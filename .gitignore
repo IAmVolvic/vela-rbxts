@@ -15,3 +15,5 @@ pnpm-publish-summary.json
 .idea
 .vscode
 .vscode/settings.json
+
+digest.txt
