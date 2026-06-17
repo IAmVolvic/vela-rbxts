@@ -134,6 +134,7 @@ async function packWorkspacePackage(
 			`${JSON.stringify(rewrittenManifest, null, 2)}\n`,
 			"utf8",
 		);
+		await rm(join(stagingDir, ".turbo"), { force: true, recursive: true });
 
 		const before = await getTgzFiles(ARTIFACT_DIRS.npm);
 		runCommand(

@@ -7,6 +7,7 @@ export type PackageJson = {
 	name?: string;
 	version?: string;
 	private?: boolean;
+	type?: string;
 	main?: string;
 	types?: string;
 	exports?: unknown;

@@ -94,6 +94,38 @@ async function resolveLspTargets(overrides: readonly string[]) {
 	};
 }
 
+function detectLinuxRuntimeKind(): "gnu" | "musl" {
+	if (typeof process.report?.getReport !== "function") {
+		return "musl";
+	}
+
+	const report = process.report.getReport() as {
+		header?: {
+			glibcVersionRuntime?: string;
+		};
+	};
+
+	return report.header?.glibcVersionRuntime ? "gnu" : "musl";
+}
+
+function getHostCompilerTarget() {
+	switch (process.platform) {
+		case "darwin":
+			return process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
+		case "linux":
+			return `${process.arch === "arm64" ? "aarch64" : "x86_64"}-unknown-linux-${detectLinuxRuntimeKind()}`;
+		case "win32":
+			return process.arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
+		default:
+			return undefined;
+	}
+}
+
+function shouldCrossCompileTarget(target: string) {
+	const hostTarget = getHostCompilerTarget();
+	return hostTarget !== undefined && target !== hostTarget;
+}
+
 async function main() {
 	const rawArgs = process.argv.slice(2);
 	const dryRun = parseDryRunFlag(rawArgs);
@@ -158,7 +190,7 @@ async function main() {
 			"--target",
 			target,
 		];
-		if (target === "aarch64-unknown-linux-gnu") {
+		if (shouldCrossCompileTarget(target)) {
 			args.push("--cross-compile");
 		}
 
@@ -190,6 +222,9 @@ async function main() {
 				"--target",
 				config.target,
 			];
+			if (shouldCrossCompileTarget(config.target)) {
+				args.push("--cross-compile");
+			}
 
 			if (dryRun) {
 				console.log(`[dry-run] pnpm ${args.join(" ")}`);

@@ -15,10 +15,14 @@ import {
 	exists,
 	listFilesRecursive,
 	REPO_ROOT,
+	readJsonFile,
 	writeJsonFile,
 } from "./utils/fs";
 import type { PackageJson } from "./utils/package-json";
-import { readJsonFile } from "./utils/fs";
+import {
+	verifyPackedConsumer,
+} from "./utils/packed-consumer";
+import { resolveMarketplaceVsixVersion } from "./utils/vsix-version.cjs";
 
 type TarballPackageInfo = {
 	artifact: PackedArtifact;
@@ -241,9 +245,14 @@ async function main() {
 			join(REPO_ROOT, "packages/vscode-extension/package.json"),
 		);
 		const version = String(extensionManifest.version ?? "0.1.0");
+		const marketplaceVersion = resolveMarketplaceVsixVersion({
+			sourceVersion: version,
+			releaseTag: process.env.RELEASE_TAG?.trim() ?? "",
+			overrideVersion: process.env.VSIX_VERSION?.trim() ?? "",
+		});
 		const expectedVsixFileNames = new Set(
 			vsixTargetsModule.SUPPORTED_VSCODE_TARGETS.map(
-				(target) => `vela-rbxts-lsp-${version}-${target}.vsix`,
+				(target) => `vela-rbxts-lsp-${marketplaceVersion}-${target}.vsix`,
 			),
 		);
 
@@ -272,6 +281,8 @@ async function main() {
 		}
 	}
 
+	const packedConsumerReport = await verifyPackedConsumer();
+
 	await writeJsonFile(VERIFY_REPORT_PATH, {
 		verifiedAt: new Date().toISOString(),
 		verifiedTarballs: packManifest.artifacts.map((artifact) => ({
@@ -279,6 +290,7 @@ async function main() {
 			version: artifact.version,
 			tarballPath: artifact.tarballPath,
 		})),
+		packedConsumer: packedConsumerReport,
 	});
 
 	console.log("Artifact verification succeeded.");

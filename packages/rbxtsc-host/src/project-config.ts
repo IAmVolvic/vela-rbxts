@@ -68,7 +68,9 @@ export function resolveProjectConfigInfo(sourceFileName: string): {
 
 function loadProjectConfig(configFilePath: string): TailwindConfig {
 	const ts = loadTypeScript();
-	const sourceText = fs.readFileSync(configFilePath, "utf8");
+	const sourceText = stripVelaRbxtsImports(
+		fs.readFileSync(configFilePath, "utf8"),
+	);
 	const transpiled = ts.transpileModule(sourceText, {
 		compilerOptions: {
 			module: ts.ModuleKind.CommonJS,
@@ -124,6 +126,46 @@ function loadProjectConfig(configFilePath: string): TailwindConfig {
 		normalizeConfigExport(module.exports),
 		configFilePath,
 	);
+}
+
+function stripVelaRbxtsImports(sourceText: string): string {
+	const ts = loadTypeScript();
+	const sourceFile = ts.createSourceFile(
+		CONFIG_FILE_NAME,
+		sourceText,
+		ts.ScriptTarget.Latest,
+		true,
+		ts.ScriptKind.TS,
+	);
+
+	const chunks: string[] = [];
+	let lastPosition = 0;
+	let removedImport = false;
+
+	for (const statement of sourceFile.statements) {
+		if (!ts.isImportDeclaration(statement)) {
+			continue;
+		}
+
+		const moduleSpecifier = statement.moduleSpecifier;
+		if (
+			!ts.isStringLiteral(moduleSpecifier) ||
+			moduleSpecifier.text !== "vela-rbxts"
+		) {
+			continue;
+		}
+
+		chunks.push(sourceText.slice(lastPosition, statement.getFullStart()));
+		lastPosition = statement.getEnd();
+		removedImport = true;
+	}
+
+	if (!removedImport) {
+		return sourceText;
+	}
+
+	chunks.push(sourceText.slice(lastPosition));
+	return chunks.join("");
 }
 
 function findProjectConfigFile(sourceFileName: string): string | undefined {

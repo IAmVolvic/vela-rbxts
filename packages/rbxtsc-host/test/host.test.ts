@@ -195,7 +195,9 @@ test("keeps runtime-aware output self-contained when runtime rules are reported"
 
 test("loads vela.config.ts when present", () => {
 	const project = createProject(
-		`export default defineConfig({
+		`import { defineConfig } from "vela-rbxts";
+
+		export default defineConfig({
 			theme: {
 				colors: {
 					primary: "Color3.fromRGB(99, 102, 241)",
