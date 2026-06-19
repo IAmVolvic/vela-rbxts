@@ -2,9 +2,9 @@ use crate::api::{DocumentColor, DocumentColorsRequest, DocumentColorsResponse};
 use crate::editor::{collect_class_name_contexts, tokenize_class_name_with_ranges};
 use crate::semantic::analyze::analyze_class_token;
 use crate::semantic::utility::{
-    BACKGROUND_COLOR_FAMILY, ColorFamilySpec, ColorResolution, IMAGE_COLOR_FAMILY,
-    PLACEHOLDER_COLOR_FAMILY, TEXT_COLOR_FAMILY, UtilityKind, is_utility_allowed_on_host,
-    resolve_color_value,
+    BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorFamilySpec, ColorResolution,
+    IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, TEXT_COLOR_FAMILY, UtilityKind,
+    is_utility_allowed_on_host, resolve_color_value,
 };
 
 pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> DocumentColorsResponse {
@@ -29,9 +29,13 @@ pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> Docume
             };
 
             let mut diagnostics = Vec::new();
-            let Some(resolution) =
-                resolve_color_value(&config, &mut diagnostics, color_family, color_key, &token.text)
-            else {
+            let Some(resolution) = resolve_color_value(
+                &config,
+                &mut diagnostics,
+                color_family,
+                color_key,
+                &token.text,
+            ) else {
                 continue;
             };
 
@@ -60,6 +64,7 @@ fn color_family_spec(kind: &UtilityKind) -> Option<ColorFamilySpec> {
         UtilityKind::TextColor => Some(TEXT_COLOR_FAMILY),
         UtilityKind::ImageColor => Some(IMAGE_COLOR_FAMILY),
         UtilityKind::PlaceholderColor => Some(PLACEHOLDER_COLOR_FAMILY),
+        UtilityKind::Border => Some(BORDER_COLOR_FAMILY),
         _ => None,
     }
 }
@@ -67,14 +72,16 @@ fn color_family_spec(kind: &UtilityKind) -> Option<ColorFamilySpec> {
 fn resolution_to_rgba(resolution: ColorResolution) -> Option<(f64, f64, f64, f64)> {
     match resolution {
         ColorResolution::Transparent => Some((0.0, 0.0, 0.0, 0.0)),
-        ColorResolution::Expression(value) => parse_color3_from_rgb(&value).map(|(red, green, blue)| {
-            (
-                f64::from(red) / 255.0,
-                f64::from(green) / 255.0,
-                f64::from(blue) / 255.0,
-                1.0,
-            )
-        }),
+        ColorResolution::Expression(value) => {
+            parse_color3_from_rgb(&value).map(|(red, green, blue)| {
+                (
+                    f64::from(red) / 255.0,
+                    f64::from(green) / 255.0,
+                    f64::from(blue) / 255.0,
+                    1.0,
+                )
+            })
+        }
     }
 }
 

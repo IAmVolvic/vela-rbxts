@@ -1,5 +1,5 @@
-pub(crate) mod completions;
 pub(crate) mod colors;
+pub(crate) mod completions;
 pub(crate) mod diagnostics;
 pub(crate) mod hover;
 

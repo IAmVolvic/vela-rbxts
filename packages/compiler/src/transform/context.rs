@@ -2,8 +2,7 @@ use crate::api::Diagnostic;
 use crate::class_value::scope::ClassValueScopeStack;
 use crate::ir::model::{PropEntry, StyleIr};
 use crate::swc::builders::{
-    create_helper_child, create_helper_child_cast_any, create_prop_attr,
-    create_prop_attr_cast_any,
+    create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
 };
 use crate::transform::jsx::lower_class_name;
 use crate::transform::module::{
@@ -131,10 +130,8 @@ impl VisitMut for VelaTransformer {
                 name: "__velaTag",
                 value: format!("\"{}\"", element_tag_name(&element.opening.name)),
             }));
-            element.opening.name = JSXElementName::Ident(Ident::new_no_ctxt(
-                "VelaRuntimeHost".into(),
-                DUMMY_SP,
-            ));
+            element.opening.name =
+                JSXElementName::Ident(Ident::new_no_ctxt("VelaRuntimeHost".into(), DUMMY_SP));
         } else {
             attrs.extend(
                 lowered

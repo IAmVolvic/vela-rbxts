@@ -1,6 +1,8 @@
 use super::result::{AnalyzedClassToken, SemanticIssue};
 use super::token::parse_class_token;
-use super::utility::UtilityKind;
+use super::utility::{
+    UtilityKind, is_known_unsupported_border_payload, resolve_border_thickness_value,
+};
 
 pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
     let parsed = parse_class_token(token);
@@ -52,6 +54,24 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
                 }
             } else {
                 false
+            }
+        }
+        UtilityKind::Border => {
+            if let Some(payload) = parsed.utility.payload.as_deref() {
+                if resolve_border_thickness_value(Some(payload)).is_some()
+                    || payload == "transparent"
+                {
+                    true
+                } else if is_known_unsupported_border_payload(payload) {
+                    issues.push(SemanticIssue::UnsupportedBorderValue {
+                        value: payload.to_owned(),
+                    });
+                    false
+                } else {
+                    true
+                }
+            } else {
+                true
             }
         }
         UtilityKind::Size => matches!(parsed.utility.payload.as_deref(), Some("fit"))
@@ -117,6 +137,13 @@ mod tests {
         assert!(matches!(
             size.issues.as_slice(),
             [SemanticIssue::UnsupportedSizeMode { mode }] if mode == "fit"
+        ));
+
+        let border = analyze_class_token("border-dashed");
+        assert!(!border.supported);
+        assert!(matches!(
+            border.issues.as_slice(),
+            [SemanticIssue::UnsupportedBorderValue { value }] if value == "dashed"
         ));
     }
 }

@@ -6,9 +6,10 @@ use crate::editor::{
 };
 use crate::semantic::{
     utility::{
-        PaddingKind, UtilityKind, Z_INDEX_VALUES, color_completion_keys,
-        is_utility_allowed_on_host, radius_completion_keys, size_completion_keys,
-        spacing_completion_keys,
+        ALIGNMENT_VALUES, ASPECT_RATIO_VALUES, BORDER_THICKNESS_VALUES, FLEX_DIRECTION_VALUES,
+        OPACITY_VALUES, PaddingKind, ROTATION_VALUES, UtilityKind, Z_INDEX_VALUES,
+        color_completion_keys, is_utility_allowed_on_host, radius_completion_keys,
+        size_completion_keys, spacing_completion_keys,
     },
     variant::RUNTIME_VARIANTS,
 };
@@ -130,6 +131,58 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         });
     }
 
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "border".to_owned(),
+            insert_text: "border".to_owned(),
+            kind: "utility".to_owned(),
+            category: "border".to_owned(),
+            documentation: "Create a Roblox UIStroke with `Thickness = 1`.".to_owned(),
+            replacement: None,
+        },
+        utility_kind: UtilityKind::Border,
+    });
+
+    for thickness in BORDER_THICKNESS_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("border-{thickness}"),
+                insert_text: format!("border-{thickness}"),
+                kind: "utility".to_owned(),
+                category: "border".to_owned(),
+                documentation: format!("Set Roblox UIStroke.Thickness to `{thickness}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::Border,
+        });
+    }
+
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "border-transparent".to_owned(),
+            insert_text: "border-transparent".to_owned(),
+            kind: "utility".to_owned(),
+            category: "border".to_owned(),
+            documentation: "Set Roblox UIStroke.Transparency to `1`.".to_owned(),
+            replacement: None,
+        },
+        utility_kind: UtilityKind::Border,
+    });
+
+    for color_key in color_completion_keys(config) {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("border-{color_key}"),
+                insert_text: format!("border-{color_key}"),
+                kind: "utility".to_owned(),
+                category: "color".to_owned(),
+                documentation: format!("Set Roblox UIStroke.Color from theme color `{color_key}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::Border,
+        });
+    }
+
     for key in radius_completion_keys(config) {
         items.push(CompletionSpec {
             item: CompletionItem {
@@ -202,6 +255,119 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                     kind: "utility".to_owned(),
                     category: "size".to_owned(),
                     documentation: format!("Set Roblox Size using `{prefix}-{key}`."),
+                    replacement: None,
+                },
+                utility_kind: utility_kind.clone(),
+            });
+        }
+    }
+
+    for degrees in ROTATION_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("rotate-{degrees}"),
+                insert_text: format!("rotate-{degrees}"),
+                kind: "utility".to_owned(),
+                category: "transform".to_owned(),
+                documentation: format!("Set Roblox Rotation to `{degrees}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::Rotation,
+        });
+
+        if degrees != "0" {
+            items.push(CompletionSpec {
+                item: CompletionItem {
+                    label: format!("-rotate-{degrees}"),
+                    insert_text: format!("-rotate-{degrees}"),
+                    kind: "utility".to_owned(),
+                    category: "transform".to_owned(),
+                    documentation: format!("Set Roblox Rotation to `-{degrees}`."),
+                    replacement: None,
+                },
+                utility_kind: UtilityKind::Rotation,
+            });
+        }
+    }
+
+    for percent in OPACITY_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("opacity-{percent}"),
+                insert_text: format!("opacity-{percent}"),
+                kind: "utility".to_owned(),
+                category: "effects".to_owned(),
+                documentation: format!(
+                    "Set Roblox BackgroundTransparency from opacity `{percent}`."
+                ),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::Opacity,
+        });
+    }
+
+    for key in ASPECT_RATIO_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("aspect-{key}"),
+                insert_text: format!("aspect-{key}"),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!(
+                    "Set Roblox UIAspectRatioConstraint.AspectRatio from `aspect-{key}`."
+                ),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::AspectRatio,
+        });
+    }
+
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "flex".to_owned(),
+            insert_text: "flex".to_owned(),
+            kind: "utility".to_owned(),
+            category: "layout".to_owned(),
+            documentation: "Create a Roblox UIListLayout with a horizontal fill direction."
+                .to_owned(),
+            replacement: None,
+        },
+        utility_kind: UtilityKind::FlexDirection,
+    });
+
+    for direction in FLEX_DIRECTION_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("flex-{direction}"),
+                insert_text: format!("flex-{direction}"),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!(
+                    "Set Roblox UIListLayout.FillDirection from `flex-{direction}`."
+                ),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::FlexDirection,
+        });
+    }
+
+    for (prefix, utility_kind) in [
+        ("justify", UtilityKind::JustifyContent),
+        ("items", UtilityKind::AlignItems),
+    ] {
+        for alignment in ALIGNMENT_VALUES {
+            let target = if prefix == "justify" {
+                "UIListLayout.HorizontalAlignment"
+            } else {
+                "UIListLayout.VerticalAlignment"
+            };
+            items.push(CompletionSpec {
+                item: CompletionItem {
+                    label: format!("{prefix}-{alignment}"),
+                    insert_text: format!("{prefix}-{alignment}"),
+                    kind: "utility".to_owned(),
+                    category: "layout".to_owned(),
+                    documentation: format!("Set Roblox {target} from `{prefix}-{alignment}`."),
                     replacement: None,
                 },
                 utility_kind: utility_kind.clone(),

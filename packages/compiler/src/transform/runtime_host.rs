@@ -118,7 +118,14 @@ type RuntimeCamera = {
 	GetPropertyChangedSignal(property: "ViewportSize"): unknown;
 };
 
-type RuntimePropValue = string | number | boolean | Color3 | UDim | UDim2;
+type RuntimePropValue =
+	| string
+	| number
+	| boolean
+	| Color3
+	| UDim
+	| UDim2
+	| EnumItem;
 
 type RuntimePropMap = Record<string, RuntimePropValue>;
 
@@ -432,6 +439,97 @@ function resolveUtilityToken(
 	theme: RuntimeTheme,
 	token: string,
 ): RuntimeResolvedEffectBundle | undefined {
+	if (token === "border") {
+		return {
+			props: [],
+			helpers: [
+				{
+					tag: "uistroke",
+					props: [{ name: "Thickness", value: 1 }],
+				},
+			],
+		};
+	}
+
+	if (startsWith(token, "border-")) {
+		const key = substring(token, stringLength("border-"));
+		if (key === "transparent") {
+			return {
+				props: [],
+				helpers: [
+					{
+						tag: "uistroke",
+						props: [{ name: "Transparency", value: 1 }],
+					},
+				],
+			};
+		}
+
+		if (key === "0" || key === "1" || key === "2" || key === "4") {
+			return {
+				props: [],
+				helpers: [
+					{
+						tag: "uistroke",
+						props: [{ name: "Thickness", value: toNumber(key) ?? 0 }],
+					},
+				],
+			};
+		}
+
+		if (isUnsupportedBorderKey(key)) {
+			return undefined;
+		}
+
+		const [colorName, shade] = splitColorKey(key);
+		const value = theme.colors[colorName];
+		if (typeIs(value, "string")) {
+			if (shade !== undefined) {
+				return undefined;
+			}
+
+			const parsed = parseColor3(value);
+			if (parsed === undefined) {
+				return undefined;
+			}
+
+			return {
+				props: [],
+				helpers: [
+					{
+						tag: "uistroke",
+						props: [
+							{ name: "Color", value: parsed },
+							{ name: "Transparency", value: 0 },
+						],
+					},
+				],
+			};
+		}
+
+		if (shade === undefined || value === undefined) {
+			return undefined;
+		}
+
+		const shadeValue = value[shade];
+		if (shadeValue === undefined) {
+			return undefined;
+		}
+
+		return {
+			props: [],
+			helpers: [
+				{
+					tag: "uistroke",
+					props: [
+						{ name: "Color", value: shadeValue },
+						{ name: "Transparency", value: 0 },
+					],
+				},
+			],
+		};
+	}
+
 	if (startsWith(token, "bg-")) {
 		const key = substring(token, 3);
 		const [colorName, shade] = splitColorKey(key);
@@ -687,6 +785,46 @@ function resolveUtilityToken(
 	}
 
 	return undefined;
+}
+
+function isUnsupportedBorderKey(key: string): boolean {
+	if (key === "dashed" || key === "solid" || key === "dotted" || key === "double") {
+		return true;
+	}
+
+	if (key === "x" || key === "y" || key === "t" || key === "r" || key === "b" || key === "l") {
+		return true;
+	}
+
+	if (
+		startsWith(key, "x-") ||
+		startsWith(key, "y-") ||
+		startsWith(key, "t-") ||
+		startsWith(key, "r-") ||
+		startsWith(key, "b-") ||
+		startsWith(key, "l-")
+	) {
+		return true;
+	}
+
+	if (startsWith(key, "opacity-")) {
+		return true;
+	}
+
+	if (startsWith(key, "[") && endsWith(key, "]")) {
+		return true;
+	}
+
+	if (includesChar(key, "/")) {
+		return true;
+	}
+
+	const numeric = toNumber(key);
+	if (numeric !== undefined) {
+		return key !== "0" && key !== "1" && key !== "2" && key !== "4";
+	}
+
+	return false;
 }
 
 function splitColorKey(key: string): [string, string | undefined] {
@@ -945,6 +1083,28 @@ function parseUDim2(value: string): UDim2 | undefined {
 	);
 }
 
+function parseEnumValue(value: string): EnumItem | undefined {
+	if (!startsWith(value, "Enum.")) {
+		return undefined;
+	}
+
+	const segments = splitBy(value, ".");
+	if (arraySize(segments) !== 3) {
+		return undefined;
+	}
+
+	const registry = Enum as unknown as Record<
+		string,
+		Record<string, EnumItem> | undefined
+	>;
+	const category = registry[segments[1]];
+	if (category === undefined) {
+		return undefined;
+	}
+
+	return category[segments[2]];
+}
+
 function normalizeClassValue(value: ClassValue | undefined): string[] {
 	const tokens: string[] = [];
 
@@ -1126,6 +1286,11 @@ function parseRuntimePropValue(value: string): RuntimePropValue {
 		return udim2;
 	}
 
+	const enumValue = parseEnumValue(trimmed);
+	if (enumValue !== undefined) {
+		return enumValue;
+	}
+
 	if (trimmed === "true") {
 		return true;
 	}
@@ -1197,6 +1362,16 @@ function lastIndexOf(value: string, needle: string): number {
 	}
 
 	return -1;
+}
+
+function includesChar(value: string, char: string): boolean {
+	for (let index = 0; index < stringLength(value); index++) {
+		if (substring(value, index, index + 1) === char) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 function trim(value: string): string {
@@ -1334,14 +1509,11 @@ function arraySize<T>(value: T[]): number {
 pub(crate) fn create_runtime_host_module_items(config: &TailwindConfig) -> Vec<ModuleItem> {
     let config_json = serde_json::to_string(config).expect("runtime config must serialize to JSON");
     let source = format!(
-		"{RUNTIME_HOST_TEMPLATE}\nconst __VelaRuntimeConfig = {config_json};\nconst VelaRuntimeHost = __createVelaRuntimeHost(__VelaRuntimeConfig);"
+        "{RUNTIME_HOST_TEMPLATE}\nconst __VelaRuntimeConfig = {config_json};\nconst VelaRuntimeHost = __createVelaRuntimeHost(__VelaRuntimeConfig);"
     );
     let items = parse_module_items(&source);
 
-    assert!(
-        !items.is_empty(),
-        "inline runtime helper source must parse"
-    );
+    assert!(!items.is_empty(), "inline runtime helper source must parse");
 
     items
 }

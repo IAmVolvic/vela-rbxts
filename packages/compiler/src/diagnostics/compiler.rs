@@ -52,6 +52,65 @@ pub(crate) fn unsupported_z_index_value_diagnostic(value: &str, token: &str) -> 
     }
 }
 
+pub(crate) fn unsupported_rotation_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-rotation-value".to_owned(),
+        message: format!(
+            "Tailwind `rotate-{value}` is not supported yet; supported values are rotate-0, rotate-1, rotate-2, rotate-3, rotate-6, rotate-12, rotate-45, rotate-90, and rotate-180."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_opacity_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-opacity-value".to_owned(),
+        message: format!(
+            "Tailwind `opacity-{value}` is not supported; opacity must be an integer between 0 and 100."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_aspect_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-aspect-value".to_owned(),
+        message: format!(
+            "Tailwind `aspect-{value}` is not supported; supported values are `aspect-square`, `aspect-video`, and arbitrary ratios such as `aspect-[4/3]`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_flex_direction_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-flex-direction".to_owned(),
+        message: format!(
+            "Tailwind `flex-{value}` is not supported; supported values are `flex`, `flex-row`, and `flex-col`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_alignment_value_diagnostic(
+    family: &str,
+    value: &str,
+    token: &str,
+) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-alignment-value".to_owned(),
+        message: format!(
+            "Tailwind `{family}-{value}` is not supported; supported values are `{family}-start`, `{family}-center`, and `{family}-end`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
 pub(crate) fn unknown_theme_key_diagnostic(
     theme_family: &str,
     key: &str,
@@ -84,6 +143,17 @@ pub(crate) fn unsupported_size_mode_diagnostic(mode: &str, token: &str) -> Diagn
         code: "unsupported-size-mode".to_owned(),
         message: format!(
             "Size mode \"{mode}\" needs Roblox automatic sizing semantics and is not lowered to Size."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_border_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-border-value".to_owned(),
+        message: format!(
+            "Tailwind `border-{value}` is not supported yet; supported border utilities are `border`, `border-0`, `border-1`, `border-2`, `border-4`, `border-transparent`, and `border-{{color}}`."
         ),
         token: Some(token.to_owned()),
     }

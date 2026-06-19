@@ -6,10 +6,13 @@ use crate::ir::model::SizeAxisValue;
 use crate::semantic::{
     analyze::analyze_class_token,
     utility::{
-        BACKGROUND_COLOR_FAMILY, ColorResolution, IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY,
-        PaddingKind, TEXT_COLOR_FAMILY, UtilityKind, is_utility_allowed_on_host,
-        resolve_color_value, resolve_radius_value, resolve_size_axis_value, resolve_spacing_value,
-        resolve_z_index_value,
+        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, IMAGE_COLOR_FAMILY,
+        PLACEHOLDER_COLOR_FAMILY, PaddingKind, TEXT_COLOR_FAMILY, UtilityKind,
+        is_known_unsupported_border_payload, is_utility_allowed_on_host, resolve_align_items_value,
+        resolve_aspect_ratio_value, resolve_border_thickness_value, resolve_color_value,
+        resolve_flex_direction_value, resolve_justify_value, resolve_opacity_value,
+        resolve_radius_value, resolve_rotation_value, resolve_size_axis_value,
+        resolve_spacing_value, resolve_z_index_value,
     },
 };
 
@@ -95,6 +98,9 @@ fn describe_token(
             "PlaceholderColor3",
             variant_prefix,
         ),
+        UtilityKind::Border => {
+            describe_border_token(token, analysis.payload(), config, variant_prefix)
+        }
         UtilityKind::Radius => {
             let radius_key = analysis.payload()?;
             let value = resolve_radius_value(config, radius_key)?;
@@ -163,6 +169,62 @@ fn describe_token(
                 documentation: format!("{variant_prefix}Sets `{target}` using {resolved}."),
             })
         }
+        UtilityKind::Rotation => {
+            let degrees = analysis.payload()?;
+            let negative = analysis.parsed.utility.raw.starts_with("-rotate-");
+            let value = resolve_rotation_value(degrees, negative)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> Rotation"),
+                documentation: format!("{variant_prefix}Sets `Rotation` to `{value}`."),
+            })
+        }
+        UtilityKind::Opacity => {
+            let percent = analysis.payload()?;
+            let value = resolve_opacity_value(percent)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> BackgroundTransparency"),
+                documentation: format!(
+                    "{variant_prefix}Sets `BackgroundTransparency` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::AspectRatio => {
+            let ratio_key = analysis.payload()?;
+            let value = resolve_aspect_ratio_value(ratio_key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIAspectRatioConstraint.AspectRatio"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIAspectRatioConstraint.AspectRatio` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::FlexDirection => {
+            let value = resolve_flex_direction_value(analysis.payload())?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.FillDirection"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.FillDirection` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::JustifyContent => {
+            let value = resolve_justify_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.HorizontalAlignment"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.HorizontalAlignment` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::AlignItems => {
+            let value = resolve_align_items_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.VerticalAlignment"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.VerticalAlignment` to `{value}`."
+                ),
+            })
+        }
         UtilityKind::Unknown => None,
     }
 }
@@ -188,6 +250,68 @@ fn describe_color_token(
 
     Some(HoverContent {
         display: format!("`{token}` -> {prop}"),
+        documentation,
+    })
+}
+
+fn describe_border_token(
+    token: &str,
+    border_key: Option<&str>,
+    config: &crate::config::model::TailwindConfig,
+    variant_prefix: String,
+) -> Option<HoverContent> {
+    let Some(border_key) = border_key else {
+        return Some(HoverContent {
+            display: format!("`{token}` -> UIStroke.Thickness"),
+            documentation: format!(
+                "{variant_prefix}Creates a Roblox UIStroke with `Thickness = 1`."
+            ),
+        });
+    };
+
+    if let Some(thickness) = resolve_border_thickness_value(Some(border_key)) {
+        return Some(HoverContent {
+            display: format!("`{token}` -> UIStroke.Thickness"),
+            documentation: format!("{variant_prefix}Sets `UIStroke.Thickness` to `{thickness}`."),
+        });
+    }
+
+    if border_key == "transparent" {
+        return Some(HoverContent {
+            display: format!("`{token}` -> UIStroke.Transparency"),
+            documentation: format!("{variant_prefix}Sets `UIStroke.Transparency` to `1`."),
+        });
+    }
+
+    if is_known_unsupported_border_payload(border_key) {
+        return Some(HoverContent {
+            display: format!("`{token}`"),
+            documentation: format!(
+                "{variant_prefix}This border utility is not supported on Roblox yet."
+            ),
+        });
+    }
+
+    let mut diagnostics = Vec::new();
+    let resolution = resolve_color_value(
+        config,
+        &mut diagnostics,
+        BORDER_COLOR_FAMILY,
+        border_key,
+        token,
+    )?;
+
+    let documentation = match resolution {
+        ColorResolution::Expression(value) => format!(
+            "{variant_prefix}Sets `UIStroke.Color` to the resolved `{border_key}` Color3 value `{value}` and clears `UIStroke.Transparency` to `0`."
+        ),
+        ColorResolution::Transparent => {
+            format!("{variant_prefix}Sets `UIStroke.Transparency` to `1`.")
+        }
+    };
+
+    Some(HoverContent {
+        display: format!("`{token}` -> UIStroke.Color"),
         documentation,
     })
 }

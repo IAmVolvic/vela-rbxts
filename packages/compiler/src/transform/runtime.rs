@@ -2,7 +2,10 @@ use crate::api::Diagnostic;
 use crate::config::model::TailwindConfig;
 use crate::diagnostics::compiler::{
     negative_z_index_diagnostic, unknown_theme_key_diagnostic,
-    unsupported_arbitrary_z_index_diagnostic, unsupported_color_keyword_diagnostic,
+    unsupported_alignment_value_diagnostic, unsupported_arbitrary_z_index_diagnostic,
+    unsupported_aspect_value_diagnostic, unsupported_border_value_diagnostic,
+    unsupported_color_keyword_diagnostic, unsupported_flex_direction_diagnostic,
+    unsupported_opacity_value_diagnostic, unsupported_rotation_value_diagnostic,
     unsupported_size_mode_diagnostic, unsupported_utility_family_diagnostic,
     unsupported_z_index_auto_diagnostic, unsupported_z_index_value_diagnostic,
 };
@@ -11,8 +14,11 @@ use crate::semantic::{
     analyze::analyze_class_token,
     result::{AnalyzedClassToken, SemanticIssue},
     utility::{
-        BACKGROUND_COLOR_FAMILY, ColorResolution, IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY,
-        PaddingKind, TEXT_COLOR_FAMILY, UtilityKind, resolve_color_value, resolve_radius_value,
+        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, IMAGE_COLOR_FAMILY,
+        PLACEHOLDER_COLOR_FAMILY, PaddingKind, TEXT_COLOR_FAMILY, UtilityKind,
+        is_known_unsupported_border_payload, resolve_align_items_value, resolve_aspect_ratio_value,
+        resolve_border_thickness_value, resolve_color_value, resolve_flex_direction_value,
+        resolve_justify_value, resolve_opacity_value, resolve_radius_value, resolve_rotation_value,
         resolve_size_axis_value, resolve_spacing_value, resolve_z_index_value,
     },
 };
@@ -138,6 +144,13 @@ fn apply_analyzed_token(
                     diagnostics.push(unsupported_size_mode_diagnostic(mode, &analysis.parsed.raw));
                     return;
                 }
+                SemanticIssue::UnsupportedBorderValue { value } => {
+                    diagnostics.push(unsupported_border_value_diagnostic(
+                        value,
+                        &analysis.parsed.raw,
+                    ));
+                    return;
+                }
             }
         }
     }
@@ -191,6 +204,13 @@ fn apply_analyzed_token(
                 );
             }
         }
+        UtilityKind::Border => {
+            if let Some(border_key) = analysis.payload() {
+                apply_border_utility(style, config, diagnostics, border_key, &analysis.parsed.raw);
+            } else if let Some(value) = resolve_border_thickness_value(None) {
+                style.set_helper_prop("uistroke", "Thickness", value.to_owned());
+            }
+        }
         UtilityKind::Radius => {
             if let Some(radius_key) = analysis.payload() {
                 if let Some(value) = resolve_radius_value(config, radius_key) {
@@ -226,7 +246,13 @@ fn apply_analyzed_token(
         }
         UtilityKind::Gap => {
             if let Some(spacing_key) = analysis.payload() {
-                apply_gap_utility(style, config, diagnostics, spacing_key, &analysis.parsed.raw);
+                apply_gap_utility(
+                    style,
+                    config,
+                    diagnostics,
+                    spacing_key,
+                    &analysis.parsed.raw,
+                );
             }
         }
         UtilityKind::Width => {
@@ -247,6 +273,79 @@ fn apply_analyzed_token(
                     resolve_size_axis_value(config, diagnostics, size_key, &analysis.parsed.raw);
                 *pending_size_width = value.clone();
                 *pending_size_height = value;
+            }
+        }
+        UtilityKind::Rotation => {
+            if let Some(degrees) = analysis.payload() {
+                let negative = analysis.parsed.utility.raw.starts_with("-rotate-");
+                if let Some(value) = resolve_rotation_value(degrees, negative) {
+                    style.set_prop("Rotation", value);
+                } else {
+                    diagnostics.push(unsupported_rotation_value_diagnostic(
+                        degrees,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::Opacity => {
+            if let Some(percent) = analysis.payload() {
+                if let Some(value) = resolve_opacity_value(percent) {
+                    style.set_prop("BackgroundTransparency", value);
+                } else {
+                    diagnostics.push(unsupported_opacity_value_diagnostic(
+                        percent,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::AspectRatio => {
+            if let Some(ratio_key) = analysis.payload() {
+                if let Some(value) = resolve_aspect_ratio_value(ratio_key) {
+                    style.set_helper_prop("uiaspectratioconstraint", "AspectRatio", value);
+                } else {
+                    diagnostics.push(unsupported_aspect_value_diagnostic(
+                        ratio_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::FlexDirection => {
+            if let Some(value) = resolve_flex_direction_value(analysis.payload()) {
+                style.set_helper_prop("uilistlayout", "FillDirection", value);
+            } else {
+                diagnostics.push(unsupported_flex_direction_diagnostic(
+                    analysis.payload().unwrap_or_default(),
+                    &analysis.parsed.raw,
+                ));
+            }
+        }
+        UtilityKind::JustifyContent => {
+            if let Some(alignment_key) = analysis.payload() {
+                if let Some(value) = resolve_justify_value(alignment_key) {
+                    style.set_helper_prop("uilistlayout", "HorizontalAlignment", value);
+                } else {
+                    diagnostics.push(unsupported_alignment_value_diagnostic(
+                        "justify",
+                        alignment_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::AlignItems => {
+            if let Some(alignment_key) = analysis.payload() {
+                if let Some(value) = resolve_align_items_value(alignment_key) {
+                    style.set_helper_prop("uilistlayout", "VerticalAlignment", value);
+                } else {
+                    diagnostics.push(unsupported_alignment_value_diagnostic(
+                        "items",
+                        alignment_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
             }
         }
         UtilityKind::Unknown => {
@@ -287,6 +386,45 @@ fn apply_color_utility(
                 color_key,
                 token,
             ));
+        }
+    }
+}
+
+fn apply_border_utility(
+    style: &mut StyleIr,
+    config: &TailwindConfig,
+    diagnostics: &mut Vec<Diagnostic>,
+    border_key: &str,
+    token: &str,
+) {
+    if let Some(thickness) = resolve_border_thickness_value(Some(border_key)) {
+        style.set_helper_prop("uistroke", "Thickness", thickness.to_owned());
+        return;
+    }
+
+    if border_key == "transparent" {
+        style.set_helper_prop("uistroke", "Transparency", "1".to_owned());
+        return;
+    }
+
+    if is_known_unsupported_border_payload(border_key) {
+        diagnostics.push(unsupported_border_value_diagnostic(border_key, token));
+        return;
+    }
+
+    let Some(resolution) =
+        resolve_color_value(config, diagnostics, BORDER_COLOR_FAMILY, border_key, token)
+    else {
+        return;
+    };
+
+    match resolution {
+        ColorResolution::Expression(value) => {
+            style.set_helper_prop("uistroke", "Color", value);
+            style.set_helper_prop("uistroke", "Transparency", "0".to_owned());
+        }
+        ColorResolution::Transparent => {
+            style.set_helper_prop("uistroke", "Transparency", "1".to_owned());
         }
     }
 }

@@ -219,6 +219,117 @@ test("resolves normalized default background colors and transparent keywords", (
 	expect(result.code).toContain("<frame BackgroundTransparency={1}/>");
 });
 
+test("lowers border utilities to UIStroke helpers", () => {
+	const result = transform(
+		'<frame><frame className="border border-slate-700" /><frame className="border-2 border-blue-600" /><frame className="border-4 border-transparent" /><frame className="rounded-md border border-rose-500 px-4" /></frame>',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/<uistroke\b[^>]*Thickness=\{1\}[^>]*Color=\{Color3\.fromRGB\(49, 65, 88\)\}[^>]*\/>/i,
+	);
+	expect(result.code).toMatch(
+		/<uistroke\b[^>]*Thickness=\{2\}[^>]*Color=\{Color3\.fromRGB\(21, 93, 252\)\}[^>]*\/>/i,
+	);
+	expect(result.code).toMatch(
+		/<uistroke\b[^>]*Thickness=\{4\}[^>]*Transparency=\{1\}[^>]*\/>/i,
+	);
+	expect(result.code).toContain("uicorner");
+	expect(result.code).toContain("uistroke");
+});
+
+test("reports unsupported border forms with a targeted diagnostic", () => {
+	const result = transform(
+		'<frame className="border-dashed border-x border-8 border-[3px] border-opacity-50" />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.code).not.toContain("className=");
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-border-value",
+				token: "border-dashed",
+			}),
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-border-value",
+				token: "border-x",
+			}),
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-border-value",
+				token: "border-8",
+			}),
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-border-value",
+				token: "border-[3px]",
+			}),
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-border-value",
+				token: "border-opacity-50",
+			}),
+		]),
+	);
+	expect(result.code).not.toMatch(/<uistroke\b/i);
+});
+
+test("border static and runtime classifiers stay in parity", () => {
+	const THICKNESS_KEYS = ["0", "1", "2", "4"] as const;
+	const UNSUPPORTED_FORMS = [
+		"dashed",
+		"solid",
+		"dotted",
+		"double",
+		"x",
+		"y",
+		"t",
+		"r",
+		"b",
+		"l",
+		"x-2",
+		"opacity-50",
+		"[3px]",
+		"500/50",
+		"8",
+	] as const;
+
+	for (const key of THICKNESS_KEYS) {
+		const result = transform(`<frame className="border-${key}" />`);
+		expect(result.diagnostics).toEqual([]);
+		expect(result.code).toMatch(
+			new RegExp(`<uistroke\\b[^>]*Thickness=\\{${key}\\}`, "i"),
+		);
+	}
+
+	for (const form of UNSUPPORTED_FORMS) {
+		const result = transform(`<frame className="border-${form}" />`);
+		expect(
+			result.diagnostics.some(
+				(diagnostic) => diagnostic.code === "unsupported-border-value",
+			),
+		).toBe(true);
+		expect(result.code).not.toMatch(/<uistroke\b/i);
+	}
+
+	const runtime = transform(
+		'<frame className={["border", active && "border-blue-600"]} />',
+	);
+	expect(runtime.needsRuntimeHost).toBe(true);
+	expect(runtime.code).toContain(
+		`key === "${THICKNESS_KEYS.join('" || key === "')}"`,
+	);
+	for (const keyword of ["dashed", "solid", "dotted", "double"]) {
+		expect(runtime.code).toContain(`key === "${keyword}"`);
+	}
+	expect(runtime.code).toContain('startsWith(key, "opacity-")');
+});
+
 test("warns on unknown background color keys unless config defines them", () => {
 	const result = transform('<frame className="bg-surface" />');
 
@@ -1135,9 +1246,42 @@ test("rewrites dynamic object-map className through the inline runtime helper", 
 	expect(result.code).toContain('"px-2": !roomy');
 });
 
+test("rewrites dynamic border className through the inline runtime helper", () => {
+	const result = transform(
+		'<frame className={["border", active && "border-blue-600"]} />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__createVelaRuntimeHost");
+	expect(result.code).toContain("VelaRuntimeHost");
+	expect(result.code).toContain("uistroke");
+	expect(result.code).toContain("Thickness");
+	expect(result.code).toContain("Color3.fromRGB(21, 93, 252)");
+	expect(result.code).not.toContain("@vela-rbxts/runtime");
+	expect(result.code).not.toContain("vela-rbxts/runtime");
+});
+
+test("rewrites dynamic border object maps through the inline runtime helper", () => {
+	const result = transform(
+		'<frame className={{ "border-2": thick, "border-transparent": hidden }} />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__createVelaRuntimeHost");
+	expect(result.code).toContain("VelaRuntimeHost");
+	expect(result.code).toContain("uistroke");
+	expect(result.code).toContain("Thickness");
+	expect(result.code).toContain("Transparency");
+	expect(result.code).toContain("className={{");
+	expect(result.code).toContain('"border-2": thick');
+	expect(result.code).toContain('"border-transparent": hidden');
+});
+
 test("rewrites runtime-aware variants through the inline runtime rule path", () => {
 	const result = transform(
-		'<frame className="rounded-md md:px-4 portrait:w-80 touch:px-3" />',
+		'<frame className="rounded-md md:border-2 portrait:w-80 touch:border-blue-600" />',
 	);
 
 	expect(result.changed).toBe(true);
@@ -1145,8 +1289,9 @@ test("rewrites runtime-aware variants through the inline runtime rule path", () 
 	expect(result.code).toContain("__velaRules");
 	expect(result.code).toContain("__createVelaRuntimeHost");
 	expect(result.code).not.toContain(
-		'className="rounded-md md:px-4 portrait:w-80 touch:px-3"',
+		'className="rounded-md md:border-2 portrait:w-80 touch:border-blue-600"',
 	);
+	expect(result.code).toContain("uistroke");
 });
 
 test("rewrites dynamic ClassValue expressions through the runtime wrapper", () => {
@@ -1329,7 +1474,7 @@ test("keeps variant-prefixed literals on the runtime rule path when they survive
 
 test("lifts variant-prefixed literal utilities into runtime rules", () => {
 	const result = transform(
-		'<frame className="rounded-md md:px-4 portrait:w-80" />',
+		'<frame className="rounded-md md:border-2 portrait:w-80 touch:border-blue-600" />',
 	);
 
 	expect(result.changed).toBe(true);
@@ -1345,7 +1490,7 @@ test("lifts variant-prefixed literal utilities into runtime rules", () => {
 	expect(result.code).not.toContain("../__vela__/runtime-host");
 	expect(result.code).toContain("__velaRules");
 	expect(result.code).not.toContain(
-		'className="rounded-md md:px-4 portrait:w-80"',
+		'className="rounded-md md:border-2 portrait:w-80 touch:border-blue-600"',
 	);
 	expect(result.ir).toHaveLength(1);
 
@@ -1368,7 +1513,20 @@ test("lifts variant-prefixed literal utilities into runtime rules", () => {
 					effects: expect.objectContaining({
 						helpers: expect.arrayContaining([
 							expect.objectContaining({
-								tag: "uipadding",
+								tag: "uistroke",
+							}),
+						]),
+					}),
+				}),
+				expect.objectContaining({
+					condition: expect.objectContaining({
+						kind: "input",
+						value: "touch",
+					}),
+					effects: expect.objectContaining({
+						helpers: expect.arrayContaining([
+							expect.objectContaining({
+								tag: "uistroke",
 							}),
 						]),
 					}),
@@ -1389,6 +1547,210 @@ test("lifts variant-prefixed literal utilities into runtime rules", () => {
 				}),
 			]),
 			runtimeClassValue: false,
+		}),
+	);
+});
+
+test("lowers rotate utilities to the Roblox Rotation prop", () => {
+	const result = transform('<frame className="rotate-45" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(/Rotation=\{45\}/);
+});
+
+test("lowers negative rotate utilities to a negative Rotation prop", () => {
+	const result = transform('<frame className="-rotate-90" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(/Rotation=\{-90\}/);
+});
+
+test("warns on unsupported rotate values", () => {
+	const result = transform('<frame className="rotate-17" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).not.toMatch(/Rotation=/);
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-rotation-value",
+				token: "rotate-17",
+			}),
+		]),
+	);
+});
+
+test("lowers opacity utilities to BackgroundTransparency", () => {
+	const result = transform('<frame className="opacity-25" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(/BackgroundTransparency=\{0\.75\}/);
+});
+
+test("warns on out-of-range opacity values", () => {
+	const result = transform('<frame className="opacity-150" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).not.toMatch(/BackgroundTransparency=/);
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-opacity-value",
+				token: "opacity-150",
+			}),
+		]),
+	);
+});
+
+test("lowers aspect utilities to a UIAspectRatioConstraint helper", () => {
+	const result = transform(
+		'<frame><frame className="aspect-square" /><frame className="aspect-video" /><frame className="aspect-[4/3]" /></frame>',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/<uiaspectratioconstraint\b[^>]*AspectRatio=\{1\}[^>]*\/>/i,
+	);
+	expect(result.code).toMatch(
+		/<uiaspectratioconstraint\b[^>]*AspectRatio=\{1\.7777777778\}[^>]*\/>/i,
+	);
+	expect(result.code).toMatch(
+		/<uiaspectratioconstraint\b[^>]*AspectRatio=\{1\.3333333333\}[^>]*\/>/i,
+	);
+});
+
+test("warns on unsupported aspect values", () => {
+	const result = transform('<frame className="aspect-auto" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).not.toMatch(/<uiaspectratioconstraint\b/i);
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				level: "warning",
+				code: "unsupported-aspect-value",
+				token: "aspect-auto",
+			}),
+		]),
+	);
+});
+
+test("lowers flex and alignment utilities onto a shared UIListLayout helper", () => {
+	const result = transform(
+		'<frame className="flex-row justify-center items-end gap-4" />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/FillDirection=\{Enum\.FillDirection\.Horizontal\}/,
+	);
+	expect(result.code).toMatch(
+		/HorizontalAlignment=\{Enum\.HorizontalAlignment\.Center\}/,
+	);
+	expect(result.code).toMatch(
+		/VerticalAlignment=\{Enum\.VerticalAlignment\.Bottom\}/,
+	);
+	expect(result.code).toMatch(/Padding=\{new UDim\(0, 16\)\}/);
+	expect(result.code.match(/<uilistlayout\b/gi) ?? []).toHaveLength(1);
+});
+
+test("treats bare flex as a horizontal UIListLayout", () => {
+	const result = transform('<frame className="flex" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/<uilistlayout\b[^>]*FillDirection=\{Enum\.FillDirection\.Horizontal\}[^>]*\/>/i,
+	);
+});
+
+test("warns on unsupported flex and alignment values", () => {
+	const result = transform(
+		'<frame className="flex-row-reverse justify-between items-stretch" />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).not.toMatch(/<uilistlayout\b/i);
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				code: "unsupported-flex-direction",
+				token: "flex-row-reverse",
+			}),
+			expect.objectContaining({
+				code: "unsupported-alignment-value",
+				token: "justify-between",
+			}),
+			expect.objectContaining({
+				code: "unsupported-alignment-value",
+				token: "items-stretch",
+			}),
+		]),
+	);
+});
+
+test("carries flex utilities through the runtime variant path with enum parsing", () => {
+	const result = transform('<frame className="flex-row md:flex-col" />');
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__createVelaRuntimeHost");
+	expect(result.code).toContain('startsWith(value, "Enum.")');
+
+	expect(JSON.parse(result.ir[0])).toEqual(
+		expect.objectContaining({
+			base: expect.objectContaining({
+				helpers: expect.arrayContaining([
+					expect.objectContaining({
+						tag: "uilistlayout",
+						props: expect.arrayContaining([
+							expect.objectContaining({
+								name: "FillDirection",
+								value: "Enum.FillDirection.Horizontal",
+							}),
+						]),
+					}),
+				]),
+			}),
+			runtimeRules: expect.arrayContaining([
+				expect.objectContaining({
+					condition: expect.objectContaining({
+						kind: "width",
+						alias: "md",
+					}),
+					effects: expect.objectContaining({
+						helpers: expect.arrayContaining([
+							expect.objectContaining({
+								tag: "uilistlayout",
+								props: expect.arrayContaining([
+									expect.objectContaining({
+										name: "FillDirection",
+										value: "Enum.FillDirection.Vertical",
+									}),
+								]),
+							}),
+						]),
+					}),
+				}),
+			]),
 		}),
 	);
 });
