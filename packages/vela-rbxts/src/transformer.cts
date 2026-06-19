@@ -1,8 +1,16 @@
 import { createVelaProgramTransformer } from "@vela-rbxts/rbxtsc-host";
 
-export { createVelaProgramTransformer as createTransformer };
+function createTransformer(
+	...args: Parameters<typeof createVelaProgramTransformer>
+) {
+	return createVelaProgramTransformer(...args);
+}
 
 /** @deprecated Use createVelaProgramTransformer instead. */
-export { createVelaProgramTransformer as createRbxtsTailwindProgramTransformer };
+const exportedTransformer = Object.assign(createTransformer, {
+	createTransformer,
+	createRbxtsTailwindProgramTransformer: createTransformer,
+	default: createTransformer,
+});
 
-export default createVelaProgramTransformer;
+export = exportedTransformer;
