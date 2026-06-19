@@ -19,9 +19,8 @@ import {
 	writeJsonFile,
 } from "./utils/fs";
 import type { PackageJson } from "./utils/package-json";
-import {
-	verifyPackedConsumer,
-} from "./utils/packed-consumer";
+import { verifyPackedConsumer } from "./utils/packed-consumer";
+import { detectLinuxRuntimeKind } from "./utils/platform";
 import { resolveMarketplaceVsixVersion } from "./utils/vsix-version.cjs";
 
 type TarballPackageInfo = {
@@ -91,20 +90,6 @@ function assertManifestFieldEntries(
 	if (typeof manifest.exports === "string") {
 		assertRequiredEntry(entries, `package/${manifest.exports.replace(/^\.\//, "")}`, `${packageName} exports`);
 	}
-}
-
-function detectLinuxRuntimeKind(): "gnu" | "musl" {
-	if (typeof process.report?.getReport !== "function") {
-		return "musl";
-	}
-
-	const report = process.report.getReport() as {
-		header?: {
-			glibcVersionRuntime?: string;
-		};
-	};
-
-	return report.header?.glibcVersionRuntime ? "gnu" : "musl";
 }
 
 async function main() {

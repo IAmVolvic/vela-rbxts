@@ -21,7 +21,7 @@ describe("packed consumer luau assertions", () => {
 					"uistroke",
 					"Thickness = 1",
 					"Thickness = 2",
-					"Color = Color3.fromRGB(49, 65, 88)",
+					"Color = Color3.fromRGB(98, 116, 142)",
 					"Color3.fromRGB(21, 93, 252)",
 					"PaddingLeft = UDim.new(0, 16)",
 					"PaddingRight = UDim.new(0, 16)",

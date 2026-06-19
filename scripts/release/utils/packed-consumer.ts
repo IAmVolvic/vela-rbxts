@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { PACK_MANIFEST_PATH, type PackManifest } from "./artifacts";
 import { ensureDir, exists, REPO_ROOT, readJsonFile, writeJsonFile } from "./fs";
 import type { PackageJson } from "./package-json";
+import { getCurrentCompilerBinaryPackageName } from "./platform";
 
 const PACKED_CONSUMER_PROJECT_NAME = "packed-consumer-smoke";
 const PACKED_CONSUMER_OUTPUT_FILE = "out/client/App.luau";
@@ -19,7 +20,7 @@ const REQUIRED_OUTPUT_FRAGMENTS = [
 	"uistroke",
 	"Thickness = 1",
 	"Thickness = 2",
-	"Color = Color3.fromRGB(49, 65, 88)",
+	"Color = Color3.fromRGB(98, 116, 142)",
 	"Color3.fromRGB(21, 93, 252)",
 	"PaddingLeft = UDim.new(0, 16)",
 	"PaddingRight = UDim.new(0, 16)",
@@ -39,8 +40,8 @@ const FORBIDDEN_OUTPUT_FRAGMENTS = [
 	"__rbxtsTailwindRuntimeHost",
 	"RbxtsTailwindRuntimeHost",
 	"../__vela__/runtime-host",
-	"raw static className = \"rounded-md bg-slate-700 border border-slate-700 px-4 py-3 w-80 h-27 gap-4\"",
-	'className = "rounded-md bg-slate-700 border border-slate-700 px-4 py-3 w-80 h-27 gap-4"',
+	"raw static className = \"rounded-md bg-slate-700 border border-slate-500 px-4 py-3 w-80 h-27 gap-4\"",
+	'className = "rounded-md bg-slate-700 border border-slate-500 px-4 py-3 w-80 h-27 gap-4"',
 ] as const;
 
 const VELA_CONSUMER_PACKAGE_NAMES = [
@@ -207,7 +208,7 @@ export function App() {
 
 \treturn (
 \t\t<screengui ResetOnSpawn={false} IgnoreGuiInset>
-\t\t\t<frame className="rounded-md bg-slate-700 border border-slate-700 px-4 py-3 w-80 h-27 gap-4">
+\t\t\t<frame className="rounded-md bg-slate-700 border border-slate-500 px-4 py-3 w-80 h-27 gap-4">
 \t\t\t\t<textlabel
 \t\t\t\t\tBackgroundTransparency={1}
 \t\t\t\t\tText="packed consumer smoke"
@@ -369,50 +370,6 @@ function getDependencyVersion(manifest: PackageJson, name: string): string {
 	}
 
 	return version;
-}
-
-function getCurrentCompilerBinaryPackageName() {
-	if (process.platform === "darwin") {
-		return `@vela-rbxts/compiler-darwin-${process.arch}`;
-	}
-
-	if (process.platform === "win32") {
-		if (process.arch !== "x64") {
-			throw new Error(
-				`Unsupported compiler binary platform: ${process.platform}/${process.arch}.`,
-			);
-		}
-
-		return "@vela-rbxts/compiler-win32-x64-msvc";
-	}
-
-	if (process.platform === "linux") {
-		const runtimeKind = detectLinuxRuntimeKind();
-		if (process.arch === "x64") {
-			return `@vela-rbxts/compiler-linux-x64-${runtimeKind}`;
-		}
-		if (process.arch === "arm64") {
-			return "@vela-rbxts/compiler-linux-arm64-gnu";
-		}
-	}
-
-	throw new Error(
-		`Unsupported compiler binary platform: ${process.platform}/${process.arch}.`,
-	);
-}
-
-function detectLinuxRuntimeKind(): "gnu" | "musl" {
-	if (typeof process.report?.getReport !== "function") {
-		return "musl";
-	}
-
-	const report = process.report.getReport() as {
-		header?: {
-			glibcVersionRuntime?: string;
-		};
-	};
-
-	return report.header?.glibcVersionRuntime ? "gnu" : "musl";
 }
 
 async function runPackedConsumerPreflightChecks(rootDir: string) {

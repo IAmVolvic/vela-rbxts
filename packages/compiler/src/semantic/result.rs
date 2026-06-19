@@ -5,6 +5,7 @@ use crate::ir::model::RuntimeCondition;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SemanticIssue {
     UnsupportedUtilityFamily { family: String },
+    UnsupportedBorderValue { value: String },
     UnsupportedZIndexValue { value: String },
     UnsupportedZIndexAuto,
     UnsupportedArbitraryZIndex,

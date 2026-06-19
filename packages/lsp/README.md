@@ -2,6 +2,19 @@
 
 Source package for the standalone vela-rbxts Rust LSP wrapper.
 
+## Capabilities
+
+- Completion, hover, and document colors for `className` utilities.
+- Diagnostics for unknown theme keys, unsupported utilities, and invalid values
+  (debounced while typing).
+- Quick-fix code actions: replace a token with the nearest valid suggestion, or
+  remove it.
+- Project-config aware: the editor client loads each `vela.config.ts` and pushes
+  the resolved theme via the `vela-rbxts/setConfigs` notification (and through
+  `initializationOptions.configs` at startup). The server picks the config
+  nearest to each source file, so custom theme tokens resolve instead of being
+  flagged as unknown.
+
 The release flow stages publish artifacts under `packages/lsp/.npm/publish`:
 
 - the wrapper package lives at the stage root

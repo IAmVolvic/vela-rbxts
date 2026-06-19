@@ -76,8 +76,7 @@ function buildCargoArgs(target) {
 		];
 	}
 
-	const linuxNeedsZig =
-		target.includes("linux-musl") || target.includes("aarch64-unknown-linux");
+	const linuxNeedsZig = process.platform !== "linux" && target.includes("linux");
 	if (linuxNeedsZig) {
 		return [
 			"zigbuild",

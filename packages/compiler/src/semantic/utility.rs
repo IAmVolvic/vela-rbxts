@@ -26,6 +26,7 @@ pub(crate) enum UtilityKind {
     TextColor,
     ImageColor,
     PlaceholderColor,
+    Border,
     Radius,
     ZIndex,
     Padding(PaddingKind),
@@ -33,6 +34,12 @@ pub(crate) enum UtilityKind {
     Width,
     Height,
     Size,
+    Rotation,
+    Opacity,
+    AspectRatio,
+    FlexDirection,
+    JustifyContent,
+    AlignItems,
     Unknown,
 }
 
@@ -73,7 +80,21 @@ pub(crate) const PLACEHOLDER_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
     transparency_prop: None,
 };
 
+pub(crate) const BORDER_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
+    theme_family: "border color",
+    color_prop: "Color",
+    transparency_prop: Some("Transparency"),
+};
+
 pub(crate) const Z_INDEX_VALUES: [&str; 6] = ["0", "10", "20", "30", "40", "50"];
+pub(crate) const BORDER_THICKNESS_VALUES: [&str; 4] = ["0", "1", "2", "4"];
+pub(crate) const ROTATION_VALUES: [&str; 9] = ["0", "1", "2", "3", "6", "12", "45", "90", "180"];
+pub(crate) const OPACITY_VALUES: [&str; 14] = [
+    "0", "5", "10", "20", "25", "30", "40", "50", "60", "70", "75", "80", "90", "100",
+];
+pub(crate) const ASPECT_RATIO_VALUES: [&str; 2] = ["square", "video"];
+pub(crate) const FLEX_DIRECTION_VALUES: [&str; 2] = ["row", "col"];
+pub(crate) const ALIGNMENT_VALUES: [&str; 3] = ["start", "center", "end"];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParsedUtility {
@@ -134,6 +155,7 @@ impl UtilityKind {
                 | UtilityKind::TextColor
                 | UtilityKind::ImageColor
                 | UtilityKind::PlaceholderColor
+                | UtilityKind::Border
                 | UtilityKind::Radius
                 | UtilityKind::Padding(_)
                 | UtilityKind::Gap
@@ -167,11 +189,39 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         };
     }
 
+    if let Some(value) = token.strip_prefix("-rotate-") {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "rotate".to_owned(),
+            payload: Some(value.to_owned()),
+            kind: UtilityKind::Rotation,
+        };
+    }
+
+    if token == "border" {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "border".to_owned(),
+            payload: None,
+            kind: UtilityKind::Border,
+        };
+    }
+
+    if token == "flex" {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "flex".to_owned(),
+            payload: None,
+            kind: UtilityKind::FlexDirection,
+        };
+    }
+
     for (prefix, kind) in [
         ("bg-", UtilityKind::BackgroundColor),
         ("text-", UtilityKind::TextColor),
         ("image-", UtilityKind::ImageColor),
         ("placeholder-", UtilityKind::PlaceholderColor),
+        ("border-", UtilityKind::Border),
         ("rounded-", UtilityKind::Radius),
         ("z-", UtilityKind::ZIndex),
         ("p-", UtilityKind::Padding(PaddingKind::All)),
@@ -185,6 +235,12 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("w-", UtilityKind::Width),
         ("h-", UtilityKind::Height),
         ("size-", UtilityKind::Size),
+        ("rotate-", UtilityKind::Rotation),
+        ("opacity-", UtilityKind::Opacity),
+        ("aspect-", UtilityKind::AspectRatio),
+        ("flex-", UtilityKind::FlexDirection),
+        ("justify-", UtilityKind::JustifyContent),
+        ("items-", UtilityKind::AlignItems),
     ] {
         if let Some(payload) = token.strip_prefix(prefix) {
             return ParsedUtility {
@@ -206,6 +262,59 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         payload: token.split_once('-').map(|(_, payload)| payload.to_owned()),
         kind: UtilityKind::Unknown,
     }
+}
+
+pub(crate) fn resolve_border_thickness_value(payload: Option<&str>) -> Option<&'static str> {
+    match payload {
+        None => Some("1"),
+        Some("0") => Some("0"),
+        Some("1") => Some("1"),
+        Some("2") => Some("2"),
+        Some("4") => Some("4"),
+        _ => None,
+    }
+}
+
+pub(crate) fn is_known_unsupported_border_payload(payload: &str) -> bool {
+    if payload.is_empty() {
+        return false;
+    }
+
+    if matches!(payload, "dashed" | "solid" | "dotted" | "double") {
+        return true;
+    }
+
+    if matches!(payload, "x" | "y" | "t" | "r" | "b" | "l") {
+        return true;
+    }
+
+    if payload.starts_with("x-")
+        || payload.starts_with("y-")
+        || payload.starts_with("t-")
+        || payload.starts_with("r-")
+        || payload.starts_with("b-")
+        || payload.starts_with("l-")
+    {
+        return true;
+    }
+
+    if payload.starts_with("opacity-") {
+        return true;
+    }
+
+    if payload.starts_with('[') && payload.ends_with(']') {
+        return true;
+    }
+
+    if payload.contains('/') {
+        return true;
+    }
+
+    if payload.parse::<f64>().is_ok() {
+        return !BORDER_THICKNESS_VALUES.contains(&payload);
+    }
+
+    false
 }
 
 pub(crate) fn resolve_color_value(
@@ -390,6 +499,116 @@ pub(crate) fn resolve_z_index_value(
     None
 }
 
+pub(crate) fn resolve_rotation_value(degrees: &str, negative: bool) -> Option<String> {
+    if !ROTATION_VALUES.contains(&degrees) {
+        return None;
+    }
+
+    if negative && degrees != "0" {
+        return Some(format!("-{degrees}"));
+    }
+
+    Some(degrees.to_owned())
+}
+
+pub(crate) fn resolve_opacity_value(percent: &str) -> Option<String> {
+    let percent = percent.parse::<u32>().ok()?;
+    if percent > 100 {
+        return None;
+    }
+
+    Some(format_transparency(100 - percent))
+}
+
+pub(crate) fn resolve_aspect_ratio_value(key: &str) -> Option<String> {
+    let ratio = match key {
+        "square" => 1.0,
+        "video" => 16.0 / 9.0,
+        _ => parse_arbitrary_aspect_ratio(key)?,
+    };
+
+    Some(format_ratio(ratio))
+}
+
+pub(crate) fn resolve_flex_direction_value(key: Option<&str>) -> Option<String> {
+    match key {
+        None | Some("row") => Some("Enum.FillDirection.Horizontal".to_owned()),
+        Some("col") => Some("Enum.FillDirection.Vertical".to_owned()),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_justify_value(key: &str) -> Option<String> {
+    let alignment = match key {
+        "start" => "Enum.HorizontalAlignment.Left",
+        "center" => "Enum.HorizontalAlignment.Center",
+        "end" => "Enum.HorizontalAlignment.Right",
+        _ => return None,
+    };
+
+    Some(alignment.to_owned())
+}
+
+pub(crate) fn resolve_align_items_value(key: &str) -> Option<String> {
+    let alignment = match key {
+        "start" => "Enum.VerticalAlignment.Top",
+        "center" => "Enum.VerticalAlignment.Center",
+        "end" => "Enum.VerticalAlignment.Bottom",
+        _ => return None,
+    };
+
+    Some(alignment.to_owned())
+}
+
+fn parse_arbitrary_aspect_ratio(key: &str) -> Option<f64> {
+    let inner = key.strip_prefix('[')?.strip_suffix(']')?;
+
+    if let Some((width, height)) = inner.split_once('/') {
+        let width = width.trim().parse::<f64>().ok()?;
+        let height = height.trim().parse::<f64>().ok()?;
+        if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+            return None;
+        }
+
+        return Some(width / height);
+    }
+
+    let value = inner.trim().parse::<f64>().ok()?;
+    if !value.is_finite() || value <= 0.0 {
+        return None;
+    }
+
+    Some(value)
+}
+
+fn format_transparency(remainder: u32) -> String {
+    if remainder == 0 {
+        return "0".to_owned();
+    }
+
+    if remainder >= 100 {
+        return "1".to_owned();
+    }
+
+    if remainder % 10 == 0 {
+        return format!("0.{}", remainder / 10);
+    }
+
+    format!("0.{remainder:02}")
+}
+
+fn format_ratio(value: f64) -> String {
+    let rounded = value.round();
+    if (value - rounded).abs() < 1e-9 {
+        return format!("{rounded:.0}");
+    }
+
+    format!("{value:.10}")
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_owned()
+}
+
 pub(crate) enum ColorKey<'a> {
     Semantic(&'a str),
     Shaded { color_name: &'a str, shade: &'a str },
@@ -526,6 +745,96 @@ mod tests {
             resolve_spacing_value(&config, "4"),
             Some("new UDim(0, 16)".to_owned())
         );
+    }
+
+    #[test]
+    fn resolves_rotation_opacity_and_aspect_values() {
+        assert_eq!(resolve_rotation_value("45", false), Some("45".to_owned()));
+        assert_eq!(resolve_rotation_value("90", true), Some("-90".to_owned()));
+        assert_eq!(resolve_rotation_value("0", true), Some("0".to_owned()));
+        assert_eq!(resolve_rotation_value("17", false), None);
+
+        assert_eq!(resolve_opacity_value("0"), Some("1".to_owned()));
+        assert_eq!(resolve_opacity_value("50"), Some("0.5".to_owned()));
+        assert_eq!(resolve_opacity_value("25"), Some("0.75".to_owned()));
+        assert_eq!(resolve_opacity_value("95"), Some("0.05".to_owned()));
+        assert_eq!(resolve_opacity_value("100"), Some("0".to_owned()));
+        assert_eq!(resolve_opacity_value("101"), None);
+        assert_eq!(resolve_opacity_value("half"), None);
+
+        assert_eq!(resolve_aspect_ratio_value("square"), Some("1".to_owned()));
+        assert_eq!(
+            resolve_aspect_ratio_value("video"),
+            Some("1.7777777778".to_owned())
+        );
+        assert_eq!(
+            resolve_aspect_ratio_value("[4/3]"),
+            Some("1.3333333333".to_owned())
+        );
+        assert_eq!(resolve_aspect_ratio_value("[3]"), Some("3".to_owned()));
+        assert_eq!(resolve_aspect_ratio_value("auto"), None);
+        assert_eq!(resolve_aspect_ratio_value("[1/0]"), None);
+    }
+
+    #[test]
+    fn resolves_layout_enum_values() {
+        assert_eq!(
+            resolve_flex_direction_value(None),
+            Some("Enum.FillDirection.Horizontal".to_owned())
+        );
+        assert_eq!(
+            resolve_flex_direction_value(Some("col")),
+            Some("Enum.FillDirection.Vertical".to_owned())
+        );
+        assert_eq!(resolve_flex_direction_value(Some("row-reverse")), None);
+
+        assert_eq!(
+            resolve_justify_value("center"),
+            Some("Enum.HorizontalAlignment.Center".to_owned())
+        );
+        assert_eq!(resolve_justify_value("between"), None);
+
+        assert_eq!(
+            resolve_align_items_value("end"),
+            Some("Enum.VerticalAlignment.Bottom".to_owned())
+        );
+        assert_eq!(resolve_align_items_value("stretch"), None);
+    }
+
+    #[test]
+    fn parses_rotation_and_layout_families() {
+        assert!(matches!(
+            parse_utility("rotate-45").kind,
+            UtilityKind::Rotation
+        ));
+        let negative = parse_utility("-rotate-90");
+        assert!(matches!(negative.kind, UtilityKind::Rotation));
+        assert_eq!(negative.payload.as_deref(), Some("90"));
+
+        assert!(matches!(
+            parse_utility("flex").kind,
+            UtilityKind::FlexDirection
+        ));
+        assert!(matches!(
+            parse_utility("flex-col").kind,
+            UtilityKind::FlexDirection
+        ));
+        assert!(matches!(
+            parse_utility("justify-center").kind,
+            UtilityKind::JustifyContent
+        ));
+        assert!(matches!(
+            parse_utility("items-end").kind,
+            UtilityKind::AlignItems
+        ));
+        assert!(matches!(
+            parse_utility("opacity-50").kind,
+            UtilityKind::Opacity
+        ));
+        assert!(matches!(
+            parse_utility("aspect-video").kind,
+            UtilityKind::AspectRatio
+        ));
     }
 
     #[test]

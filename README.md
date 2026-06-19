@@ -218,10 +218,15 @@ The compiler currently supports a narrow Tailwind-inspired slice that maps to Ro
 | Category | Implemented classes | Notes |
 | --- | --- | --- |
 | Color | `bg-*`, `text-*`, `image-*`, `placeholder-*` | Resolve against config theme and the built-in palette. Palette colors need a shade such as `bg-slate-700`. Semantic singleton colors such as `bg-surface` work when defined in project config. `transparent` is supported where the target prop can express transparency. |
+| Border | `border`, `border-0`, `border-1`, `border-2`, `border-4`, `border-*` colors | Maps to `UIStroke`. Border colors resolve against the theme color scale. `border-transparent` maps to stroke transparency. |
 | Radius | `rounded-*` | Maps to `UICorner.CornerRadius`. |
 | Stacking | `z-0`, `z-10`, `z-20`, `z-30`, `z-40`, `z-50` | Maps directly to Roblox `ZIndex`. |
 | Spacing | `p-*`, `px-*`, `py-*`, `pt-*`, `pr-*`, `pb-*`, `pl-*`, `gap-*` | Padding utilities map to `UIPadding`. `gap-*` lowers to a `UIListLayout` helper on supported Roblox host elements. |
 | Size | `w-*`, `h-*`, `size-*` | Maps to `Size` through Roblox-specific `UDim2` values. `w-px` and `h-px` become a one-pixel offset. `w-full` and `h-full` map to scale `1`. Supported fractions such as `1/2`, `3/4`, and `5/12` map to scale values. |
+| Flexbox | `flex`, `flex-row`, `flex-col`, `justify-{start,center,end}`, `items-{start,center,end}` | Lowers to a `UIListLayout` helper alongside `gap-*`. `flex-*` sets `FillDirection`, `justify-*` sets `HorizontalAlignment`, `items-*` sets `VerticalAlignment`. Bare `flex` is horizontal. |
+| Aspect ratio | `aspect-square`, `aspect-video`, `aspect-[W/H]` | Lowers to a `UIAspectRatioConstraint` helper. Arbitrary ratios such as `aspect-[4/3]` are supported. |
+| Transform | `rotate-*`, `-rotate-*` | Maps to Roblox `Rotation`. Supported degrees are 0, 1, 2, 3, 6, 12, 45, 90, and 180, optionally negated. |
+| Effects | `opacity-*` | Maps to `BackgroundTransparency` as `1 - opacity / 100`. Accepts integers from 0 to 100. |
 | Spacing tokens | numeric spacing keys | Numeric spacing tokens resolve through the spacing theme first, then numeric fallback where allowed. |
 | Special case | `fit` | Recognized but not lowered; the compiler warns instead of pretending to model Roblox automatic sizing. |
 
@@ -232,10 +237,10 @@ These Tailwind-style families are not implemented yet and currently emit diagnos
 | Category | Not implemented yet | Notes |
 | --- | --- | --- |
 | Layout and positioning | `m-*`, `mx-*`, `my-*`, `mt-*`, `mr-*`, `mb-*`, `ml-*`, `absolute`, `relative`, `top-*`, `right-*`, `bottom-*`, `left-*` | Emits diagnostics instead of lowering. |
-| Flex and grid | `flex-*`, `grid-*`, `items-*`, `justify-*`, `content-*`, `self-*`, `place-*` | Emits diagnostics instead of lowering. |
-| Borders and effects | `border-*`, `ring-*`, `shadow-*`, `opacity-*`, `blur-*` | Emits diagnostics instead of lowering. |
+| Flex and grid | `flex-wrap`, `flex-row-reverse`, `flex-col-reverse`, `grid-*`, `justify-{between,around,evenly}`, `content-*`, `self-*`, `place-*` | Emits diagnostics instead of lowering. Only `flex`/`flex-row`/`flex-col` and `start`/`center`/`end` alignments are lowered. |
+| Borders and effects | `ring-*`, `shadow-*`, `blur-*` | Emits diagnostics instead of lowering. |
 | Typography and text formatting | `font-*`, `leading-*`, `tracking-*`, `uppercase`, `lowercase`, `capitalize`, and other non-color `text-*` utilities | Emits diagnostics instead of lowering. |
-| Motion and transforms | `transition-*`, `duration-*`, `ease-*`, `animate-*`, `transform`, `scale-*`, `rotate-*`, `translate-*`, `skew-*` | Emits diagnostics instead of lowering. |
+| Motion and transforms | `transition-*`, `duration-*`, `ease-*`, `animate-*`, `transform`, `scale-*`, `translate-*`, `skew-*` | Emits diagnostics instead of lowering. |
 
 Notes:
 
@@ -306,7 +311,7 @@ export default defineConfig();
 // src/client/App.tsx
 export function Example() {
   return (
-    <frame className="bg-slate-700 rounded-md px-4 py-3 w-80 h-27 gap-4">
+    <frame className="bg-slate-700 border border-slate-700 rounded-md px-4 py-3 w-80 h-27 gap-4">
       <textlabel Text="rbxts consumer harness" TextScaled TextWrapped />
       <textlabel Text="layout and spacing baseline" TextScaled TextWrapped />
     </frame>

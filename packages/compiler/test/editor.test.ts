@@ -33,6 +33,41 @@ test("completes background color utilities inside className", () => {
 	);
 });
 
+test("completes border utilities inside className", () => {
+	const source = '<frame className="border" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, "border"),
+	});
+
+	expect(result.isInClassNameContext).toBe(true);
+	expect(result.items).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				label: "border",
+			}),
+			expect.objectContaining({
+				label: "border-0",
+			}),
+			expect.objectContaining({
+				label: "border-2",
+			}),
+			expect.objectContaining({
+				label: "border-transparent",
+			}),
+			expect.objectContaining({
+				label: "border-slate-700",
+			}),
+			expect.objectContaining({
+				label: "border-blue-600",
+			}),
+			expect.objectContaining({
+				label: "border-rose-500",
+			}),
+		]),
+	);
+});
+
 test("completes semantic and palette color tokens with variant-aware prefixes", () => {
 	const config = defineConfig({
 		theme: {
@@ -149,6 +184,89 @@ test("completes z-index utilities inside className", () => {
 			expect.objectContaining({
 				label: "z-10",
 				insertText: "z-10",
+			}),
+		]),
+	);
+});
+
+test("completes rotate opacity aspect and layout utilities", () => {
+	for (const [prefix, expected] of [
+		["rotate-", "rotate-45"],
+		["-rotate-", "-rotate-90"],
+		["opacity-", "opacity-50"],
+		["aspect-", "aspect-video"],
+		["flex-", "flex-col"],
+		["justify-", "justify-center"],
+		["items-", "items-end"],
+	] as const) {
+		const source = `<frame className="${prefix}" />`;
+		const result = getCompletions({
+			source,
+			position: positionAfter(source, prefix),
+		});
+
+		expect(result.isInClassNameContext).toBe(true);
+		expect(result.items).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					label: expected,
+					insertText: expected,
+				}),
+			]),
+		);
+	}
+});
+
+test("hovers rotate opacity aspect and layout utilities", () => {
+	for (const [token, display] of [
+		["rotate-45", "`rotate-45` -> Rotation"],
+		["-rotate-90", "`-rotate-90` -> Rotation"],
+		["opacity-50", "`opacity-50` -> BackgroundTransparency"],
+		["aspect-video", "`aspect-video` -> UIAspectRatioConstraint.AspectRatio"],
+		["flex-row", "`flex-row` -> UIListLayout.FillDirection"],
+		["justify-center", "`justify-center` -> UIListLayout.HorizontalAlignment"],
+		["items-end", "`items-end` -> UIListLayout.VerticalAlignment"],
+	] as const) {
+		const source = `<frame className="${token}" />`;
+		const hover = getHover({
+			source,
+			position: positionAfter(source, token) - 1,
+		});
+
+		expect(hover.contents?.display).toBe(display);
+	}
+});
+
+test("reports editor diagnostics for unsupported transform and layout values", () => {
+	const source =
+		'<frame className="rotate-17 opacity-150 aspect-auto flex-row-reverse justify-between items-stretch" />';
+	const result = getDiagnostics({ source });
+
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				code: "unsupported-rotation-value",
+				token: "rotate-17",
+			}),
+			expect.objectContaining({
+				code: "unsupported-opacity-value",
+				token: "opacity-150",
+			}),
+			expect.objectContaining({
+				code: "unsupported-aspect-value",
+				token: "aspect-auto",
+			}),
+			expect.objectContaining({
+				code: "unsupported-flex-direction",
+				token: "flex-row-reverse",
+			}),
+			expect.objectContaining({
+				code: "unsupported-alignment-value",
+				token: "justify-between",
+			}),
+			expect.objectContaining({
+				code: "unsupported-alignment-value",
+				token: "items-stretch",
 			}),
 		]),
 	);
@@ -284,6 +402,39 @@ test("hovers known tokens with Roblox lowering details", () => {
 	).toBe("`z-10` -> ZIndex");
 });
 
+test("hovers border utilities with UIStroke semantics", () => {
+	const source =
+		'<frame className="border border-2 border-slate-700 border-transparent" />';
+
+	expect(
+		getHover({
+			source,
+			position: positionAfter(source, "border-2"),
+		}).contents?.display,
+	).toBe("`border-2` -> UIStroke.Thickness");
+
+	expect(
+		getHover({
+			source,
+			position: positionAfter(source, "border-slate-700"),
+		}).contents?.display,
+	).toBe("`border-slate-700` -> UIStroke.Color");
+
+	expect(
+		getHover({
+			source,
+			position: positionAfter(source, "border-transparent"),
+		}).contents?.display,
+	).toBe("`border-transparent` -> UIStroke.Transparency");
+
+	expect(
+		getHover({
+			source,
+			position: positionAfter(source, "border-slate-700"),
+		}).contents?.documentation,
+	).toContain("resolved");
+});
+
 test("hovers variant-prefixed tokens on the active token only", () => {
 	const source = '<frame className="md:bg-blue-600 px-4" />';
 	const hover = getHover({
@@ -374,6 +525,37 @@ test("reports editor diagnostics for unsupported z-index forms", () => {
 			expect.objectContaining({
 				code: "unsupported-z-index-value",
 				token: "z-999",
+			}),
+		]),
+	);
+});
+
+test("reports editor diagnostics for unsupported border forms", () => {
+	const source =
+		'<frame className="border-dashed border-x border-8 border-[3px] border-opacity-50" />';
+	const result = getDiagnostics({ source });
+
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				code: "unsupported-border-value",
+				token: "border-dashed",
+			}),
+			expect.objectContaining({
+				code: "unsupported-border-value",
+				token: "border-x",
+			}),
+			expect.objectContaining({
+				code: "unsupported-border-value",
+				token: "border-8",
+			}),
+			expect.objectContaining({
+				code: "unsupported-border-value",
+				token: "border-[3px]",
+			}),
+			expect.objectContaining({
+				code: "unsupported-border-value",
+				token: "border-opacity-50",
 			}),
 		]),
 	);
@@ -499,6 +681,20 @@ test("returns one color for background color utilities", () => {
 		expect.objectContaining({
 			token: "bg-slate-700",
 			presentation: "bg-slate-700",
+		}),
+	);
+});
+
+test("returns colors for border color utilities", () => {
+	const result = getDocumentColors({
+		source: '<frame className="border-blue-600" />',
+	});
+
+	expect(result.colors).toHaveLength(1);
+	expect(result.colors[0]).toEqual(
+		expect.objectContaining({
+			token: "border-blue-600",
+			presentation: "border-blue-600",
 		}),
 	);
 });

@@ -1,4 +1,5 @@
 mod documents;
+mod quickfix;
 mod server;
 mod state;
 mod translate;
@@ -11,6 +12,8 @@ use tower_lsp::{LspService, Server};
 async fn main() {
     eprintln!("vela-rbxts-lsp: starting stdio LSP server");
 
-    let (service, socket) = LspService::new(RbxtsLanguageServer::new);
+    let (service, socket) = LspService::build(RbxtsLanguageServer::new)
+        .custom_method("vela-rbxts/setConfigs", RbxtsLanguageServer::set_configs)
+        .finish();
     Server::new(stdin(), stdout(), socket).serve(service).await;
 }

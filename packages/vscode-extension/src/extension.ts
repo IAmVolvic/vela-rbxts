@@ -42,12 +42,15 @@ export async function activate(
 	context.subscriptions.push(
 		watcher.onDidChange((uri) => {
 			log(`Detected config change: ${uri.fsPath}`);
+			void pushProjectConfigs();
 		}),
 		watcher.onDidCreate((uri) => {
 			log(`Detected config create: ${uri.fsPath}`);
+			void pushProjectConfigs();
 		}),
 		watcher.onDidDelete((uri) => {
 			log(`Detected config delete: ${uri.fsPath}`);
+			void pushProjectConfigs();
 		}),
 	);
 
@@ -102,6 +105,8 @@ async function startClient(
 	}
 
 	const { args, command, workspaceRoot } = resolvedServerCommand;
+	const configs = await collectProjectConfigs();
+	log(`Loaded ${configs.length} vela config(s) for the language server.`);
 	const clientOutputChannel =
 		outputChannel ?? vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
 	const clientTraceOutputChannel =
@@ -144,6 +149,7 @@ async function startClient(
 				context.extension.packageJSON.version ?? "0.0.0",
 			),
 			workspaceRoot,
+			configs,
 		},
 		outputChannel: clientOutputChannel,
 		outputChannelName: OUTPUT_CHANNEL_NAME,
@@ -401,6 +407,70 @@ function toClientTrace(traceSetting: TraceSetting): Trace {
 			return Trace.Verbose;
 		default:
 			return Trace.Off;
+	}
+}
+
+type ProjectConfigModule = {
+	resolveProjectConfig(sourceFileName: string): unknown;
+};
+
+interface ConfigEntry {
+	dir: string;
+	json: string;
+}
+
+// Loaded lazily: the loader pulls the workspace TypeScript runtime to evaluate
+// vela.config.ts, which the Rust server cannot do on its own.
+function loadConfigResolver():
+	| ProjectConfigModule["resolveProjectConfig"]
+	| undefined {
+	try {
+		const moduleExports =
+			require("@vela-rbxts/rbxtsc-host/project-config") as ProjectConfigModule;
+		return moduleExports.resolveProjectConfig;
+	} catch (error) {
+		log(`Failed to load the vela config loader: ${formatError(error)}`);
+		return undefined;
+	}
+}
+
+async function collectProjectConfigs(): Promise<ConfigEntry[]> {
+	const resolveProjectConfig = loadConfigResolver();
+	if (!resolveProjectConfig) {
+		return [];
+	}
+
+	const files = await vscode.workspace.findFiles(
+		CONFIG_WATCH_GLOB,
+		"**/node_modules/**",
+	);
+	const entries: ConfigEntry[] = [];
+	for (const file of files) {
+		try {
+			const config = resolveProjectConfig(file.fsPath);
+			entries.push({
+				dir: path.dirname(file.fsPath),
+				json: JSON.stringify(config),
+			});
+		} catch (error) {
+			log(`Failed to load ${file.fsPath}: ${formatError(error)}`);
+		}
+	}
+
+	return entries;
+}
+
+async function pushProjectConfigs(): Promise<void> {
+	if (!client) {
+		return;
+	}
+
+	try {
+		const configs = await collectProjectConfigs();
+		await client.sendNotification("vela-rbxts/setConfigs", { configs });
+		log(`Pushed ${configs.length} vela config(s) to the language server.`);
+	} catch (error) {
+		log(`Failed to push vela configs: ${formatError(error)}`);
 	}
 }
 

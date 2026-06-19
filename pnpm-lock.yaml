@@ -156,6 +156,9 @@ importers:
       '@vela-rbxts/lsp':
         specifier: workspace:*
         version: link:../lsp
+      '@vela-rbxts/rbxtsc-host':
+        specifier: workspace:*
+        version: link:../rbxtsc-host
       vscode-languageclient:
         specifier: ^9.0.1
         version: 9.0.1
