@@ -13,7 +13,7 @@ const ARTIFACTS_DIR = join(PACKAGE_DIR, "artifacts");
 
 async function main() {
 	const options = parseArgs(process.argv.slice(2));
-	assertSupportedHostForTarget(options.target);
+	assertSupportedHostForTarget(options.target, options.crossCompile);
 	const packageJsonPath = join(PACKAGE_DIR, "package.json");
 	const { binaryName, targets } = await readNapiConfig(packageJsonPath);
 
@@ -50,7 +50,7 @@ async function main() {
 	console.log(destinationPath);
 }
 
-function assertSupportedHostForTarget(target) {
+function assertSupportedHostForTarget(target, crossCompile) {
 	const isWindowsTarget = target.includes("windows");
 	if (!isWindowsTarget) {
 		return;
@@ -60,8 +60,12 @@ function assertSupportedHostForTarget(target) {
 		return;
 	}
 
+	if (crossCompile) {
+		return;
+	}
+
 	throw new Error(
-		`Cross-building ${target} from ${process.platform} is not supported by build-target-artifact.mjs. Use a Windows runner for Windows targets.`,
+		`Cross-building ${target} from ${process.platform} requires --cross-compile in build-target-artifact.mjs.`,
 	);
 }
 

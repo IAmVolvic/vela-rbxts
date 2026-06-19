@@ -14,6 +14,7 @@ import {
 	writeJsonFile,
 } from "./utils/fs";
 import { type PackageJson } from "./utils/package-json";
+import { getHostCompilerTarget } from "./utils/platform";
 
 type BuildRecord = {
 	kind: "workspace" | "compiler" | "lsp";
@@ -92,33 +93,6 @@ async function resolveLspTargets(overrides: readonly string[]) {
 			overrides.includes(entry.target),
 		),
 	};
-}
-
-function detectLinuxRuntimeKind(): "gnu" | "musl" {
-	if (typeof process.report?.getReport !== "function") {
-		return "musl";
-	}
-
-	const report = process.report.getReport() as {
-		header?: {
-			glibcVersionRuntime?: string;
-		};
-	};
-
-	return report.header?.glibcVersionRuntime ? "gnu" : "musl";
-}
-
-function getHostCompilerTarget() {
-	switch (process.platform) {
-		case "darwin":
-			return process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
-		case "linux":
-			return `${process.arch === "arm64" ? "aarch64" : "x86_64"}-unknown-linux-${detectLinuxRuntimeKind()}`;
-		case "win32":
-			return process.arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
-		default:
-			return undefined;
-	}
 }
 
 function shouldCrossCompileTarget(target: string) {

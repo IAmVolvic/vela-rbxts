@@ -9,6 +9,12 @@ This repository uses an artifact-first release pipeline with strict phases:
 5. `publish npm`
 6. `package VSIX`
 
+`pnpm release:verify` now also spins up a temporary external roblox-ts consumer,
+installs the packed Vela tarballs from `artifacts/npm`, compiles a small TSX
+fixture with `rbxtsc`, and checks the emitted Luau for the expected transformer
+output. Set `VELA_KEEP_PACKED_CONSUMER=1` if you want the temporary consumer
+directory preserved after a successful run.
+
 Publishing scripts never build. Build scripts never publish.
 
 ## Commands
