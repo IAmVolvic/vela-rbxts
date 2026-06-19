@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn maps_multiline_positions_to_compiler_colors() {
-        let source = "export const App = () => (\n  <frame className=\"rounded-md md:bg-slate-700 px-4 py-3\" />\n  <textlabel className=\"text-blue-500\" />\n);";
+        let source = "export const App = () => (<>\n  <frame className=\"rounded-md md:bg-slate-700 px-4 py-3\" />\n  <textlabel className=\"text-blue-500\" />\n</>);";
         let index = Utf16Index::new(source);
         let line_one = source.lines().nth(1).unwrap();
         let line_two = source.lines().nth(2).unwrap();

@@ -15,6 +15,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./project-config": {
+      "types": "./dist/project-config.d.ts",
+      "default": "./dist/project-config.js"
     }
   },
   "scripts": {

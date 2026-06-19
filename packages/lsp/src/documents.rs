@@ -47,9 +47,13 @@ impl Document {
         self.index.range_to_lsp_range(start, end)
     }
 
-    pub fn editor_options(&self, project_root: Option<&Path>) -> EditorOptions {
+    pub fn editor_options(
+        &self,
+        project_root: Option<&Path>,
+        config_json: Option<String>,
+    ) -> EditorOptions {
         EditorOptions {
-            config_json: None,
+            config_json,
             file_name: self
                 .file_path
                 .as_ref()

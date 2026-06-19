@@ -57,6 +57,7 @@
 	},
 	"dependencies": {
 		"@vela-rbxts/lsp": "workspace:*",
+		"@vela-rbxts/rbxtsc-host": "workspace:*",
 		"vscode-languageclient": "^9.0.1"
 	},
 	"devDependencies": {
