@@ -114,8 +114,9 @@ pub(crate) const BORDER_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
 pub(crate) const Z_INDEX_VALUES: [&str; 6] = ["0", "10", "20", "30", "40", "50"];
 pub(crate) const BORDER_THICKNESS_VALUES: [&str; 4] = ["0", "1", "2", "4"];
 pub(crate) const ROTATION_VALUES: [&str; 9] = ["0", "1", "2", "3", "6", "12", "45", "90", "180"];
-pub(crate) const SCALE_VALUES: [&str; 10] =
-    ["0", "50", "75", "90", "95", "100", "105", "110", "125", "150"];
+pub(crate) const SCALE_VALUES: [&str; 10] = [
+    "0", "50", "75", "90", "95", "100", "105", "110", "125", "150",
+];
 pub(crate) const BORDER_LINE_JOIN_VALUES: [&str; 3] = ["round", "bevel", "miter"];
 pub(crate) const OPACITY_VALUES: [&str; 14] = [
     "0", "5", "10", "20", "25", "30", "40", "50", "60", "70", "75", "80", "90", "100",
@@ -416,7 +417,10 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
     if FLEX_ITEM_VALUES.contains(&token) {
         return ParsedUtility {
             raw: token.to_owned(),
-            family: token.split_once('-').map_or("flex", |(family, _)| family).to_owned(),
+            family: token
+                .split_once('-')
+                .map_or("flex", |(family, _)| family)
+                .to_owned(),
             payload: Some(token.to_owned()),
             kind: UtilityKind::FlexItem,
         };
@@ -565,9 +569,7 @@ pub(crate) fn resolve_font_weight_value(key: &str) -> Option<String> {
     FONT_WEIGHT_VALUES
         .iter()
         .find(|(name, _)| *name == key)
-        .map(|(_, weight)| {
-            format!("new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight})")
-        })
+        .map(|(_, weight)| format!("new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight})"))
 }
 
 pub(crate) fn resolve_text_x_alignment_value(key: &str) -> Option<String> {
@@ -807,7 +809,11 @@ pub(crate) fn resolve_position_axis_value(
         )?)
     };
 
-    Some(if negative { negate_size_axis(base) } else { base })
+    Some(if negative {
+        negate_size_axis(base)
+    } else {
+        base
+    })
 }
 
 pub(crate) fn resolve_anchor_point_value(key: &str) -> Option<String> {
@@ -1279,7 +1285,10 @@ mod tests {
 
     #[test]
     fn classifies_and_resolves_text_utilities() {
-        assert!(matches!(parse_utility("text-lg").kind, UtilityKind::TextSize));
+        assert!(matches!(
+            parse_utility("text-lg").kind,
+            UtilityKind::TextSize
+        ));
         assert!(matches!(
             parse_utility("text-center").kind,
             UtilityKind::TextXAlignment
@@ -1348,7 +1357,10 @@ mod tests {
             parse_utility("left-4").kind,
             UtilityKind::PositionX
         ));
-        assert!(matches!(parse_utility("top-4").kind, UtilityKind::PositionY));
+        assert!(matches!(
+            parse_utility("top-4").kind,
+            UtilityKind::PositionY
+        ));
         assert!(matches!(parse_utility("inset-0").kind, UtilityKind::Inset));
         let negative = parse_utility("-left-4");
         assert!(matches!(negative.kind, UtilityKind::PositionX));
@@ -1468,7 +1480,10 @@ mod tests {
 
     #[test]
     fn parses_and_resolves_scale_and_line_join() {
-        assert!(matches!(parse_utility("scale-110").kind, UtilityKind::Scale));
+        assert!(matches!(
+            parse_utility("scale-110").kind,
+            UtilityKind::Scale
+        ));
         assert!(matches!(
             parse_utility("scale-x-110").kind,
             UtilityKind::Scale
@@ -1491,9 +1506,15 @@ mod tests {
 
     #[test]
     fn classifies_and_resolves_flex_utilities() {
-        assert!(matches!(parse_utility("flex-1").kind, UtilityKind::FlexItem));
+        assert!(matches!(
+            parse_utility("flex-1").kind,
+            UtilityKind::FlexItem
+        ));
         assert!(matches!(parse_utility("grow").kind, UtilityKind::FlexItem));
-        assert!(matches!(parse_utility("grow-0").kind, UtilityKind::FlexItem));
+        assert!(matches!(
+            parse_utility("grow-0").kind,
+            UtilityKind::FlexItem
+        ));
         assert!(matches!(
             parse_utility("shrink").kind,
             UtilityKind::FlexItem
@@ -1555,7 +1576,10 @@ mod tests {
 
     #[test]
     fn classifies_and_resolves_shadow_utilities() {
-        assert!(matches!(parse_utility("shadow").kind, UtilityKind::ShadowSize));
+        assert!(matches!(
+            parse_utility("shadow").kind,
+            UtilityKind::ShadowSize
+        ));
         assert!(matches!(
             parse_utility("shadow-lg").kind,
             UtilityKind::ShadowSize

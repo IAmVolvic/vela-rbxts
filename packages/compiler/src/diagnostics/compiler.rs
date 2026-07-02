@@ -121,7 +121,9 @@ pub(crate) fn unsupported_alignment_value_diagnostic(
     Diagnostic {
         level: "warning".to_owned(),
         code: "unsupported-alignment-value".to_owned(),
-        message: format!("Tailwind `{family}-{value}` is not supported; supported values are {supported}."),
+        message: format!(
+            "Tailwind `{family}-{value}` is not supported; supported values are {supported}."
+        ),
         token: Some(token.to_owned()),
     }
 }

@@ -8,11 +8,11 @@ use crate::semantic::{
     utility::{
         ALIGNMENT_VALUES, ANCHOR_ORIGIN_VALUES, ASPECT_RATIO_VALUES, BORDER_LINE_JOIN_VALUES,
         BORDER_THICKNESS_VALUES, FLEX_DIRECTION_VALUES, FLEX_ITEM_VALUES, FONT_WEIGHT_VALUES,
-        GRADIENT_DIRECTION_VALUES, JUSTIFY_FLEX_VALUES, OPACITY_VALUES, PaddingKind, ROTATION_VALUES,
-        SCALE_VALUES, SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES,
-        TEXT_X_ALIGN_VALUES, TEXT_Y_ALIGN_VALUES, UtilityKind, Z_INDEX_VALUES, color_completion_keys,
-        is_utility_allowed_on_host, position_completion_keys, radius_completion_keys,
-        size_completion_keys, spacing_completion_keys,
+        GRADIENT_DIRECTION_VALUES, JUSTIFY_FLEX_VALUES, OPACITY_VALUES, PaddingKind,
+        ROTATION_VALUES, SCALE_VALUES, SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES,
+        TEXT_X_ALIGN_VALUES, TEXT_Y_ALIGN_VALUES, UtilityKind, Z_INDEX_VALUES,
+        color_completion_keys, is_utility_allowed_on_host, position_completion_keys,
+        radius_completion_keys, size_completion_keys, spacing_completion_keys,
     },
     variant::RUNTIME_VARIANTS,
 };
@@ -635,8 +635,16 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
     for (prefix, target, utility_kind) in [
         ("min-w", "UISizeConstraint.MinSize.X", UtilityKind::MinWidth),
         ("max-w", "UISizeConstraint.MaxSize.X", UtilityKind::MaxWidth),
-        ("min-h", "UISizeConstraint.MinSize.Y", UtilityKind::MinHeight),
-        ("max-h", "UISizeConstraint.MaxSize.Y", UtilityKind::MaxHeight),
+        (
+            "min-h",
+            "UISizeConstraint.MinSize.Y",
+            UtilityKind::MinHeight,
+        ),
+        (
+            "max-h",
+            "UISizeConstraint.MaxSize.Y",
+            UtilityKind::MaxHeight,
+        ),
     ] {
         for key in spacing_completion_keys(config) {
             items.push(CompletionSpec {

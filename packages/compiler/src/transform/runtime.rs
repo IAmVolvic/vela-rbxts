@@ -1,16 +1,17 @@
 use crate::api::Diagnostic;
 use crate::config::model::TailwindConfig;
 use crate::diagnostics::compiler::{
-    negative_z_index_diagnostic, unknown_theme_key_diagnostic, unsupported_alignment_value_diagnostic,
-    unsupported_anchor_value_diagnostic, unsupported_arbitrary_z_index_diagnostic,
-    unsupported_aspect_value_diagnostic, unsupported_border_value_diagnostic,
-    unsupported_color_keyword_diagnostic, unsupported_flex_direction_diagnostic,
-    unsupported_font_weight_diagnostic, unsupported_gradient_direction_diagnostic,
-    unsupported_opacity_value_diagnostic, unsupported_overflow_diagnostic,
-    unsupported_rotation_value_diagnostic, unsupported_scale_diagnostic,
-    unsupported_shadow_inset_diagnostic, unsupported_text_alignment_diagnostic,
-    unsupported_text_size_diagnostic, unsupported_utility_family_diagnostic,
-    unsupported_z_index_auto_diagnostic, unsupported_z_index_value_diagnostic,
+    negative_z_index_diagnostic, unknown_theme_key_diagnostic,
+    unsupported_alignment_value_diagnostic, unsupported_anchor_value_diagnostic,
+    unsupported_arbitrary_z_index_diagnostic, unsupported_aspect_value_diagnostic,
+    unsupported_border_value_diagnostic, unsupported_color_keyword_diagnostic,
+    unsupported_flex_direction_diagnostic, unsupported_font_weight_diagnostic,
+    unsupported_gradient_direction_diagnostic, unsupported_opacity_value_diagnostic,
+    unsupported_overflow_diagnostic, unsupported_rotation_value_diagnostic,
+    unsupported_scale_diagnostic, unsupported_shadow_inset_diagnostic,
+    unsupported_text_alignment_diagnostic, unsupported_text_size_diagnostic,
+    unsupported_utility_family_diagnostic, unsupported_z_index_auto_diagnostic,
+    unsupported_z_index_value_diagnostic,
 };
 use crate::ir::model::{RuntimeRule, SizeAxisValue, StyleIr};
 use crate::semantic::{
@@ -26,11 +27,10 @@ use crate::semantic::{
         resolve_font_weight_value, resolve_gradient_rotation, resolve_items_flex_value,
         resolve_justify_flex_value, resolve_justify_value, resolve_line_join_value,
         resolve_opacity_value, resolve_overflow_value, resolve_position_axis_value,
-        resolve_radius_value, resolve_rotation_value, resolve_scale_value,
-        resolve_shadow_preset, resolve_size_axis_value, resolve_size_spacing_offset,
-        resolve_spacing_value, resolve_text_size_value, resolve_text_wrap_value,
-        resolve_text_x_alignment_value, resolve_text_y_alignment_value, resolve_visibility_value,
-        resolve_z_index_value,
+        resolve_radius_value, resolve_rotation_value, resolve_scale_value, resolve_shadow_preset,
+        resolve_size_axis_value, resolve_size_spacing_offset, resolve_spacing_value,
+        resolve_text_size_value, resolve_text_wrap_value, resolve_text_x_alignment_value,
+        resolve_text_y_alignment_value, resolve_visibility_value, resolve_z_index_value,
     },
 };
 
@@ -110,13 +110,21 @@ impl PendingAxes {
         if self.min_width.is_some() || self.min_height.is_some() {
             let x = self.min_width.unwrap_or_else(|| "0".to_owned());
             let y = self.min_height.unwrap_or_else(|| "0".to_owned());
-            style.set_helper_prop("uisizeconstraint", "MinSize", format!("new Vector2({x}, {y})"));
+            style.set_helper_prop(
+                "uisizeconstraint",
+                "MinSize",
+                format!("new Vector2({x}, {y})"),
+            );
         }
 
         if self.max_width.is_some() || self.max_height.is_some() {
             let x = self.max_width.unwrap_or_else(|| "math.huge".to_owned());
             let y = self.max_height.unwrap_or_else(|| "math.huge".to_owned());
-            style.set_helper_prop("uisizeconstraint", "MaxSize", format!("new Vector2({x}, {y})"));
+            style.set_helper_prop(
+                "uisizeconstraint",
+                "MaxSize",
+                format!("new Vector2({x}, {y})"),
+            );
         }
 
         let stops: Vec<String> = [self.gradient_from, self.gradient_via, self.gradient_to]
@@ -129,7 +137,10 @@ impl PendingAxes {
                 style.set_helper_prop("uigradient", "Rotation", rotation.to_owned());
             }
             // UIGradient modulates BackgroundColor3, so force a white base for true stop colors.
-            style.set_prop("BackgroundColor3", "Color3.fromRGB(255, 255, 255)".to_owned());
+            style.set_prop(
+                "BackgroundColor3",
+                "Color3.fromRGB(255, 255, 255)".to_owned(),
+            );
         }
     }
 }
@@ -448,8 +459,10 @@ fn apply_analyzed_token(
                 if let Some(value) = resolve_scale_value(scale_key) {
                     style.set_helper_prop("uiscale", "Scale", value.to_owned());
                 } else {
-                    diagnostics
-                        .push(unsupported_scale_diagnostic(scale_key, &analysis.parsed.raw));
+                    diagnostics.push(unsupported_scale_diagnostic(
+                        scale_key,
+                        &analysis.parsed.raw,
+                    ));
                 }
             }
         }
@@ -535,8 +548,10 @@ fn apply_analyzed_token(
                 if let Some(value) = resolve_text_size_value(size_key) {
                     style.set_prop("TextSize", value.to_owned());
                 } else {
-                    diagnostics
-                        .push(unsupported_text_size_diagnostic(size_key, &analysis.parsed.raw));
+                    diagnostics.push(unsupported_text_size_diagnostic(
+                        size_key,
+                        &analysis.parsed.raw,
+                    ));
                 }
             }
         }
@@ -596,8 +611,10 @@ fn apply_analyzed_token(
                 if let Some(value) = resolve_overflow_value(overflow_key) {
                     style.set_prop("ClipsDescendants", value.to_owned());
                 } else {
-                    diagnostics
-                        .push(unsupported_overflow_diagnostic(overflow_key, &analysis.parsed.raw));
+                    diagnostics.push(unsupported_overflow_diagnostic(
+                        overflow_key,
+                        &analysis.parsed.raw,
+                    ));
                 }
             }
         }
@@ -608,26 +625,42 @@ fn apply_analyzed_token(
         }
         UtilityKind::MinWidth => {
             if let Some(size_key) = analysis.payload() {
-                pending.min_width =
-                    resolve_size_spacing_offset(config, diagnostics, size_key, &analysis.parsed.raw);
+                pending.min_width = resolve_size_spacing_offset(
+                    config,
+                    diagnostics,
+                    size_key,
+                    &analysis.parsed.raw,
+                );
             }
         }
         UtilityKind::MaxWidth => {
             if let Some(size_key) = analysis.payload() {
-                pending.max_width =
-                    resolve_size_spacing_offset(config, diagnostics, size_key, &analysis.parsed.raw);
+                pending.max_width = resolve_size_spacing_offset(
+                    config,
+                    diagnostics,
+                    size_key,
+                    &analysis.parsed.raw,
+                );
             }
         }
         UtilityKind::MinHeight => {
             if let Some(size_key) = analysis.payload() {
-                pending.min_height =
-                    resolve_size_spacing_offset(config, diagnostics, size_key, &analysis.parsed.raw);
+                pending.min_height = resolve_size_spacing_offset(
+                    config,
+                    diagnostics,
+                    size_key,
+                    &analysis.parsed.raw,
+                );
             }
         }
         UtilityKind::MaxHeight => {
             if let Some(size_key) = analysis.payload() {
-                pending.max_height =
-                    resolve_size_spacing_offset(config, diagnostics, size_key, &analysis.parsed.raw);
+                pending.max_height = resolve_size_spacing_offset(
+                    config,
+                    diagnostics,
+                    size_key,
+                    &analysis.parsed.raw,
+                );
             }
         }
         UtilityKind::ShadowSize => match analysis.payload() {
@@ -738,7 +771,11 @@ fn apply_border_utility(
     }
 
     if let Some(line_join) = resolve_line_join_value(border_key) {
-        style.set_helper_prop("uistroke", "LineJoinMode", format!("Enum.LineJoinMode.{line_join}"));
+        style.set_helper_prop(
+            "uistroke",
+            "LineJoinMode",
+            format!("Enum.LineJoinMode.{line_join}"),
+        );
         return;
     }
 
@@ -813,7 +850,13 @@ fn resolve_gradient_stop(
     color_key: &str,
     token: &str,
 ) -> Option<String> {
-    match resolve_color_value(style_config, diagnostics, GRADIENT_COLOR_FAMILY, color_key, token)? {
+    match resolve_color_value(
+        style_config,
+        diagnostics,
+        GRADIENT_COLOR_FAMILY,
+        color_key,
+        token,
+    )? {
         ColorResolution::Expression(value) => Some(value),
         ColorResolution::Transparent => None,
     }
@@ -843,7 +886,11 @@ fn apply_shadow_color(
 }
 
 fn apply_shadow_preset(style: &mut StyleIr, preset: &ShadowPreset) {
-    style.set_helper_prop("uishadow", "BlurRadius", format!("new UDim(0, {})", preset.blur));
+    style.set_helper_prop(
+        "uishadow",
+        "BlurRadius",
+        format!("new UDim(0, {})", preset.blur),
+    );
     style.set_helper_prop(
         "uishadow",
         "Offset",
