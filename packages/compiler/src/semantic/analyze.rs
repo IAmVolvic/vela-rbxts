@@ -74,13 +74,6 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
                 true
             }
         }
-        UtilityKind::Size => matches!(parsed.utility.payload.as_deref(), Some("fit"))
-            .then(|| {
-                issues.push(SemanticIssue::UnsupportedSizeMode {
-                    mode: "fit".to_owned(),
-                });
-            })
-            .is_none(),
         _ => utility.is_supported(),
     };
 
@@ -130,13 +123,6 @@ mod tests {
         assert!(matches!(
             z_index.issues.as_slice(),
             [SemanticIssue::UnsupportedZIndexValue { value }] if value == "100"
-        ));
-
-        let size = analyze_class_token("size-fit");
-        assert!(!size.supported);
-        assert!(matches!(
-            size.issues.as_slice(),
-            [SemanticIssue::UnsupportedSizeMode { mode }] if mode == "fit"
         ));
 
         let border = analyze_class_token("border-dashed");

@@ -111,6 +111,91 @@ pub(crate) fn unsupported_alignment_value_diagnostic(
     }
 }
 
+pub(crate) fn unsupported_text_size_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-text-size".to_owned(),
+        message: format!(
+            "Tailwind `text-{value}` is not a supported font size; supported values are `text-xs` through `text-9xl`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_font_weight_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-font-weight".to_owned(),
+        message: format!(
+            "Tailwind `font-{value}` is not supported; supported values are `font-thin`, `font-extralight`, `font-light`, `font-normal`, `font-medium`, `font-semibold`, `font-bold`, `font-extrabold`, and `font-black`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_text_alignment_diagnostic(
+    family: &str,
+    value: &str,
+    token: &str,
+) -> Diagnostic {
+    let supported = if family == "align" {
+        "`align-top`, `align-middle`, and `align-bottom`"
+    } else {
+        "`text-left`, `text-center`, and `text-right`"
+    };
+
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-text-alignment".to_owned(),
+        message: format!(
+            "Tailwind `{family}-{value}` is not supported; supported values are {supported}."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_gradient_direction_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-gradient-direction".to_owned(),
+        message: format!(
+            "Tailwind `bg-gradient-to-{value}` is not supported; supported directions are `t`, `tr`, `r`, `br`, `b`, `bl`, `l`, and `tl`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_shadow_inset_diagnostic(token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-shadow-inset".to_owned(),
+        message: "Tailwind `shadow-inner` is not supported; Roblox `UIShadow` cannot render inset shadows.".to_owned(),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_overflow_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-overflow-value".to_owned(),
+        message: format!(
+            "Tailwind `overflow-{value}` is not supported; supported values are `overflow-hidden`, `overflow-clip`, and `overflow-visible`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
+pub(crate) fn unsupported_anchor_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-anchor-value".to_owned(),
+        message: format!(
+            "`origin-{value}` is not supported; supported values are `origin-top-left`, `origin-top`, `origin-top-right`, `origin-left`, `origin-center`, `origin-right`, `origin-bottom-left`, `origin-bottom`, and `origin-bottom-right`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
 pub(crate) fn unknown_theme_key_diagnostic(
     theme_family: &str,
     key: &str,
@@ -132,17 +217,6 @@ pub(crate) fn unsupported_size_spacing_value_diagnostic(value: &str, token: &str
         code: "unsupported-size-spacing-value".to_owned(),
         message: format!(
             "Spacing value \"{value}\" for size utility must be an offset-only UDim expression."
-        ),
-        token: Some(token.to_owned()),
-    }
-}
-
-pub(crate) fn unsupported_size_mode_diagnostic(mode: &str, token: &str) -> Diagnostic {
-    Diagnostic {
-        level: "warning".to_owned(),
-        code: "unsupported-size-mode".to_owned(),
-        message: format!(
-            "Size mode \"{mode}\" needs Roblox automatic sizing semantics and is not lowered to Size."
         ),
         token: Some(token.to_owned()),
     }

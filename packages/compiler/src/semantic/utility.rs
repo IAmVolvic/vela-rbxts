@@ -4,8 +4,8 @@ use crate::diagnostics::compiler::{
     color_does_not_accept_shade_diagnostic, color_missing_shade_diagnostic,
     color_requires_shade_diagnostic, unknown_theme_key_diagnostic,
     unsupported_arbitrary_z_index_diagnostic, unsupported_color_keyword_diagnostic,
-    unsupported_size_mode_diagnostic, unsupported_size_spacing_value_diagnostic,
-    unsupported_z_index_auto_diagnostic, unsupported_z_index_value_diagnostic,
+    unsupported_size_spacing_value_diagnostic, unsupported_z_index_auto_diagnostic,
+    unsupported_z_index_value_diagnostic,
 };
 use crate::ir::model::SizeAxisValue;
 
@@ -40,6 +40,29 @@ pub(crate) enum UtilityKind {
     FlexDirection,
     JustifyContent,
     AlignItems,
+    PositionX,
+    PositionY,
+    Inset,
+    AnchorPoint,
+    TextSize,
+    FontWeight,
+    TextXAlignment,
+    TextYAlignment,
+    TextWrap,
+    TextTruncate,
+    Visibility,
+    Overflow,
+    FlexWrap,
+    MinWidth,
+    MaxWidth,
+    MinHeight,
+    MaxHeight,
+    ShadowSize,
+    ShadowColor,
+    GradientDirection,
+    GradientFrom,
+    GradientVia,
+    GradientTo,
     Unknown,
 }
 
@@ -95,6 +118,60 @@ pub(crate) const OPACITY_VALUES: [&str; 14] = [
 pub(crate) const ASPECT_RATIO_VALUES: [&str; 2] = ["square", "video"];
 pub(crate) const FLEX_DIRECTION_VALUES: [&str; 2] = ["row", "col"];
 pub(crate) const ALIGNMENT_VALUES: [&str; 3] = ["start", "center", "end"];
+pub(crate) const TEXT_SIZE_VALUES: [(&str, &str); 13] = [
+    ("xs", "12"),
+    ("sm", "14"),
+    ("base", "16"),
+    ("lg", "18"),
+    ("xl", "20"),
+    ("2xl", "24"),
+    ("3xl", "30"),
+    ("4xl", "36"),
+    ("5xl", "48"),
+    ("6xl", "60"),
+    ("7xl", "72"),
+    ("8xl", "96"),
+    ("9xl", "128"),
+];
+pub(crate) const FONT_WEIGHT_VALUES: [(&str, &str); 9] = [
+    ("thin", "Thin"),
+    ("extralight", "ExtraLight"),
+    ("light", "Light"),
+    ("normal", "Regular"),
+    ("medium", "Medium"),
+    ("semibold", "SemiBold"),
+    ("bold", "Bold"),
+    ("extrabold", "ExtraBold"),
+    ("black", "Heavy"),
+];
+pub(crate) const SHADOW_SIZE_VALUES: [&str; 6] = ["sm", "md", "lg", "xl", "2xl", "none"];
+pub(crate) const GRADIENT_DIRECTION_VALUES: [&str; 8] =
+    ["t", "tr", "r", "br", "b", "bl", "l", "tl"];
+pub(crate) const GRADIENT_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
+    theme_family: "gradient color",
+    color_prop: "Color",
+    transparency_prop: None,
+};
+pub(crate) const SHADOW_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
+    theme_family: "shadow color",
+    color_prop: "Color",
+    transparency_prop: Some("Transparency"),
+};
+pub(crate) const TEXT_X_ALIGN_VALUES: [&str; 3] = ["left", "center", "right"];
+pub(crate) const TEXT_Y_ALIGN_VALUES: [&str; 3] = ["top", "middle", "bottom"];
+pub(crate) const TEXT_WRAP_VALUES: [&str; 2] = ["wrap", "nowrap"];
+pub(crate) const DEFAULT_FONT_FAMILY: &str = "rbxasset://fonts/families/SourceSansPro.json";
+pub(crate) const ANCHOR_ORIGIN_VALUES: [&str; 9] = [
+    "top-left",
+    "top",
+    "top-right",
+    "left",
+    "center",
+    "right",
+    "bottom-left",
+    "bottom",
+    "bottom-right",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParsedUtility {
@@ -139,8 +216,22 @@ pub(crate) fn spacing_completion_keys(config: &TailwindConfig) -> Vec<String> {
 pub(crate) fn size_completion_keys(config: &TailwindConfig) -> Vec<String> {
     let mut keys = spacing_completion_keys(config);
     for key in [
-        "px", "full", "fit", "1/2", "1/3", "2/3", "1/4", "3/4", "1/5", "2/5", "3/5", "4/5", "1/6",
-        "5/6", "1/12", "5/12", "11/12",
+        "px", "full", "auto", "fit", "1/2", "1/3", "2/3", "1/4", "3/4", "1/5", "2/5", "3/5", "4/5",
+        "1/6", "5/6", "1/12", "5/12", "11/12",
+    ] {
+        push_unique(&mut keys, key.to_owned());
+    }
+    keys
+}
+
+pub(crate) fn is_automatic_size_key(key: &str) -> bool {
+    matches!(key, "auto" | "fit")
+}
+
+pub(crate) fn position_completion_keys(config: &TailwindConfig) -> Vec<String> {
+    let mut keys = spacing_completion_keys(config);
+    for key in [
+        "px", "full", "1/2", "1/3", "2/3", "1/4", "3/4", "1/5", "2/5", "3/5", "4/5",
     ] {
         push_unique(&mut keys, key.to_owned());
     }
@@ -162,6 +253,17 @@ impl UtilityKind {
                 | UtilityKind::Width
                 | UtilityKind::Height
                 | UtilityKind::Size
+                | UtilityKind::PositionX
+                | UtilityKind::PositionY
+                | UtilityKind::Inset
+                | UtilityKind::MinWidth
+                | UtilityKind::MaxWidth
+                | UtilityKind::MinHeight
+                | UtilityKind::MaxHeight
+                | UtilityKind::ShadowColor
+                | UtilityKind::GradientFrom
+                | UtilityKind::GradientVia
+                | UtilityKind::GradientTo
         )
     }
 
@@ -172,7 +274,15 @@ impl UtilityKind {
 
 pub(crate) fn is_utility_allowed_on_host(element_tag: &str, kind: &UtilityKind) -> bool {
     match kind {
-        UtilityKind::TextColor => matches!(element_tag, "textlabel" | "textbutton" | "textbox"),
+        UtilityKind::TextColor
+        | UtilityKind::TextSize
+        | UtilityKind::FontWeight
+        | UtilityKind::TextXAlignment
+        | UtilityKind::TextYAlignment
+        | UtilityKind::TextWrap
+        | UtilityKind::TextTruncate => {
+            matches!(element_tag, "textlabel" | "textbutton" | "textbox")
+        }
         UtilityKind::ImageColor => matches!(element_tag, "imagelabel" | "imagebutton"),
         UtilityKind::PlaceholderColor => element_tag == "textbox",
         _ => true,
@@ -198,12 +308,74 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         };
     }
 
+    for (prefix, family, kind) in [
+        ("-top-", "top", UtilityKind::PositionY),
+        ("-left-", "left", UtilityKind::PositionX),
+        ("-inset-", "inset", UtilityKind::Inset),
+    ] {
+        if let Some(value) = token.strip_prefix(prefix) {
+            return ParsedUtility {
+                raw: token.to_owned(),
+                family: family.to_owned(),
+                payload: Some(value.to_owned()),
+                kind,
+            };
+        }
+    }
+
     if token == "border" {
         return ParsedUtility {
             raw: token.to_owned(),
             family: "border".to_owned(),
             payload: None,
             kind: UtilityKind::Border,
+        };
+    }
+
+    if token == "truncate" {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "truncate".to_owned(),
+            payload: None,
+            kind: UtilityKind::TextTruncate,
+        };
+    }
+
+    if let Some(payload) = token.strip_prefix("text-") {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "text".to_owned(),
+            payload: Some(payload.to_owned()),
+            kind: classify_text_utility(payload),
+        };
+    }
+
+    for prefix in ["bg-gradient-to-", "bg-linear-to-"] {
+        if let Some(dir) = token.strip_prefix(prefix) {
+            return ParsedUtility {
+                raw: token.to_owned(),
+                family: "gradient".to_owned(),
+                payload: Some(dir.to_owned()),
+                kind: UtilityKind::GradientDirection,
+            };
+        }
+    }
+
+    if token == "shadow" {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "shadow".to_owned(),
+            payload: None,
+            kind: UtilityKind::ShadowSize,
+        };
+    }
+
+    if let Some(payload) = token.strip_prefix("shadow-") {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "shadow".to_owned(),
+            payload: Some(payload.to_owned()),
+            kind: classify_shadow_utility(payload),
         };
     }
 
@@ -216,9 +388,28 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         };
     }
 
+    if matches!(token, "flex-wrap" | "flex-nowrap") {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "flex".to_owned(),
+            payload: token.strip_prefix("flex-").map(|value| value.to_owned()),
+            kind: UtilityKind::FlexWrap,
+        };
+    }
+
+    if matches!(token, "hidden" | "visible") {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: token.to_owned(),
+            payload: Some(token.to_owned()),
+            kind: UtilityKind::Visibility,
+        };
+    }
+
     for (prefix, kind) in [
         ("bg-", UtilityKind::BackgroundColor),
-        ("text-", UtilityKind::TextColor),
+        ("font-", UtilityKind::FontWeight),
+        ("align-", UtilityKind::TextYAlignment),
         ("image-", UtilityKind::ImageColor),
         ("placeholder-", UtilityKind::PlaceholderColor),
         ("border-", UtilityKind::Border),
@@ -232,15 +423,27 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("pb-", UtilityKind::Padding(PaddingKind::Bottom)),
         ("pl-", UtilityKind::Padding(PaddingKind::Left)),
         ("gap-", UtilityKind::Gap),
+        ("min-w-", UtilityKind::MinWidth),
+        ("max-w-", UtilityKind::MaxWidth),
+        ("min-h-", UtilityKind::MinHeight),
+        ("max-h-", UtilityKind::MaxHeight),
         ("w-", UtilityKind::Width),
         ("h-", UtilityKind::Height),
         ("size-", UtilityKind::Size),
+        ("overflow-", UtilityKind::Overflow),
         ("rotate-", UtilityKind::Rotation),
         ("opacity-", UtilityKind::Opacity),
         ("aspect-", UtilityKind::AspectRatio),
         ("flex-", UtilityKind::FlexDirection),
         ("justify-", UtilityKind::JustifyContent),
         ("items-", UtilityKind::AlignItems),
+        ("from-", UtilityKind::GradientFrom),
+        ("via-", UtilityKind::GradientVia),
+        ("to-", UtilityKind::GradientTo),
+        ("top-", UtilityKind::PositionY),
+        ("left-", UtilityKind::PositionX),
+        ("inset-", UtilityKind::Inset),
+        ("origin-", UtilityKind::AnchorPoint),
     ] {
         if let Some(payload) = token.strip_prefix(prefix) {
             return ParsedUtility {
@@ -261,6 +464,137 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
             .to_owned(),
         payload: token.split_once('-').map(|(_, payload)| payload.to_owned()),
         kind: UtilityKind::Unknown,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ShadowPreset {
+    pub(crate) blur: u32,
+    pub(crate) offset_y: u32,
+    pub(crate) spread: i32,
+    pub(crate) transparency: &'static str,
+}
+
+fn classify_shadow_utility(payload: &str) -> UtilityKind {
+    if SHADOW_SIZE_VALUES.contains(&payload) || payload == "inner" {
+        UtilityKind::ShadowSize
+    } else {
+        UtilityKind::ShadowColor
+    }
+}
+
+pub(crate) fn resolve_gradient_rotation(direction: &str) -> Option<&'static str> {
+    match direction {
+        "r" => Some("0"),
+        "br" => Some("45"),
+        "b" => Some("90"),
+        "bl" => Some("135"),
+        "l" => Some("180"),
+        "tl" => Some("225"),
+        "t" => Some("270"),
+        "tr" => Some("315"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_shadow_preset(key: Option<&str>) -> Option<ShadowPreset> {
+    let (blur, offset_y, spread, transparency) = match key {
+        None => (3, 1, 0, "0.9"),
+        Some("sm") => (2, 1, 0, "0.95"),
+        Some("md") => (6, 4, -1, "0.9"),
+        Some("lg") => (15, 10, -3, "0.9"),
+        Some("xl") => (25, 20, -5, "0.9"),
+        Some("2xl") => (50, 25, -12, "0.75"),
+        _ => return None,
+    };
+
+    Some(ShadowPreset {
+        blur,
+        offset_y,
+        spread,
+        transparency,
+    })
+}
+
+fn classify_text_utility(payload: &str) -> UtilityKind {
+    if TEXT_SIZE_VALUES.iter().any(|(key, _)| *key == payload) {
+        UtilityKind::TextSize
+    } else if TEXT_X_ALIGN_VALUES.contains(&payload) || payload == "justify" {
+        UtilityKind::TextXAlignment
+    } else if TEXT_WRAP_VALUES.contains(&payload) {
+        UtilityKind::TextWrap
+    } else {
+        UtilityKind::TextColor
+    }
+}
+
+pub(crate) fn resolve_text_size_value(key: &str) -> Option<&'static str> {
+    TEXT_SIZE_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, value)| *value)
+}
+
+pub(crate) fn resolve_font_weight_value(key: &str) -> Option<String> {
+    FONT_WEIGHT_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, weight)| {
+            format!("new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight})")
+        })
+}
+
+pub(crate) fn resolve_text_x_alignment_value(key: &str) -> Option<String> {
+    let alignment = match key {
+        "left" => "Enum.TextXAlignment.Left",
+        "center" => "Enum.TextXAlignment.Center",
+        "right" => "Enum.TextXAlignment.Right",
+        _ => return None,
+    };
+
+    Some(alignment.to_owned())
+}
+
+pub(crate) fn resolve_text_y_alignment_value(key: &str) -> Option<String> {
+    let alignment = match key {
+        "top" => "Enum.TextYAlignment.Top",
+        "middle" => "Enum.TextYAlignment.Center",
+        "bottom" => "Enum.TextYAlignment.Bottom",
+        _ => return None,
+    };
+
+    Some(alignment.to_owned())
+}
+
+pub(crate) fn resolve_text_wrap_value(key: &str) -> Option<&'static str> {
+    match key {
+        "wrap" => Some("true"),
+        "nowrap" => Some("false"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_visibility_value(key: &str) -> Option<&'static str> {
+    match key {
+        "hidden" => Some("false"),
+        "visible" => Some("true"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_overflow_value(key: &str) -> Option<&'static str> {
+    match key {
+        "hidden" | "clip" => Some("true"),
+        "visible" => Some("false"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_flex_wrap_value(key: &str) -> Option<&'static str> {
+    match key {
+        "wrap" => Some("true"),
+        "nowrap" => Some("false"),
+        _ => None,
     }
 }
 
@@ -418,16 +752,70 @@ pub(crate) fn resolve_size_axis_value(
         return Some(SizeAxisValue::scale("1"));
     }
 
-    if size_key == "fit" {
-        diagnostics.push(unsupported_size_mode_diagnostic(size_key, token));
-        return None;
-    }
-
     if let Some(fraction) = resolve_size_fraction_scale(size_key) {
         return Some(SizeAxisValue::scale(fraction));
     }
 
     resolve_size_spacing_offset(config, diagnostics, size_key, token).map(SizeAxisValue::offset)
+}
+
+pub(crate) fn resolve_position_axis_value(
+    config: &TailwindConfig,
+    diagnostics: &mut Vec<Diagnostic>,
+    position_key: &str,
+    token: &str,
+    negative: bool,
+) -> Option<SizeAxisValue> {
+    let base = if position_key == "px" {
+        SizeAxisValue::offset("1")
+    } else if position_key == "full" {
+        SizeAxisValue::scale("1")
+    } else if let Some(fraction) = resolve_size_fraction_scale(position_key) {
+        SizeAxisValue::scale(fraction)
+    } else {
+        SizeAxisValue::offset(resolve_size_spacing_offset(
+            config,
+            diagnostics,
+            position_key,
+            token,
+        )?)
+    };
+
+    Some(if negative { negate_size_axis(base) } else { base })
+}
+
+pub(crate) fn resolve_anchor_point_value(key: &str) -> Option<String> {
+    let (x, y) = match key {
+        "top-left" => ("0", "0"),
+        "top" => ("0.5", "0"),
+        "top-right" => ("1", "0"),
+        "left" => ("0", "0.5"),
+        "center" => ("0.5", "0.5"),
+        "right" => ("1", "0.5"),
+        "bottom-left" => ("0", "1"),
+        "bottom" => ("0.5", "1"),
+        "bottom-right" => ("1", "1"),
+        _ => return None,
+    };
+
+    Some(format!("new Vector2({x}, {y})"))
+}
+
+fn negate_size_axis(value: SizeAxisValue) -> SizeAxisValue {
+    SizeAxisValue {
+        scale: negate_number(value.scale),
+        offset: negate_number(value.offset),
+    }
+}
+
+fn negate_number(value: String) -> String {
+    if value == "0" {
+        value
+    } else if let Some(rest) = value.strip_prefix('-') {
+        rest.to_owned()
+    } else {
+        format!("-{value}")
+    }
 }
 
 pub(crate) fn resolve_size_spacing_offset(
@@ -777,6 +1165,124 @@ mod tests {
     }
 
     #[test]
+    fn resolves_position_and_anchor_values() {
+        let config = TailwindConfig::default();
+        let mut diagnostics = Vec::new();
+
+        let offset = resolve_position_axis_value(&config, &mut diagnostics, "4", "left-4", false)
+            .expect("spacing offset");
+        assert_eq!(offset.scale, "0");
+        assert_eq!(offset.offset, "16");
+
+        let negative =
+            resolve_position_axis_value(&config, &mut diagnostics, "4", "-top-4", true).unwrap();
+        assert_eq!(negative.offset, "-16");
+
+        let half = resolve_position_axis_value(&config, &mut diagnostics, "1/2", "left-1/2", false)
+            .unwrap();
+        assert_eq!(half.scale, "0.5");
+        assert_eq!(half.offset, "0");
+
+        let negative_half =
+            resolve_position_axis_value(&config, &mut diagnostics, "1/2", "-left-1/2", true)
+                .unwrap();
+        assert_eq!(negative_half.scale, "-0.5");
+        assert_eq!(diagnostics.len(), 0);
+
+        assert_eq!(
+            resolve_anchor_point_value("center"),
+            Some("new Vector2(0.5, 0.5)".to_owned())
+        );
+        assert_eq!(
+            resolve_anchor_point_value("bottom-right"),
+            Some("new Vector2(1, 1)".to_owned())
+        );
+        assert_eq!(resolve_anchor_point_value("middle"), None);
+    }
+
+    #[test]
+    fn classifies_and_resolves_text_utilities() {
+        assert!(matches!(parse_utility("text-lg").kind, UtilityKind::TextSize));
+        assert!(matches!(
+            parse_utility("text-center").kind,
+            UtilityKind::TextXAlignment
+        ));
+        assert!(matches!(
+            parse_utility("text-nowrap").kind,
+            UtilityKind::TextWrap
+        ));
+        assert!(matches!(
+            parse_utility("text-red-500").kind,
+            UtilityKind::TextColor
+        ));
+        assert!(matches!(
+            parse_utility("text-transparent").kind,
+            UtilityKind::TextColor
+        ));
+        assert!(matches!(
+            parse_utility("font-bold").kind,
+            UtilityKind::FontWeight
+        ));
+        assert!(matches!(
+            parse_utility("align-middle").kind,
+            UtilityKind::TextYAlignment
+        ));
+        assert!(matches!(
+            parse_utility("truncate").kind,
+            UtilityKind::TextTruncate
+        ));
+
+        assert_eq!(resolve_text_size_value("2xl"), Some("24"));
+        assert_eq!(resolve_text_size_value("huge"), None);
+        assert_eq!(
+            resolve_font_weight_value("bold"),
+            Some(format!(
+                "new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.Bold)"
+            ))
+        );
+        assert_eq!(
+            resolve_text_x_alignment_value("center"),
+            Some("Enum.TextXAlignment.Center".to_owned())
+        );
+        assert_eq!(resolve_text_x_alignment_value("justify"), None);
+        assert_eq!(
+            resolve_text_y_alignment_value("bottom"),
+            Some("Enum.TextYAlignment.Bottom".to_owned())
+        );
+        assert_eq!(resolve_text_wrap_value("nowrap"), Some("false"));
+    }
+
+    #[test]
+    fn restricts_text_utilities_to_text_hosts() {
+        assert!(is_utility_allowed_on_host(
+            "textlabel",
+            &UtilityKind::TextSize
+        ));
+        assert!(!is_utility_allowed_on_host("frame", &UtilityKind::TextSize));
+        assert!(!is_utility_allowed_on_host(
+            "frame",
+            &UtilityKind::FontWeight
+        ));
+    }
+
+    #[test]
+    fn parses_position_families() {
+        assert!(matches!(
+            parse_utility("left-4").kind,
+            UtilityKind::PositionX
+        ));
+        assert!(matches!(parse_utility("top-4").kind, UtilityKind::PositionY));
+        assert!(matches!(parse_utility("inset-0").kind, UtilityKind::Inset));
+        let negative = parse_utility("-left-4");
+        assert!(matches!(negative.kind, UtilityKind::PositionX));
+        assert_eq!(negative.payload.as_deref(), Some("4"));
+        assert!(matches!(
+            parse_utility("origin-center").kind,
+            UtilityKind::AnchorPoint
+        ));
+    }
+
+    #[test]
     fn resolves_layout_enum_values() {
         assert_eq!(
             resolve_flex_direction_value(None),
@@ -838,14 +1344,123 @@ mod tests {
     }
 
     #[test]
-    fn flags_size_fit_as_semantic_warning() {
+    fn parses_and_resolves_state_utilities() {
+        assert!(matches!(
+            parse_utility("hidden").kind,
+            UtilityKind::Visibility
+        ));
+        assert!(matches!(
+            parse_utility("visible").kind,
+            UtilityKind::Visibility
+        ));
+        assert!(matches!(
+            parse_utility("overflow-hidden").kind,
+            UtilityKind::Overflow
+        ));
+        assert!(matches!(
+            parse_utility("flex-wrap").kind,
+            UtilityKind::FlexWrap
+        ));
+        assert!(matches!(
+            parse_utility("flex-col").kind,
+            UtilityKind::FlexDirection
+        ));
+        assert!(matches!(
+            parse_utility("min-w-40").kind,
+            UtilityKind::MinWidth
+        ));
+        assert!(matches!(
+            parse_utility("max-h-40").kind,
+            UtilityKind::MaxHeight
+        ));
+
+        assert_eq!(resolve_visibility_value("hidden"), Some("false"));
+        assert_eq!(resolve_visibility_value("visible"), Some("true"));
+        assert_eq!(resolve_overflow_value("clip"), Some("true"));
+        assert_eq!(resolve_overflow_value("scroll"), None);
+        assert_eq!(resolve_flex_wrap_value("nowrap"), Some("false"));
+
         let config = TailwindConfig::default();
         let mut diagnostics = Vec::new();
+        assert_eq!(
+            resolve_size_spacing_offset(&config, &mut diagnostics, "40", "min-w-40"),
+            Some("160".to_owned())
+        );
+        assert_eq!(diagnostics.len(), 0);
+    }
 
-        assert!(resolve_size_axis_value(&config, &mut diagnostics, "fit", "size-fit").is_none());
+    #[test]
+    fn classifies_and_resolves_gradient_utilities() {
         assert!(matches!(
-            diagnostics.as_slice(),
-            [diag] if diag.code == "unsupported-size-mode"
+            parse_utility("bg-gradient-to-r").kind,
+            UtilityKind::GradientDirection
         ));
+        assert!(matches!(
+            parse_utility("bg-linear-to-br").kind,
+            UtilityKind::GradientDirection
+        ));
+        assert!(matches!(
+            parse_utility("from-cyan-500").kind,
+            UtilityKind::GradientFrom
+        ));
+        assert!(matches!(
+            parse_utility("via-purple-500").kind,
+            UtilityKind::GradientVia
+        ));
+        assert!(matches!(
+            parse_utility("to-blue-500").kind,
+            UtilityKind::GradientTo
+        ));
+        assert!(matches!(
+            parse_utility("bg-red-500").kind,
+            UtilityKind::BackgroundColor
+        ));
+
+        assert_eq!(resolve_gradient_rotation("r"), Some("0"));
+        assert_eq!(resolve_gradient_rotation("b"), Some("90"));
+        assert_eq!(resolve_gradient_rotation("tl"), Some("225"));
+        assert_eq!(resolve_gradient_rotation("nope"), None);
+    }
+
+    #[test]
+    fn classifies_and_resolves_shadow_utilities() {
+        assert!(matches!(parse_utility("shadow").kind, UtilityKind::ShadowSize));
+        assert!(matches!(
+            parse_utility("shadow-lg").kind,
+            UtilityKind::ShadowSize
+        ));
+        assert!(matches!(
+            parse_utility("shadow-none").kind,
+            UtilityKind::ShadowSize
+        ));
+        assert!(matches!(
+            parse_utility("shadow-inner").kind,
+            UtilityKind::ShadowSize
+        ));
+        assert!(matches!(
+            parse_utility("shadow-red-500").kind,
+            UtilityKind::ShadowColor
+        ));
+
+        let base = resolve_shadow_preset(None).unwrap();
+        assert_eq!(base.blur, 3);
+        assert_eq!(base.offset_y, 1);
+        assert_eq!(base.transparency, "0.9");
+
+        let two_xl = resolve_shadow_preset(Some("2xl")).unwrap();
+        assert_eq!(two_xl.blur, 50);
+        assert_eq!(two_xl.spread, -12);
+        assert_eq!(two_xl.transparency, "0.75");
+
+        assert!(resolve_shadow_preset(Some("none")).is_none());
+        assert!(resolve_shadow_preset(Some("inner")).is_none());
+    }
+
+    #[test]
+    fn recognizes_automatic_size_keys() {
+        assert!(is_automatic_size_key("auto"));
+        assert!(is_automatic_size_key("fit"));
+        assert!(!is_automatic_size_key("full"));
+        assert!(!is_automatic_size_key("4"));
     }
 }

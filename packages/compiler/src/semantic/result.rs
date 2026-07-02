@@ -10,7 +10,6 @@ pub(crate) enum SemanticIssue {
     UnsupportedZIndexAuto,
     UnsupportedArbitraryZIndex,
     NegativeZIndex,
-    UnsupportedSizeMode { mode: String },
 }
 
 #[derive(Clone, Debug)]

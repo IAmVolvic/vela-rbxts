@@ -6,9 +6,11 @@ use crate::editor::{
 };
 use crate::semantic::{
     utility::{
-        ALIGNMENT_VALUES, ASPECT_RATIO_VALUES, BORDER_THICKNESS_VALUES, FLEX_DIRECTION_VALUES,
-        OPACITY_VALUES, PaddingKind, ROTATION_VALUES, UtilityKind, Z_INDEX_VALUES,
-        color_completion_keys, is_utility_allowed_on_host, radius_completion_keys,
+        ALIGNMENT_VALUES, ANCHOR_ORIGIN_VALUES, ASPECT_RATIO_VALUES, BORDER_THICKNESS_VALUES,
+        FLEX_DIRECTION_VALUES, FONT_WEIGHT_VALUES, GRADIENT_DIRECTION_VALUES, OPACITY_VALUES,
+        PaddingKind, ROTATION_VALUES, SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES,
+        TEXT_X_ALIGN_VALUES, TEXT_Y_ALIGN_VALUES, UtilityKind, Z_INDEX_VALUES, color_completion_keys,
+        is_utility_allowed_on_host, position_completion_keys, radius_completion_keys,
         size_completion_keys, spacing_completion_keys,
     },
     variant::RUNTIME_VARIANTS,
@@ -349,6 +351,275 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             },
             utility_kind: UtilityKind::FlexDirection,
         });
+    }
+
+    for (prefix, utility_kind, axis) in [
+        ("left", UtilityKind::PositionX, "Position.X"),
+        ("top", UtilityKind::PositionY, "Position.Y"),
+        ("inset", UtilityKind::Inset, "Position"),
+    ] {
+        for key in position_completion_keys(config) {
+            for label in [format!("{prefix}-{key}"), format!("-{prefix}-{key}")] {
+                items.push(CompletionSpec {
+                    item: CompletionItem {
+                        label: label.clone(),
+                        insert_text: label,
+                        kind: "utility".to_owned(),
+                        category: "layout".to_owned(),
+                        documentation: format!("Set Roblox {axis} using `{prefix}-{key}`."),
+                        replacement: None,
+                    },
+                    utility_kind: utility_kind.clone(),
+                });
+            }
+        }
+    }
+
+    for origin in ANCHOR_ORIGIN_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("origin-{origin}"),
+                insert_text: format!("origin-{origin}"),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!("Set Roblox AnchorPoint from `origin-{origin}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::AnchorPoint,
+        });
+    }
+
+    for (key, value) in TEXT_SIZE_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("text-{key}"),
+                insert_text: format!("text-{key}"),
+                kind: "utility".to_owned(),
+                category: "typography".to_owned(),
+                documentation: format!("Set Roblox TextSize to `{value}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::TextSize,
+        });
+    }
+
+    for (key, weight) in FONT_WEIGHT_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("font-{key}"),
+                insert_text: format!("font-{key}"),
+                kind: "utility".to_owned(),
+                category: "typography".to_owned(),
+                documentation: format!("Set Roblox FontFace weight to `{weight}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::FontWeight,
+        });
+    }
+
+    for alignment in TEXT_X_ALIGN_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("text-{alignment}"),
+                insert_text: format!("text-{alignment}"),
+                kind: "utility".to_owned(),
+                category: "typography".to_owned(),
+                documentation: format!("Set Roblox TextXAlignment from `text-{alignment}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::TextXAlignment,
+        });
+    }
+
+    for alignment in TEXT_Y_ALIGN_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("align-{alignment}"),
+                insert_text: format!("align-{alignment}"),
+                kind: "utility".to_owned(),
+                category: "typography".to_owned(),
+                documentation: format!("Set Roblox TextYAlignment from `align-{alignment}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::TextYAlignment,
+        });
+    }
+
+    for wrap in TEXT_WRAP_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("text-{wrap}"),
+                insert_text: format!("text-{wrap}"),
+                kind: "utility".to_owned(),
+                category: "typography".to_owned(),
+                documentation: format!("Set Roblox TextWrapped from `text-{wrap}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::TextWrap,
+        });
+    }
+
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "truncate".to_owned(),
+            insert_text: "truncate".to_owned(),
+            kind: "utility".to_owned(),
+            category: "typography".to_owned(),
+            documentation: "Set Roblox TextTruncate to `Enum.TextTruncate.AtEnd`.".to_owned(),
+            replacement: None,
+        },
+        utility_kind: UtilityKind::TextTruncate,
+    });
+
+    for (label, prop, value, utility_kind) in [
+        ("hidden", "Visible", "false", UtilityKind::Visibility),
+        ("visible", "Visible", "true", UtilityKind::Visibility),
+        (
+            "overflow-hidden",
+            "ClipsDescendants",
+            "true",
+            UtilityKind::Overflow,
+        ),
+        (
+            "overflow-clip",
+            "ClipsDescendants",
+            "true",
+            UtilityKind::Overflow,
+        ),
+        (
+            "overflow-visible",
+            "ClipsDescendants",
+            "false",
+            UtilityKind::Overflow,
+        ),
+        (
+            "flex-wrap",
+            "UIListLayout.Wraps",
+            "true",
+            UtilityKind::FlexWrap,
+        ),
+        (
+            "flex-nowrap",
+            "UIListLayout.Wraps",
+            "false",
+            UtilityKind::FlexWrap,
+        ),
+    ] {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: label.to_owned(),
+                insert_text: label.to_owned(),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!("Set Roblox {prop} to `{value}`."),
+                replacement: None,
+            },
+            utility_kind,
+        });
+    }
+
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "shadow".to_owned(),
+            insert_text: "shadow".to_owned(),
+            kind: "utility".to_owned(),
+            category: "effects".to_owned(),
+            documentation: "Create a Roblox UIShadow with the default drop shadow.".to_owned(),
+            replacement: None,
+        },
+        utility_kind: UtilityKind::ShadowSize,
+    });
+
+    for size in SHADOW_SIZE_VALUES {
+        let documentation = if size == "none" {
+            "Disable the UIShadow via `UIShadow.Enabled = false`.".to_owned()
+        } else {
+            format!("Create a Roblox UIShadow sized like Tailwind `shadow-{size}`.")
+        };
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("shadow-{size}"),
+                insert_text: format!("shadow-{size}"),
+                kind: "utility".to_owned(),
+                category: "effects".to_owned(),
+                documentation,
+                replacement: None,
+            },
+            utility_kind: UtilityKind::ShadowSize,
+        });
+    }
+
+    for color_key in color_completion_keys(config) {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("shadow-{color_key}"),
+                insert_text: format!("shadow-{color_key}"),
+                kind: "utility".to_owned(),
+                category: "color".to_owned(),
+                documentation: format!("Set Roblox UIShadow.Color from theme color `{color_key}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::ShadowColor,
+        });
+    }
+
+    for direction in GRADIENT_DIRECTION_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("bg-gradient-to-{direction}"),
+                insert_text: format!("bg-gradient-to-{direction}"),
+                kind: "utility".to_owned(),
+                category: "effects".to_owned(),
+                documentation: format!(
+                    "Create a Roblox UIGradient pointing `{direction}`. Combine with `from-*`/`via-*`/`to-*`."
+                ),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::GradientDirection,
+        });
+    }
+
+    for (prefix, utility_kind) in [
+        ("from", UtilityKind::GradientFrom),
+        ("via", UtilityKind::GradientVia),
+        ("to", UtilityKind::GradientTo),
+    ] {
+        for color_key in color_completion_keys(config) {
+            items.push(CompletionSpec {
+                item: CompletionItem {
+                    label: format!("{prefix}-{color_key}"),
+                    insert_text: format!("{prefix}-{color_key}"),
+                    kind: "utility".to_owned(),
+                    category: "color".to_owned(),
+                    documentation: format!(
+                        "Add a `{prefix}` UIGradient color stop from theme color `{color_key}`."
+                    ),
+                    replacement: None,
+                },
+                utility_kind: utility_kind.clone(),
+            });
+        }
+    }
+
+    for (prefix, target, utility_kind) in [
+        ("min-w", "UISizeConstraint.MinSize.X", UtilityKind::MinWidth),
+        ("max-w", "UISizeConstraint.MaxSize.X", UtilityKind::MaxWidth),
+        ("min-h", "UISizeConstraint.MinSize.Y", UtilityKind::MinHeight),
+        ("max-h", "UISizeConstraint.MaxSize.Y", UtilityKind::MaxHeight),
+    ] {
+        for key in spacing_completion_keys(config) {
+            items.push(CompletionSpec {
+                item: CompletionItem {
+                    label: format!("{prefix}-{key}"),
+                    insert_text: format!("{prefix}-{key}"),
+                    kind: "utility".to_owned(),
+                    category: "size".to_owned(),
+                    documentation: format!("Set Roblox {target} from spacing `{key}`."),
+                    replacement: None,
+                },
+                utility_kind: utility_kind.clone(),
+            });
+        }
     }
 
     for (prefix, utility_kind) in [

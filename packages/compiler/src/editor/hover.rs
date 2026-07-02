@@ -6,13 +6,20 @@ use crate::ir::model::SizeAxisValue;
 use crate::semantic::{
     analyze::analyze_class_token,
     utility::{
-        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, IMAGE_COLOR_FAMILY,
-        PLACEHOLDER_COLOR_FAMILY, PaddingKind, TEXT_COLOR_FAMILY, UtilityKind,
-        is_known_unsupported_border_payload, is_utility_allowed_on_host, resolve_align_items_value,
-        resolve_aspect_ratio_value, resolve_border_thickness_value, resolve_color_value,
-        resolve_flex_direction_value, resolve_justify_value, resolve_opacity_value,
-        resolve_radius_value, resolve_rotation_value, resolve_size_axis_value,
-        resolve_spacing_value, resolve_z_index_value,
+        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, GRADIENT_COLOR_FAMILY,
+        IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, PaddingKind, SHADOW_COLOR_FAMILY,
+        TEXT_COLOR_FAMILY, UtilityKind,
+        is_automatic_size_key, is_known_unsupported_border_payload, is_utility_allowed_on_host,
+        resolve_align_items_value, resolve_anchor_point_value, resolve_aspect_ratio_value,
+        resolve_border_thickness_value,
+        resolve_color_value, resolve_flex_direction_value, resolve_flex_wrap_value,
+        resolve_font_weight_value, resolve_justify_value, resolve_opacity_value,
+        resolve_overflow_value, resolve_position_axis_value, resolve_radius_value,
+        resolve_gradient_rotation, resolve_rotation_value, resolve_shadow_preset,
+        resolve_size_axis_value, resolve_size_spacing_offset, resolve_spacing_value,
+        resolve_text_size_value,
+        resolve_text_wrap_value, resolve_text_x_alignment_value, resolve_text_y_alignment_value,
+        resolve_visibility_value, resolve_z_index_value,
     },
 };
 
@@ -146,11 +153,17 @@ fn describe_token(
                 _ => unreachable!(),
             };
 
-            if size_key == "fit" {
+            if is_automatic_size_key(size_key) {
+                let axis = match &analysis.utility {
+                    UtilityKind::Width => "X",
+                    UtilityKind::Height => "Y",
+                    UtilityKind::Size => "XY",
+                    _ => unreachable!(),
+                };
                 return Some(HoverContent {
-                    display: format!("`{token}` -> recognized, not lowered"),
+                    display: format!("`{token}` -> AutomaticSize"),
                     documentation: format!(
-                        "{variant_prefix}`fit` needs Roblox automatic sizing semantics and is not lowered to `Size`."
+                        "{variant_prefix}Sets `AutomaticSize` to `Enum.AutomaticSize.{axis}`."
                     ),
                 });
             }
@@ -223,6 +236,202 @@ fn describe_token(
                 documentation: format!(
                     "{variant_prefix}Sets `UIListLayout.VerticalAlignment` to `{value}`."
                 ),
+            })
+        }
+        UtilityKind::PositionX | UtilityKind::PositionY | UtilityKind::Inset => {
+            let position_key = analysis.payload()?;
+            let (negative, target) = match &analysis.utility {
+                UtilityKind::PositionX => (analysis.parsed.utility.raw.starts_with("-left-"), "Position.X"),
+                UtilityKind::PositionY => (analysis.parsed.utility.raw.starts_with("-top-"), "Position.Y"),
+                UtilityKind::Inset => (analysis.parsed.utility.raw.starts_with("-inset-"), "Position"),
+                _ => unreachable!(),
+            };
+
+            let mut diagnostics = Vec::new();
+            let value = resolve_position_axis_value(
+                config,
+                &mut diagnostics,
+                position_key,
+                &analysis.parsed.utility.raw,
+                negative,
+            )?;
+            let resolved = describe_size_axis_value(&value);
+
+            Some(HoverContent {
+                display: format!("`{token}` -> Roblox {target}"),
+                documentation: format!("{variant_prefix}Sets `{target}` using {resolved}."),
+            })
+        }
+        UtilityKind::AnchorPoint => {
+            let origin_key = analysis.payload()?;
+            let value = resolve_anchor_point_value(origin_key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> AnchorPoint"),
+                documentation: format!("{variant_prefix}Sets `AnchorPoint` to `{value}`."),
+            })
+        }
+        UtilityKind::TextSize => {
+            let size_key = analysis.payload()?;
+            let value = resolve_text_size_value(size_key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TextSize"),
+                documentation: format!("{variant_prefix}Sets `TextSize` to `{value}`."),
+            })
+        }
+        UtilityKind::FontWeight => {
+            let weight_key = analysis.payload()?;
+            let value = resolve_font_weight_value(weight_key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> FontFace"),
+                documentation: format!("{variant_prefix}Sets `FontFace` to `{value}`."),
+            })
+        }
+        UtilityKind::TextXAlignment => {
+            let value = resolve_text_x_alignment_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TextXAlignment"),
+                documentation: format!("{variant_prefix}Sets `TextXAlignment` to `{value}`."),
+            })
+        }
+        UtilityKind::TextYAlignment => {
+            let value = resolve_text_y_alignment_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TextYAlignment"),
+                documentation: format!("{variant_prefix}Sets `TextYAlignment` to `{value}`."),
+            })
+        }
+        UtilityKind::TextWrap => {
+            let value = resolve_text_wrap_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TextWrapped"),
+                documentation: format!("{variant_prefix}Sets `TextWrapped` to `{value}`."),
+            })
+        }
+        UtilityKind::TextTruncate => Some(HoverContent {
+            display: format!("`{token}` -> TextTruncate"),
+            documentation: format!(
+                "{variant_prefix}Sets `TextTruncate` to `Enum.TextTruncate.AtEnd`."
+            ),
+        }),
+        UtilityKind::Visibility => {
+            let value = resolve_visibility_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> Visible"),
+                documentation: format!("{variant_prefix}Sets `Visible` to `{value}`."),
+            })
+        }
+        UtilityKind::Overflow => {
+            let value = resolve_overflow_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ClipsDescendants"),
+                documentation: format!("{variant_prefix}Sets `ClipsDescendants` to `{value}`."),
+            })
+        }
+        UtilityKind::FlexWrap => {
+            let value = resolve_flex_wrap_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.Wraps"),
+                documentation: format!("{variant_prefix}Sets `UIListLayout.Wraps` to `{value}`."),
+            })
+        }
+        UtilityKind::MinWidth
+        | UtilityKind::MaxWidth
+        | UtilityKind::MinHeight
+        | UtilityKind::MaxHeight => {
+            let size_key = analysis.payload()?;
+            let target = match &analysis.utility {
+                UtilityKind::MinWidth => "UISizeConstraint.MinSize.X",
+                UtilityKind::MaxWidth => "UISizeConstraint.MaxSize.X",
+                UtilityKind::MinHeight => "UISizeConstraint.MinSize.Y",
+                UtilityKind::MaxHeight => "UISizeConstraint.MaxSize.Y",
+                _ => unreachable!(),
+            };
+            let mut diagnostics = Vec::new();
+            let value = resolve_size_spacing_offset(
+                config,
+                &mut diagnostics,
+                size_key,
+                &analysis.parsed.utility.raw,
+            )?;
+            Some(HoverContent {
+                display: format!("`{token}` -> {target}"),
+                documentation: format!("{variant_prefix}Sets `{target}` to `{value}`."),
+            })
+        }
+        UtilityKind::ShadowSize => {
+            let key = analysis.payload();
+            match key {
+                Some("none") => Some(HoverContent {
+                    display: format!("`{token}` -> UIShadow.Enabled"),
+                    documentation: format!("{variant_prefix}Sets `UIShadow.Enabled` to `false`."),
+                }),
+                Some("inner") => Some(HoverContent {
+                    display: format!("`{token}`"),
+                    documentation: format!(
+                        "{variant_prefix}`shadow-inner` is not supported; Roblox `UIShadow` cannot render inset shadows."
+                    ),
+                }),
+                _ => {
+                    let preset = resolve_shadow_preset(key)?;
+                    Some(HoverContent {
+                        display: format!("`{token}` -> UIShadow"),
+                        documentation: format!(
+                            "{variant_prefix}Creates a Roblox UIShadow with `BlurRadius = {}`, `Offset = (0, {})`, and `Transparency = {}`.",
+                            preset.blur, preset.offset_y, preset.transparency
+                        ),
+                    })
+                }
+            }
+        }
+        UtilityKind::ShadowColor => {
+            let color_key = analysis.payload()?;
+            let mut diagnostics = Vec::new();
+            let resolution =
+                resolve_color_value(config, &mut diagnostics, SHADOW_COLOR_FAMILY, color_key, token)?;
+            let documentation = match resolution {
+                ColorResolution::Expression(value) => {
+                    format!("{variant_prefix}Sets `UIShadow.Color` to `{value}`.")
+                }
+                ColorResolution::Transparent => {
+                    format!("{variant_prefix}Sets `UIShadow.Transparency` to `1`.")
+                }
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIShadow.Color"),
+                documentation,
+            })
+        }
+        UtilityKind::GradientDirection => {
+            let rotation = resolve_gradient_rotation(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGradient.Rotation"),
+                documentation: format!(
+                    "{variant_prefix}Creates a Roblox UIGradient with `Rotation = {rotation}`. Combine with `from-*`, `via-*`, and `to-*` color stops."
+                ),
+            })
+        }
+        UtilityKind::GradientFrom | UtilityKind::GradientVia | UtilityKind::GradientTo => {
+            let color_key = analysis.payload()?;
+            let stop = match &analysis.utility {
+                UtilityKind::GradientFrom => "from",
+                UtilityKind::GradientVia => "via",
+                UtilityKind::GradientTo => "to",
+                _ => unreachable!(),
+            };
+            let mut diagnostics = Vec::new();
+            let resolution =
+                resolve_color_value(config, &mut diagnostics, GRADIENT_COLOR_FAMILY, color_key, token)?;
+            let documentation = match resolution {
+                ColorResolution::Expression(value) => format!(
+                    "{variant_prefix}Adds a `{stop}` color stop `{value}` to the parent's UIGradient."
+                ),
+                ColorResolution::Transparent => format!(
+                    "{variant_prefix}`transparent` gradient stops are not lowered to UIGradient yet."
+                ),
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGradient.Color"),
+                documentation,
             })
         }
         UtilityKind::Unknown => None,
