@@ -63,6 +63,17 @@ pub(crate) fn unsupported_rotation_value_diagnostic(value: &str, token: &str) ->
     }
 }
 
+pub(crate) fn unsupported_scale_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-scale-value".to_owned(),
+        message: format!(
+            "Tailwind `scale-{value}` is not supported; Roblox `UIScale` is uniform, and supported values are `scale-0`, `scale-50`, `scale-75`, `scale-90`, `scale-95`, `scale-100`, `scale-105`, `scale-110`, `scale-125`, and `scale-150`."
+        ),
+        token: Some(token.to_owned()),
+    }
+}
+
 pub(crate) fn unsupported_opacity_value_diagnostic(value: &str, token: &str) -> Diagnostic {
     Diagnostic {
         level: "warning".to_owned(),

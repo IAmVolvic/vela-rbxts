@@ -15,8 +15,9 @@ use crate::semantic::{
         resolve_color_value, resolve_flex_direction_value, resolve_flex_item_mode,
         resolve_flex_wrap_value, resolve_font_weight_value, resolve_gradient_rotation,
         resolve_items_flex_value, resolve_justify_flex_value, resolve_justify_value,
-        resolve_opacity_value, resolve_overflow_value, resolve_position_axis_value,
-        resolve_radius_value, resolve_rotation_value, resolve_shadow_preset,
+        resolve_line_join_value, resolve_opacity_value, resolve_overflow_value,
+        resolve_position_axis_value, resolve_radius_value, resolve_rotation_value,
+        resolve_scale_value, resolve_shadow_preset,
         resolve_size_axis_value, resolve_size_spacing_offset, resolve_spacing_value,
         resolve_text_size_value,
         resolve_text_wrap_value, resolve_text_x_alignment_value, resolve_text_y_alignment_value,
@@ -190,6 +191,14 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> Rotation"),
                 documentation: format!("{variant_prefix}Sets `Rotation` to `{value}`."),
+            })
+        }
+        UtilityKind::Scale => {
+            let scale_key = analysis.payload()?;
+            let value = resolve_scale_value(scale_key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIScale.Scale"),
+                documentation: format!("{variant_prefix}Sets `UIScale.Scale` to `{value}`."),
             })
         }
         UtilityKind::Opacity => {
@@ -517,6 +526,15 @@ fn describe_border_token(
         return Some(HoverContent {
             display: format!("`{token}` -> UIStroke.Transparency"),
             documentation: format!("{variant_prefix}Sets `UIStroke.Transparency` to `1`."),
+        });
+    }
+
+    if let Some(line_join) = resolve_line_join_value(border_key) {
+        return Some(HoverContent {
+            display: format!("`{token}` -> UIStroke.LineJoinMode"),
+            documentation: format!(
+                "{variant_prefix}Sets `UIStroke.LineJoinMode` to `Enum.LineJoinMode.{line_join}`."
+            ),
         });
     }
 

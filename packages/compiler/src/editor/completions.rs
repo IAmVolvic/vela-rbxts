@@ -6,10 +6,10 @@ use crate::editor::{
 };
 use crate::semantic::{
     utility::{
-        ALIGNMENT_VALUES, ANCHOR_ORIGIN_VALUES, ASPECT_RATIO_VALUES, BORDER_THICKNESS_VALUES,
-        FLEX_DIRECTION_VALUES, FLEX_ITEM_VALUES, FONT_WEIGHT_VALUES, GRADIENT_DIRECTION_VALUES,
-        JUSTIFY_FLEX_VALUES, OPACITY_VALUES,
-        PaddingKind, ROTATION_VALUES, SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES,
+        ALIGNMENT_VALUES, ANCHOR_ORIGIN_VALUES, ASPECT_RATIO_VALUES, BORDER_LINE_JOIN_VALUES,
+        BORDER_THICKNESS_VALUES, FLEX_DIRECTION_VALUES, FLEX_ITEM_VALUES, FONT_WEIGHT_VALUES,
+        GRADIENT_DIRECTION_VALUES, JUSTIFY_FLEX_VALUES, OPACITY_VALUES, PaddingKind, ROTATION_VALUES,
+        SCALE_VALUES, SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES,
         TEXT_X_ALIGN_VALUES, TEXT_Y_ALIGN_VALUES, UtilityKind, Z_INDEX_VALUES, color_completion_keys,
         is_utility_allowed_on_host, position_completion_keys, radius_completion_keys,
         size_completion_keys, spacing_completion_keys,
@@ -172,6 +172,22 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         utility_kind: UtilityKind::Border,
     });
 
+    for line_join in BORDER_LINE_JOIN_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("border-{line_join}"),
+                insert_text: format!("border-{line_join}"),
+                kind: "utility".to_owned(),
+                category: "border".to_owned(),
+                documentation: format!(
+                    "Set Roblox UIStroke.LineJoinMode from `border-{line_join}`."
+                ),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::Border,
+        });
+    }
+
     for color_key in color_completion_keys(config) {
         items.push(CompletionSpec {
             item: CompletionItem {
@@ -291,6 +307,20 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 utility_kind: UtilityKind::Rotation,
             });
         }
+    }
+
+    for scale in SCALE_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("scale-{scale}"),
+                insert_text: format!("scale-{scale}"),
+                kind: "utility".to_owned(),
+                category: "transform".to_owned(),
+                documentation: format!("Set Roblox UIScale.Scale from `scale-{scale}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::Scale,
+        });
     }
 
     for percent in OPACITY_VALUES {

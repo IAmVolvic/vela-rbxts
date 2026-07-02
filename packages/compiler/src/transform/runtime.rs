@@ -7,7 +7,7 @@ use crate::diagnostics::compiler::{
     unsupported_color_keyword_diagnostic, unsupported_flex_direction_diagnostic,
     unsupported_font_weight_diagnostic, unsupported_gradient_direction_diagnostic,
     unsupported_opacity_value_diagnostic, unsupported_overflow_diagnostic,
-    unsupported_rotation_value_diagnostic,
+    unsupported_rotation_value_diagnostic, unsupported_scale_diagnostic,
     unsupported_shadow_inset_diagnostic, unsupported_text_alignment_diagnostic,
     unsupported_text_size_diagnostic, unsupported_utility_family_diagnostic,
     unsupported_z_index_auto_diagnostic, unsupported_z_index_value_diagnostic,
@@ -24,9 +24,9 @@ use crate::semantic::{
         resolve_aspect_ratio_value, resolve_border_thickness_value, resolve_color_value,
         resolve_flex_direction_value, resolve_flex_item_mode, resolve_flex_wrap_value,
         resolve_font_weight_value, resolve_gradient_rotation, resolve_items_flex_value,
-        resolve_justify_flex_value, resolve_justify_value, resolve_opacity_value,
-        resolve_overflow_value,
-        resolve_position_axis_value, resolve_radius_value, resolve_rotation_value,
+        resolve_justify_flex_value, resolve_justify_value, resolve_line_join_value,
+        resolve_opacity_value, resolve_overflow_value, resolve_position_axis_value,
+        resolve_radius_value, resolve_rotation_value, resolve_scale_value,
         resolve_shadow_preset, resolve_size_axis_value, resolve_size_spacing_offset,
         resolve_spacing_value, resolve_text_size_value, resolve_text_wrap_value,
         resolve_text_x_alignment_value, resolve_text_y_alignment_value, resolve_visibility_value,
@@ -443,6 +443,16 @@ fn apply_analyzed_token(
                 }
             }
         }
+        UtilityKind::Scale => {
+            if let Some(scale_key) = analysis.payload() {
+                if let Some(value) = resolve_scale_value(scale_key) {
+                    style.set_helper_prop("uiscale", "Scale", value.to_owned());
+                } else {
+                    diagnostics
+                        .push(unsupported_scale_diagnostic(scale_key, &analysis.parsed.raw));
+                }
+            }
+        }
         UtilityKind::Opacity => {
             if let Some(percent) = analysis.payload() {
                 if let Some(value) = resolve_opacity_value(percent) {
@@ -724,6 +734,11 @@ fn apply_border_utility(
 
     if border_key == "transparent" {
         style.set_helper_prop("uistroke", "Transparency", "1".to_owned());
+        return;
+    }
+
+    if let Some(line_join) = resolve_line_join_value(border_key) {
+        style.set_helper_prop("uistroke", "LineJoinMode", format!("Enum.LineJoinMode.{line_join}"));
         return;
     }
 

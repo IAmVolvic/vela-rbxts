@@ -64,6 +64,7 @@ pub(crate) enum UtilityKind {
     GradientVia,
     GradientTo,
     FlexItem,
+    Scale,
     Unknown,
 }
 
@@ -113,6 +114,9 @@ pub(crate) const BORDER_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
 pub(crate) const Z_INDEX_VALUES: [&str; 6] = ["0", "10", "20", "30", "40", "50"];
 pub(crate) const BORDER_THICKNESS_VALUES: [&str; 4] = ["0", "1", "2", "4"];
 pub(crate) const ROTATION_VALUES: [&str; 9] = ["0", "1", "2", "3", "6", "12", "45", "90", "180"];
+pub(crate) const SCALE_VALUES: [&str; 10] =
+    ["0", "50", "75", "90", "95", "100", "105", "110", "125", "150"];
+pub(crate) const BORDER_LINE_JOIN_VALUES: [&str; 3] = ["round", "bevel", "miter"];
 pub(crate) const OPACITY_VALUES: [&str; 14] = [
     "0", "5", "10", "20", "25", "30", "40", "50", "60", "70", "75", "80", "90", "100",
 ];
@@ -453,6 +457,7 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("size-", UtilityKind::Size),
         ("overflow-", UtilityKind::Overflow),
         ("rotate-", UtilityKind::Rotation),
+        ("scale-", UtilityKind::Scale),
         ("opacity-", UtilityKind::Opacity),
         ("aspect-", UtilityKind::AspectRatio),
         ("flex-", UtilityKind::FlexDirection),
@@ -906,6 +911,31 @@ pub(crate) fn resolve_z_index_value(
 
     diagnostics.push(unsupported_z_index_value_diagnostic(z_key, token));
     None
+}
+
+pub(crate) fn resolve_scale_value(key: &str) -> Option<&'static str> {
+    match key {
+        "0" => Some("0"),
+        "50" => Some("0.5"),
+        "75" => Some("0.75"),
+        "90" => Some("0.9"),
+        "95" => Some("0.95"),
+        "100" => Some("1"),
+        "105" => Some("1.05"),
+        "110" => Some("1.1"),
+        "125" => Some("1.25"),
+        "150" => Some("1.5"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_line_join_value(key: &str) -> Option<&'static str> {
+    match key {
+        "round" => Some("Round"),
+        "bevel" => Some("Bevel"),
+        "miter" => Some("Miter"),
+        _ => None,
+    }
 }
 
 pub(crate) fn resolve_rotation_value(degrees: &str, negative: bool) -> Option<String> {
@@ -1434,6 +1464,29 @@ mod tests {
             Some("160".to_owned())
         );
         assert_eq!(diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn parses_and_resolves_scale_and_line_join() {
+        assert!(matches!(parse_utility("scale-110").kind, UtilityKind::Scale));
+        assert!(matches!(
+            parse_utility("scale-x-110").kind,
+            UtilityKind::Scale
+        ));
+
+        assert_eq!(resolve_scale_value("100"), Some("1"));
+        assert_eq!(resolve_scale_value("110"), Some("1.1"));
+        assert_eq!(resolve_scale_value("50"), Some("0.5"));
+        assert_eq!(resolve_scale_value("x-110"), None);
+        assert_eq!(resolve_scale_value("113"), None);
+
+        assert_eq!(resolve_line_join_value("round"), Some("Round"));
+        assert_eq!(resolve_line_join_value("miter"), Some("Miter"));
+        assert_eq!(resolve_line_join_value("groove"), None);
+        assert!(matches!(
+            parse_utility("border-round").kind,
+            UtilityKind::Border
+        ));
     }
 
     #[test]
