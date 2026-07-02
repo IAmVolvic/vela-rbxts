@@ -101,12 +101,16 @@ pub(crate) fn unsupported_alignment_value_diagnostic(
     value: &str,
     token: &str,
 ) -> Diagnostic {
+    let supported = if family == "justify" {
+        "`justify-start`, `justify-center`, `justify-end`, `justify-between`, `justify-around`, and `justify-evenly`"
+    } else {
+        "`items-start`, `items-center`, `items-end`, and `items-stretch`"
+    };
+
     Diagnostic {
         level: "warning".to_owned(),
         code: "unsupported-alignment-value".to_owned(),
-        message: format!(
-            "Tailwind `{family}-{value}` is not supported; supported values are `{family}-start`, `{family}-center`, and `{family}-end`."
-        ),
+        message: format!("Tailwind `{family}-{value}` is not supported; supported values are {supported}."),
         token: Some(token.to_owned()),
     }
 }

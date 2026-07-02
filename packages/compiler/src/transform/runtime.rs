@@ -22,9 +22,10 @@ use crate::semantic::{
         ShadowPreset, TEXT_COLOR_FAMILY, UtilityKind, is_automatic_size_key,
         is_known_unsupported_border_payload, resolve_align_items_value, resolve_anchor_point_value,
         resolve_aspect_ratio_value, resolve_border_thickness_value, resolve_color_value,
-        resolve_gradient_rotation,
-        resolve_flex_direction_value, resolve_flex_wrap_value, resolve_font_weight_value,
-        resolve_justify_value, resolve_opacity_value, resolve_overflow_value,
+        resolve_flex_direction_value, resolve_flex_item_mode, resolve_flex_wrap_value,
+        resolve_font_weight_value, resolve_gradient_rotation, resolve_items_flex_value,
+        resolve_justify_flex_value, resolve_justify_value, resolve_opacity_value,
+        resolve_overflow_value,
         resolve_position_axis_value, resolve_radius_value, resolve_rotation_value,
         resolve_shadow_preset, resolve_size_axis_value, resolve_size_spacing_offset,
         resolve_spacing_value, resolve_text_size_value, resolve_text_wrap_value,
@@ -478,7 +479,13 @@ fn apply_analyzed_token(
         }
         UtilityKind::JustifyContent => {
             if let Some(alignment_key) = analysis.payload() {
-                if let Some(value) = resolve_justify_value(alignment_key) {
+                if let Some(flex) = resolve_justify_flex_value(alignment_key) {
+                    style.set_helper_prop(
+                        "uilistlayout",
+                        "HorizontalFlex",
+                        format!("Enum.UIFlexAlignment.{flex}"),
+                    );
+                } else if let Some(value) = resolve_justify_value(alignment_key) {
                     style.set_helper_prop("uilistlayout", "HorizontalAlignment", value);
                 } else {
                     diagnostics.push(unsupported_alignment_value_diagnostic(
@@ -491,7 +498,13 @@ fn apply_analyzed_token(
         }
         UtilityKind::AlignItems => {
             if let Some(alignment_key) = analysis.payload() {
-                if let Some(value) = resolve_align_items_value(alignment_key) {
+                if let Some(flex) = resolve_items_flex_value(alignment_key) {
+                    style.set_helper_prop(
+                        "uilistlayout",
+                        "VerticalFlex",
+                        format!("Enum.UIFlexAlignment.{flex}"),
+                    );
+                } else if let Some(value) = resolve_align_items_value(alignment_key) {
                     style.set_helper_prop("uilistlayout", "VerticalAlignment", value);
                 } else {
                     diagnostics.push(unsupported_alignment_value_diagnostic(
@@ -500,6 +513,11 @@ fn apply_analyzed_token(
                         &analysis.parsed.raw,
                     ));
                 }
+            }
+        }
+        UtilityKind::FlexItem => {
+            if let Some(mode) = analysis.payload().and_then(resolve_flex_item_mode) {
+                style.set_helper_prop("uiflexitem", "FlexMode", format!("Enum.UIFlexMode.{mode}"));
             }
         }
         UtilityKind::TextSize => {

@@ -12,10 +12,11 @@ use crate::semantic::{
         is_automatic_size_key, is_known_unsupported_border_payload, is_utility_allowed_on_host,
         resolve_align_items_value, resolve_anchor_point_value, resolve_aspect_ratio_value,
         resolve_border_thickness_value,
-        resolve_color_value, resolve_flex_direction_value, resolve_flex_wrap_value,
-        resolve_font_weight_value, resolve_justify_value, resolve_opacity_value,
-        resolve_overflow_value, resolve_position_axis_value, resolve_radius_value,
-        resolve_gradient_rotation, resolve_rotation_value, resolve_shadow_preset,
+        resolve_color_value, resolve_flex_direction_value, resolve_flex_item_mode,
+        resolve_flex_wrap_value, resolve_font_weight_value, resolve_gradient_rotation,
+        resolve_items_flex_value, resolve_justify_flex_value, resolve_justify_value,
+        resolve_opacity_value, resolve_overflow_value, resolve_position_axis_value,
+        resolve_radius_value, resolve_rotation_value, resolve_shadow_preset,
         resolve_size_axis_value, resolve_size_spacing_offset, resolve_spacing_value,
         resolve_text_size_value,
         resolve_text_wrap_value, resolve_text_x_alignment_value, resolve_text_y_alignment_value,
@@ -221,7 +222,16 @@ fn describe_token(
             })
         }
         UtilityKind::JustifyContent => {
-            let value = resolve_justify_value(analysis.payload()?)?;
+            let key = analysis.payload()?;
+            if let Some(flex) = resolve_justify_flex_value(key) {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.HorizontalFlex"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.HorizontalFlex` to `Enum.UIFlexAlignment.{flex}`."
+                    ),
+                });
+            }
+            let value = resolve_justify_value(key)?;
             Some(HoverContent {
                 display: format!("`{token}` -> UIListLayout.HorizontalAlignment"),
                 documentation: format!(
@@ -230,7 +240,16 @@ fn describe_token(
             })
         }
         UtilityKind::AlignItems => {
-            let value = resolve_align_items_value(analysis.payload()?)?;
+            let key = analysis.payload()?;
+            if let Some(flex) = resolve_items_flex_value(key) {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.VerticalFlex"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.VerticalFlex` to `Enum.UIFlexAlignment.{flex}`."
+                    ),
+                });
+            }
+            let value = resolve_align_items_value(key)?;
             Some(HoverContent {
                 display: format!("`{token}` -> UIListLayout.VerticalAlignment"),
                 documentation: format!(
@@ -399,6 +418,15 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> UIShadow.Color"),
                 documentation,
+            })
+        }
+        UtilityKind::FlexItem => {
+            let mode = resolve_flex_item_mode(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIFlexItem.FlexMode"),
+                documentation: format!(
+                    "{variant_prefix}Adds a Roblox UIFlexItem with `FlexMode = Enum.UIFlexMode.{mode}`."
+                ),
             })
         }
         UtilityKind::GradientDirection => {

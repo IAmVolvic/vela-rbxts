@@ -63,6 +63,7 @@ pub(crate) enum UtilityKind {
     GradientFrom,
     GradientVia,
     GradientTo,
+    FlexItem,
     Unknown,
 }
 
@@ -118,6 +119,17 @@ pub(crate) const OPACITY_VALUES: [&str; 14] = [
 pub(crate) const ASPECT_RATIO_VALUES: [&str; 2] = ["square", "video"];
 pub(crate) const FLEX_DIRECTION_VALUES: [&str; 2] = ["row", "col"];
 pub(crate) const ALIGNMENT_VALUES: [&str; 3] = ["start", "center", "end"];
+pub(crate) const JUSTIFY_FLEX_VALUES: [&str; 3] = ["between", "around", "evenly"];
+pub(crate) const FLEX_ITEM_VALUES: [&str; 8] = [
+    "flex-1",
+    "flex-auto",
+    "flex-initial",
+    "flex-none",
+    "grow",
+    "grow-0",
+    "shrink",
+    "shrink-0",
+];
 pub(crate) const TEXT_SIZE_VALUES: [(&str, &str); 13] = [
     ("xs", "12"),
     ("sm", "14"),
@@ -394,6 +406,15 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
             family: "flex".to_owned(),
             payload: token.strip_prefix("flex-").map(|value| value.to_owned()),
             kind: UtilityKind::FlexWrap,
+        };
+    }
+
+    if FLEX_ITEM_VALUES.contains(&token) {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: token.split_once('-').map_or("flex", |(family, _)| family).to_owned(),
+            payload: Some(token.to_owned()),
+            kind: UtilityKind::FlexItem,
         };
     }
 
@@ -926,6 +947,32 @@ pub(crate) fn resolve_flex_direction_value(key: Option<&str>) -> Option<String> 
     }
 }
 
+pub(crate) fn resolve_justify_flex_value(key: &str) -> Option<&'static str> {
+    match key {
+        "between" => Some("SpaceBetween"),
+        "around" => Some("SpaceAround"),
+        "evenly" => Some("SpaceEvenly"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_items_flex_value(key: &str) -> Option<&'static str> {
+    match key {
+        "stretch" => Some("Fill"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_flex_item_mode(key: &str) -> Option<&'static str> {
+    match key {
+        "grow" => Some("Grow"),
+        "shrink" | "flex-initial" => Some("Shrink"),
+        "flex-1" | "flex-auto" => Some("Fill"),
+        "grow-0" | "shrink-0" | "flex-none" => Some("None"),
+        _ => None,
+    }
+}
+
 pub(crate) fn resolve_justify_value(key: &str) -> Option<String> {
     let alignment = match key {
         "start" => "Enum.HorizontalAlignment.Left",
@@ -1387,6 +1434,37 @@ mod tests {
             Some("160".to_owned())
         );
         assert_eq!(diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn classifies_and_resolves_flex_utilities() {
+        assert!(matches!(parse_utility("flex-1").kind, UtilityKind::FlexItem));
+        assert!(matches!(parse_utility("grow").kind, UtilityKind::FlexItem));
+        assert!(matches!(parse_utility("grow-0").kind, UtilityKind::FlexItem));
+        assert!(matches!(
+            parse_utility("shrink").kind,
+            UtilityKind::FlexItem
+        ));
+        assert!(matches!(
+            parse_utility("flex-col").kind,
+            UtilityKind::FlexDirection
+        ));
+        assert!(matches!(
+            parse_utility("flex-wrap").kind,
+            UtilityKind::FlexWrap
+        ));
+
+        assert_eq!(resolve_flex_item_mode("grow"), Some("Grow"));
+        assert_eq!(resolve_flex_item_mode("grow-0"), Some("None"));
+        assert_eq!(resolve_flex_item_mode("flex-1"), Some("Fill"));
+        assert_eq!(resolve_flex_item_mode("flex-initial"), Some("Shrink"));
+        assert_eq!(resolve_flex_item_mode("flex-none"), Some("None"));
+
+        assert_eq!(resolve_justify_flex_value("between"), Some("SpaceBetween"));
+        assert_eq!(resolve_justify_flex_value("evenly"), Some("SpaceEvenly"));
+        assert_eq!(resolve_justify_flex_value("center"), None);
+        assert_eq!(resolve_items_flex_value("stretch"), Some("Fill"));
+        assert_eq!(resolve_items_flex_value("center"), None);
     }
 
     #[test]

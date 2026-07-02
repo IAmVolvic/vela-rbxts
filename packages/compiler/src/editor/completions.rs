@@ -7,7 +7,8 @@ use crate::editor::{
 use crate::semantic::{
     utility::{
         ALIGNMENT_VALUES, ANCHOR_ORIGIN_VALUES, ASPECT_RATIO_VALUES, BORDER_THICKNESS_VALUES,
-        FLEX_DIRECTION_VALUES, FONT_WEIGHT_VALUES, GRADIENT_DIRECTION_VALUES, OPACITY_VALUES,
+        FLEX_DIRECTION_VALUES, FLEX_ITEM_VALUES, FONT_WEIGHT_VALUES, GRADIENT_DIRECTION_VALUES,
+        JUSTIFY_FLEX_VALUES, OPACITY_VALUES,
         PaddingKind, ROTATION_VALUES, SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES,
         TEXT_X_ALIGN_VALUES, TEXT_Y_ALIGN_VALUES, UtilityKind, Z_INDEX_VALUES, color_completion_keys,
         is_utility_allowed_on_host, position_completion_keys, radius_completion_keys,
@@ -644,6 +645,49 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 utility_kind: utility_kind.clone(),
             });
         }
+    }
+
+    for alignment in JUSTIFY_FLEX_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("justify-{alignment}"),
+                insert_text: format!("justify-{alignment}"),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!(
+                    "Set Roblox UIListLayout.HorizontalFlex from `justify-{alignment}`."
+                ),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::JustifyContent,
+        });
+    }
+
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "items-stretch".to_owned(),
+            insert_text: "items-stretch".to_owned(),
+            kind: "utility".to_owned(),
+            category: "layout".to_owned(),
+            documentation: "Set Roblox UIListLayout.VerticalFlex to `Enum.UIFlexAlignment.Fill`."
+                .to_owned(),
+            replacement: None,
+        },
+        utility_kind: UtilityKind::AlignItems,
+    });
+
+    for label in FLEX_ITEM_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: label.to_owned(),
+                insert_text: label.to_owned(),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!("Add a Roblox UIFlexItem from `{label}`."),
+                replacement: None,
+            },
+            utility_kind: UtilityKind::FlexItem,
+        });
     }
 
     items
