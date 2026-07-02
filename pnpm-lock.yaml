@@ -65,8 +65,8 @@ importers:
         specifier: ^3.0.0-types.0
         version: 3.0.0-types.0
       '@rbxts/types':
-        specifier: ^1.0.916
-        version: 1.0.916
+        specifier: ^1.0.935
+        version: 1.0.935
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
@@ -145,8 +145,8 @@ importers:
         specifier: ^3.0.0-types.0
         version: 3.0.0-types.0
       '@rbxts/types':
-        specifier: ^1.0.916
-        version: 1.0.916
+        specifier: ^1.0.935
+        version: 1.0.935
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
@@ -1173,8 +1173,8 @@ packages:
   '@rbxts/services@1.6.0':
     resolution: {integrity: sha512-YH02E1/tGHeMXB0Mam8qPdAZa2fjQWdylEscSL4Zn0RIaQeByYImA2qUsXM3nBdhcyKHDwltzSznDKyCGfFEWA==}
 
-  '@rbxts/types@1.0.916':
-    resolution: {integrity: sha512-Bwy7hkbho4xtDR6ANjrdJWPTNF3bPoJnIfQYjQQv9Lt+xFid5bD1ZYs3Ij1xSfykgI3D8KS0yzWKdNhycZkHCQ==}
+  '@rbxts/types@1.0.935':
+    resolution: {integrity: sha512-VyX1GIDcwtJFcpkrjLTK6xW1z5d1IsIrD+GST/b5L+uOsR2mZMXOxUu4BjNU+rLF7N1dTz+zhyy+3cBx+KBd6g==}
 
   '@roblox-ts/luau-ast@2.0.0':
     resolution: {integrity: sha512-cmMi093IdwBOLVxwuordhM8AmtbyTIyRpsTbB0D/JauidW4SXsQRQowSwWjHo4QP0DRJBXvOIlxtqEQi50uNzQ==}
@@ -4004,7 +4004,7 @@ snapshots:
 
   '@rbxts/services@1.6.0': {}
 
-  '@rbxts/types@1.0.916': {}
+  '@rbxts/types@1.0.935': {}
 
   '@roblox-ts/luau-ast@2.0.0': {}
 
