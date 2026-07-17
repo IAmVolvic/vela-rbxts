@@ -17,3 +17,4 @@ pnpm-publish-summary.json
 .vscode/settings.json
 
 digest.txt
+.serena/
