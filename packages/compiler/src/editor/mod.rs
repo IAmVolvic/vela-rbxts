@@ -83,6 +83,15 @@ pub(crate) fn class_name_context_at_position(
         })
 }
 
+pub(crate) fn collect_class_tokens(source: &str) -> Vec<ClassToken> {
+    collect_class_name_contexts(source)
+        .into_iter()
+        .flat_map(|context| {
+            tokenize_class_name_with_ranges(&context.value, context.value_range.start)
+        })
+        .collect()
+}
+
 pub(crate) fn collect_class_name_contexts(source: &str) -> Vec<ClassNameContext> {
     let cm: Lrc<SourceMap> = Default::default();
     let fm = cm.new_source_file(

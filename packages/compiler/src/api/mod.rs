@@ -73,6 +73,13 @@ pub struct EditorRange {
     pub end: u32,
 }
 
+/// Rust-only editor API surface (not exposed over napi/wasm).
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ClassTokenSpan {
+    pub text: String,
+    pub range: EditorRange,
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CompletionItem {

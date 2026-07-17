@@ -15,11 +15,23 @@ pub(crate) mod transform;
 pub(crate) mod utilities;
 
 pub use api::{
-    CompletionItem, CompletionRequest, CompletionResponse, Diagnostic, DiagnosticsRequest,
-    DiagnosticsResponse, DocumentColor, DocumentColorsRequest, DocumentColorsResponse,
-    EditorDiagnostic, EditorOptions, EditorRange, HoverContent, HoverRequest, HoverResponse,
-    TransformOptions, TransformResult,
+    ClassTokenSpan, CompletionItem, CompletionRequest, CompletionResponse, Diagnostic,
+    DiagnosticsRequest, DiagnosticsResponse, DocumentColor, DocumentColorsRequest,
+    DocumentColorsResponse, EditorDiagnostic, EditorOptions, EditorRange, HoverContent,
+    HoverRequest, HoverResponse, TransformOptions, TransformResult,
 };
+
+/// All class tokens in `className` attributes of supported host elements,
+/// with UTF-16 source ranges. Rust-only; used by the LSP for highlights.
+pub fn get_class_tokens(source: &str) -> Vec<ClassTokenSpan> {
+    editor::collect_class_tokens(source)
+        .into_iter()
+        .map(|token| ClassTokenSpan {
+            text: token.text,
+            range: token.range,
+        })
+        .collect()
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 #[napi(js_name = "implementationKind")]
