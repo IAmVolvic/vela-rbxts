@@ -1127,43 +1127,24 @@ test("rejects invalid numeric square size spacing fallback tokens", () => {
 	expect(result.code).not.toMatch(/Size=/);
 });
 
-test("warns on fit size mode instead of generating misleading sizing", () => {
+test("lowers fit size modes to AutomaticSize instead of misleading sizing", () => {
 	const result = transform('<frame className="w-fit h-fit" />');
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
-	expect(result.diagnostics).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({
-				level: "warning",
-				code: "unsupported-size-mode",
-				token: "w-fit",
-			}),
-			expect.objectContaining({
-				level: "warning",
-				code: "unsupported-size-mode",
-				token: "h-fit",
-			}),
-		]),
-	);
-	expect(result.code).not.toMatch(/Size=/);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/AutomaticSize=\{Enum\.AutomaticSize\.XY\}/);
+	expect(result.code).not.toMatch(/ Size=/);
 });
 
-test("warns on square fit size mode instead of generating misleading sizing", () => {
+test("lowers square fit size mode to AutomaticSize instead of misleading sizing", () => {
 	const result = transform('<frame className="size-fit" />');
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
-	expect(result.diagnostics).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({
-				level: "warning",
-				code: "unsupported-size-mode",
-				token: "size-fit",
-			}),
-		]),
-	);
-	expect(result.code).not.toMatch(/Size=/);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/AutomaticSize=\{Enum\.AutomaticSize\.XY\}/);
+	expect(result.code).not.toMatch(/ Size=/);
 });
 
 test("warns on unknown radius keys without falling back to numeric radius resolution", () => {
@@ -1183,8 +1164,8 @@ test("warns on unknown radius keys without falling back to numeric radius resolu
 	expect(result.code).not.toMatch(/CornerRadius=/);
 });
 
-test("removes className even when only unsupported utilities remain", () => {
-	const result = transform('<frame className="shadow-md bg-card" />');
+test("removes className even when only diagnosed utilities remain", () => {
+	const result = transform('<frame className="bg-card rounded-card" />');
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
@@ -1192,13 +1173,13 @@ test("removes className even when only unsupported utilities remain", () => {
 		expect.arrayContaining([
 			expect.objectContaining({
 				level: "warning",
-				code: "unsupported-utility-family",
-				token: "shadow-md",
+				code: "unknown-theme-key",
+				token: "bg-card",
 			}),
 			expect.objectContaining({
 				level: "warning",
 				code: "unknown-theme-key",
-				token: "bg-card",
+				token: "rounded-card",
 			}),
 		]),
 	);
@@ -1680,30 +1661,23 @@ test("treats bare flex as a horizontal UIListLayout", () => {
 	);
 });
 
-test("warns on unsupported flex and alignment values", () => {
+test("warns on unsupported flex directions while lowering flex distribution", () => {
 	const result = transform(
 		'<frame className="flex-row-reverse justify-between items-stretch" />',
 	);
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).not.toMatch(/<uilistlayout\b/i);
-	expect(result.diagnostics).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({
-				code: "unsupported-flex-direction",
-				token: "flex-row-reverse",
-			}),
-			expect.objectContaining({
-				code: "unsupported-alignment-value",
-				token: "justify-between",
-			}),
-			expect.objectContaining({
-				code: "unsupported-alignment-value",
-				token: "items-stretch",
-			}),
-		]),
+	expect(result.code).toMatch(
+		/HorizontalFlex=\{Enum\.UIFlexAlignment\.SpaceBetween\}/,
 	);
+	expect(result.code).toMatch(/VerticalFlex=\{Enum\.UIFlexAlignment\.Fill\}/);
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-flex-direction",
+			token: "flex-row-reverse",
+		}),
+	]);
 });
 
 test("carries flex utilities through the runtime variant path with enum parsing", () => {

@@ -242,34 +242,24 @@ test("reports editor diagnostics for unsupported transform and layout values", (
 		'<frame className="rotate-17 opacity-150 aspect-auto flex-row-reverse justify-between items-stretch" />';
 	const result = getDiagnostics({ source });
 
-	expect(result.diagnostics).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({
-				code: "unsupported-rotation-value",
-				token: "rotate-17",
-			}),
-			expect.objectContaining({
-				code: "unsupported-opacity-value",
-				token: "opacity-150",
-			}),
-			expect.objectContaining({
-				code: "unsupported-aspect-value",
-				token: "aspect-auto",
-			}),
-			expect.objectContaining({
-				code: "unsupported-flex-direction",
-				token: "flex-row-reverse",
-			}),
-			expect.objectContaining({
-				code: "unsupported-alignment-value",
-				token: "justify-between",
-			}),
-			expect.objectContaining({
-				code: "unsupported-alignment-value",
-				token: "items-stretch",
-			}),
-		]),
-	);
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-rotation-value",
+			token: "rotate-17",
+		}),
+		expect.objectContaining({
+			code: "unsupported-opacity-value",
+			token: "opacity-150",
+		}),
+		expect.objectContaining({
+			code: "unsupported-aspect-value",
+			token: "aspect-auto",
+		}),
+		expect.objectContaining({
+			code: "unsupported-flex-direction",
+			token: "flex-row-reverse",
+		}),
+	]);
 });
 
 test("completes runtime variants", () => {
@@ -473,35 +463,26 @@ test("hovers include resolved config values when available", () => {
 	expect(hover.contents?.documentation).toContain("Color3.fromRGB(1, 2, 3)");
 });
 
-test("reports editor diagnostics for unknown keys unsupported families and fit", () => {
+test("reports editor diagnostics for unknown keys but not supported utilities", () => {
 	const source =
 		'<frame><frame className="bg-card bg-surface shadow-md w-fit" /><textbox className="placeholder-card" /></frame>';
 	const result = getDiagnostics({ source });
 
-	expect(result.diagnostics).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({
-				code: "unknown-theme-key",
-				token: "bg-card",
-			}),
-			expect.objectContaining({
-				code: "unknown-theme-key",
-				token: "bg-surface",
-			}),
-			expect.objectContaining({
-				code: "unsupported-utility-family",
-				token: "shadow-md",
-			}),
-			expect.objectContaining({
-				code: "unsupported-size-mode",
-				token: "w-fit",
-			}),
-			expect.objectContaining({
-				code: "unknown-theme-key",
-				token: "placeholder-card",
-			}),
-		]),
-	);
+	// `shadow-md` (UIShadow) and `w-fit` (AutomaticSize) are supported.
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unknown-theme-key",
+			token: "bg-card",
+		}),
+		expect.objectContaining({
+			code: "unknown-theme-key",
+			token: "bg-surface",
+		}),
+		expect.objectContaining({
+			code: "unknown-theme-key",
+			token: "placeholder-card",
+		}),
+	]);
 });
 
 test("reports editor diagnostics for unsupported z-index forms", () => {
