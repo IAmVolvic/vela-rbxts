@@ -12,17 +12,17 @@ use tower_lsp::lsp_types::{
     ColorPresentationParams, ColorProviderCapability, CompletionItem, CompletionItemKind,
     CompletionOptions, CompletionParams, CompletionResponse, CompletionTextEdit, Diagnostic,
     DiagnosticSeverity, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentColorParams, Hover,
-    HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-    InitializedParams, MarkupContent, MarkupKind, NumberOrString, Position, Range,
-    ServerCapabilities, ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit,
-    Url, WorkspaceEdit,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentColorParams, DocumentHighlight,
+    DocumentHighlightKind, DocumentHighlightParams, Hover, HoverContents, HoverParams,
+    HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, MarkupContent,
+    MarkupKind, NumberOrString, OneOf, Position, PositionEncodingKind, Range, ServerCapabilities,
+    ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
 };
 use tower_lsp::{Client, LanguageServer};
 use vela_rbxts_compiler::{
-    CompletionRequest, DiagnosticsRequest, DocumentColor as CompilerDocumentColor,
+    ClassTokenSpan, CompletionRequest, DiagnosticsRequest, DocumentColor as CompilerDocumentColor,
     DocumentColorsRequest, EditorDiagnostic as CompilerDiagnostic, EditorOptions, HoverRequest,
-    get_completions, get_diagnostics, get_document_colors, get_hover,
+    get_class_tokens, get_completions, get_diagnostics, get_document_colors, get_hover,
 };
 
 use crate::documents::Document;
@@ -81,14 +81,20 @@ impl RbxtsLanguageServer {
         self.state.read().await.document_cloned(uri)
     }
 
-    async fn compiler_editor_options(&self, document: &Document) -> EditorOptions {
+    async fn document_with_options(&self, uri: &Url) -> Option<(Document, EditorOptions)> {
         let state = self.state.read().await;
+        let document = state.document_cloned(uri)?;
         let config_json = state.config_json_for(document.file_path.as_deref());
-        document.editor_options(state.project_root.as_deref(), config_json)
+        let options = document.editor_options(state.project_root.as_deref(), config_json);
+        Some((document, options))
     }
 
     async fn publish_now(&self, document: &Document) {
-        let options = self.compiler_editor_options(document).await;
+        let options = {
+            let state = self.state.read().await;
+            let config_json = state.config_json_for(document.file_path.as_deref());
+            document.editor_options(state.project_root.as_deref(), config_json)
+        };
         publish_diagnostics(&self.client, document, options).await;
     }
 
@@ -182,17 +188,24 @@ impl LanguageServer for RbxtsLanguageServer {
                 version: Some(env!("CARGO_PKG_VERSION").to_owned()),
             }),
             capabilities: ServerCapabilities {
+                position_encoding: Some(PositionEncodingKind::UTF16),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
+                    TextDocumentSyncKind::INCREMENTAL,
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec!["-".to_owned(), ":".to_owned()]),
+                    trigger_characters: Some(
+                        ["-", ":", "\"", "'", " "]
+                            .into_iter()
+                            .map(str::to_owned)
+                            .collect(),
+                    ),
                     ..Default::default()
                 }),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                document_highlight_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
         })
@@ -225,25 +238,32 @@ impl LanguageServer for RbxtsLanguageServer {
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let Some(change) = params.content_changes.into_iter().last() else {
-            return;
-        };
-
         let uri = params.text_document.uri;
         let version = params.text_document.version;
-        let text = change.text;
-
-        {
-            let mut state = self.state.write().await;
-            if state
-                .update_document(&uri, text.clone(), Some(version))
-                .is_none()
-            {
-                state.upsert_document(uri.clone(), text, Some(version));
-            }
+        let changes = params.content_changes;
+        if changes.is_empty() {
+            return;
         }
 
-        self.schedule_diagnostics(uri, version);
+        let applied = {
+            let mut state = self.state.write().await;
+            if state
+                .apply_document_changes(&uri, &changes, Some(version))
+                .is_some()
+            {
+                true
+            } else if let Some(full) = changes.iter().rev().find(|change| change.range.is_none()) {
+                // No document to patch (missed did_open); only full text can seed one.
+                state.upsert_document(uri.clone(), full.text.clone(), Some(version));
+                true
+            } else {
+                false
+            }
+        };
+
+        if applied {
+            self.schedule_diagnostics(uri, version);
+        }
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -267,18 +287,14 @@ impl LanguageServer for RbxtsLanguageServer {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
-        let Some(document) = self.snapshot_document(&uri).await else {
-            return Ok(None);
-        };
-
-        let Some(offset) = document.position_to_offset(position) else {
+        let Some((document, options)) = self.document_with_options(&uri).await else {
             return Ok(None);
         };
 
         let response = get_completions(CompletionRequest {
             source: document.text.clone(),
-            position: offset,
-            options: Some(self.compiler_editor_options(&document).await),
+            position: document.position_to_offset(position),
+            options: Some(options),
         });
 
         if !response.is_in_class_name_context {
@@ -297,18 +313,15 @@ impl LanguageServer for RbxtsLanguageServer {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        let Some(document) = self.snapshot_document(&uri).await else {
+        let Some((document, options)) = self.document_with_options(&uri).await else {
             return Ok(None);
         };
 
-        let Some(offset) = document.position_to_offset(position) else {
-            return Ok(None);
-        };
-
+        let offset = document.position_to_offset(position);
         let response = get_hover(HoverRequest {
             source: document.text.clone(),
             position: offset,
-            options: Some(self.compiler_editor_options(&document).await),
+            options: Some(options),
         });
 
         let Some(contents) = response.contents else {
@@ -317,29 +330,31 @@ impl LanguageServer for RbxtsLanguageServer {
 
         let hover_range = response
             .range
-            .and_then(|range| document.range_to_lsp_range(range.start, range.end))
-            .or_else(|| {
-                document
-                    .offset_to_position(offset)
-                    .map(|position| Range::new(position, position))
+            .map(|range| document.range_to_lsp_range(range.start, range.end))
+            .unwrap_or_else(|| {
+                let position = document.offset_to_position(offset);
+                Range::new(position, position)
             });
 
         Ok(Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: format!("{}\n\n{}", contents.display, contents.documentation),
+                value: hover_markdown(contents.display, &contents.documentation),
             }),
-            range: hover_range,
+            range: Some(hover_range),
         }))
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        if !action_kind_allowed(params.context.only.as_ref(), &CodeActionKind::QUICKFIX) {
+            return Ok(None);
+        }
+
         let uri = params.text_document.uri.clone();
-        let Some(document) = self.snapshot_document(&uri).await else {
+        let Some((document, options)) = self.document_with_options(&uri).await else {
             return Ok(None);
         };
 
-        let options = self.compiler_editor_options(&document).await;
         let mut actions: CodeActionResponse = Vec::new();
 
         for diagnostic in &params.context.diagnostics {
@@ -351,22 +366,17 @@ impl LanguageServer for RbxtsLanguageServer {
                 continue;
             };
 
-            let suggestions = document
-                .position_to_offset(diagnostic.range.start)
-                .map(|offset| {
-                    let completions = get_completions(CompletionRequest {
-                        source: document.text.clone(),
-                        position: offset,
-                        options: Some(options.clone()),
-                    });
-                    let labels: Vec<String> = completions
-                        .items
-                        .into_iter()
-                        .map(|item| item.label)
-                        .collect();
-                    rank_suggestions(&token, &labels, MAX_REPLACEMENT_SUGGESTIONS)
-                })
-                .unwrap_or_default();
+            let completions = get_completions(CompletionRequest {
+                source: document.text.clone(),
+                position: document.position_to_offset(diagnostic.range.start),
+                options: Some(options.clone()),
+            });
+            let labels: Vec<String> = completions
+                .items
+                .into_iter()
+                .map(|item| item.label)
+                .collect();
+            let suggestions = rank_suggestions(&token, &labels, MAX_REPLACEMENT_SUGGESTIONS);
 
             for (index, suggestion) in suggestions.into_iter().enumerate() {
                 actions.push(CodeActionOrCommand::CodeAction(replace_action(
@@ -389,21 +399,37 @@ impl LanguageServer for RbxtsLanguageServer {
         Ok(Some(actions))
     }
 
+    async fn document_highlight(
+        &self,
+        params: DocumentHighlightParams,
+    ) -> Result<Option<Vec<DocumentHighlight>>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        let Some(document) = self.snapshot_document(&uri).await else {
+            return Ok(None);
+        };
+
+        let offset = document.position_to_offset(position);
+        let tokens = get_class_tokens(&document.text);
+
+        Ok(same_token_highlights(&document, &tokens, offset))
+    }
+
     async fn document_color(&self, params: DocumentColorParams) -> Result<Vec<ColorInformation>> {
         let uri = params.text_document.uri;
-        let Some(document) = self.snapshot_document(&uri).await else {
+        let Some((document, options)) = self.document_with_options(&uri).await else {
             return Ok(Vec::new());
         };
 
         let response = get_document_colors(DocumentColorsRequest {
             source: document.text.clone(),
-            options: Some(self.compiler_editor_options(&document).await),
+            options: Some(options),
         });
 
         Ok(response
             .colors
             .into_iter()
-            .filter_map(|color| compiler_document_color_to_lsp(&document, color))
+            .map(|color| compiler_document_color_to_lsp(&document, color))
             .collect())
     }
 
@@ -412,20 +438,20 @@ impl LanguageServer for RbxtsLanguageServer {
         params: ColorPresentationParams,
     ) -> Result<Vec<ColorPresentation>> {
         let uri = params.text_document.uri;
-        let Some(document) = self.snapshot_document(&uri).await else {
+        let Some((document, options)) = self.document_with_options(&uri).await else {
             return Ok(Vec::new());
         };
 
         let response = get_document_colors(DocumentColorsRequest {
             source: document.text.clone(),
-            options: Some(self.compiler_editor_options(&document).await),
+            options: Some(options),
         });
 
         let presentations = response
             .colors
             .into_iter()
             .filter_map(|color| {
-                let range = document.range_to_lsp_range(color.range.start, color.range.end)?;
+                let range = document.range_to_lsp_range(color.range.start, color.range.end);
                 if range != params.range {
                     return None;
                 }
@@ -456,6 +482,50 @@ async fn publish_diagnostics(client: &Client, document: &Document, options: Edit
     client
         .publish_diagnostics(document.uri.clone(), diagnostics, document.version)
         .await;
+}
+
+fn action_kind_allowed(only: Option<&Vec<CodeActionKind>>, kind: &CodeActionKind) -> bool {
+    only.is_none_or(|kinds| {
+        kinds.iter().any(|requested| {
+            let requested = requested.as_str();
+            requested.is_empty()
+                || kind.as_str() == requested
+                || kind
+                    .as_str()
+                    .strip_prefix(requested)
+                    .is_some_and(|rest| rest.starts_with('.'))
+        })
+    })
+}
+
+fn hover_markdown(display: String, documentation: &str) -> String {
+    let mut value = display;
+    if !documentation.trim().is_empty() {
+        value.push_str("\n\n");
+        value.push_str(documentation);
+    }
+    value
+}
+
+fn same_token_highlights(
+    document: &Document,
+    tokens: &[ClassTokenSpan],
+    offset: u32,
+) -> Option<Vec<DocumentHighlight>> {
+    let current = tokens
+        .iter()
+        .find(|token| offset >= token.range.start && offset <= token.range.end)?;
+
+    Some(
+        tokens
+            .iter()
+            .filter(|token| token.text == current.text)
+            .map(|token| DocumentHighlight {
+                range: document.range_to_lsp_range(token.range.start, token.range.end),
+                kind: Some(DocumentHighlightKind::TEXT),
+            })
+            .collect(),
+    )
 }
 
 fn diagnostic_token(diagnostic: &Diagnostic) -> Option<String> {
@@ -510,17 +580,12 @@ fn compiler_completion_item_to_lsp(
     let category = item.category;
     let documentation = item.documentation;
     let insert_text = item.insert_text;
-    let replacement = item.replacement;
 
-    let text_edit = replacement.as_ref().and_then(|range| {
-        document
-            .range_to_lsp_range(range.start, range.end)
-            .map(|range| {
-                CompletionTextEdit::Edit(TextEdit {
-                    range,
-                    new_text: insert_text.clone(),
-                })
-            })
+    let text_edit = item.replacement.as_ref().map(|range| {
+        CompletionTextEdit::Edit(TextEdit {
+            range: document.range_to_lsp_range(range.start, range.end),
+            new_text: insert_text.clone(),
+        })
     });
 
     CompletionItem {
@@ -557,7 +622,7 @@ fn compiler_diagnostic_to_lsp(document: &Document, diagnostic: CompilerDiagnosti
     let range = diagnostic
         .range
         .as_ref()
-        .and_then(|range| document.range_to_lsp_range(range.start, range.end))
+        .map(|range| document.range_to_lsp_range(range.start, range.end))
         .unwrap_or_else(|| {
             let position = Position::new(0, 0);
             Range::new(position, position)
@@ -587,18 +652,16 @@ fn compiler_diagnostic_to_lsp(document: &Document, diagnostic: CompilerDiagnosti
 fn compiler_document_color_to_lsp(
     document: &Document,
     color: CompilerDocumentColor,
-) -> Option<ColorInformation> {
-    let range = document.range_to_lsp_range(color.range.start, color.range.end)?;
-
-    Some(ColorInformation {
-        range,
+) -> ColorInformation {
+    ColorInformation {
+        range: document.range_to_lsp_range(color.range.start, color.range.end),
         color: Color {
             red: color.red as f32,
             green: color.green as f32,
             blue: color.blue as f32,
             alpha: color.alpha as f32,
         },
-    })
+    }
 }
 
 #[cfg(test)]
@@ -641,5 +704,81 @@ mod tests {
         let edits = &remove.edit.unwrap().changes.unwrap()[&uri];
         assert_eq!(edits[0].new_text, "");
         assert_eq!(edits[0].range, diagnostic.range);
+    }
+
+    #[test]
+    fn filters_actions_by_requested_kind() {
+        let quickfix = CodeActionKind::QUICKFIX;
+
+        assert!(action_kind_allowed(None, &quickfix));
+        assert!(action_kind_allowed(
+            Some(&vec![CodeActionKind::QUICKFIX]),
+            &quickfix
+        ));
+        assert!(action_kind_allowed(
+            Some(&vec![CodeActionKind::EMPTY]),
+            &quickfix
+        ));
+        assert!(!action_kind_allowed(
+            Some(&vec![CodeActionKind::REFACTOR, CodeActionKind::SOURCE]),
+            &quickfix
+        ));
+        // A requested sub-kind admits actions of that sub-kind, not the parent.
+        assert!(action_kind_allowed(
+            Some(&vec![CodeActionKind::QUICKFIX]),
+            &CodeActionKind::new("quickfix.replace")
+        ));
+        assert!(!action_kind_allowed(
+            Some(&vec![CodeActionKind::new("quickfixes")]),
+            &quickfix
+        ));
+    }
+
+    #[test]
+    fn joins_hover_sections_skipping_empty_documentation() {
+        assert_eq!(
+            hover_markdown("`bg-red-500`".to_owned(), "Sets the color."),
+            "`bg-red-500`\n\nSets the color."
+        );
+        assert_eq!(
+            hover_markdown("`bg-red-500`".to_owned(), " "),
+            "`bg-red-500`"
+        );
+    }
+
+    #[test]
+    fn highlights_every_occurrence_of_the_same_token() {
+        let source = "export const App = () => (<>\n  <frame className=\"bg-slate-700 px-4\" />\n  <frame className=\"px-4 bg-slate-700\" />\n</>);";
+        let document = Document::new(
+            Url::parse("file:///ws/App.tsx").unwrap(),
+            source.to_owned(),
+            Some(1),
+        );
+        let tokens = get_class_tokens(source);
+        let line = source.lines().nth(1).unwrap();
+        let offset = document.position_to_offset(Position::new(
+            1,
+            line.find("bg-slate-700").unwrap() as u32 + 2,
+        ));
+
+        let highlights = same_token_highlights(&document, &tokens, offset).unwrap();
+        assert_eq!(highlights.len(), 2);
+        assert!(
+            highlights
+                .iter()
+                .all(|highlight| { highlight.kind == Some(DocumentHighlightKind::TEXT) })
+        );
+        assert_eq!(highlights[0].range.start.line, 1);
+        assert_eq!(highlights[1].range.start.line, 2);
+
+        // Outside any className there is nothing to highlight.
+        assert_eq!(
+            same_token_highlights(
+                &document,
+                &tokens,
+                document.position_to_offset(Position::new(0, 0))
+            ),
+            None
+        );
     }
 }

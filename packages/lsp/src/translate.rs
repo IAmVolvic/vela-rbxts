@@ -9,84 +9,124 @@ use vela_rbxts_compiler::{
 };
 
 #[derive(Clone, Debug)]
+struct LineSpan {
+    start_utf16: u32,
+    start_byte: usize,
+    /// Line end before its terminator (`\n`, `\r\n`, or `\r`).
+    content_end_utf16: u32,
+    content_end_byte: usize,
+}
+
+/// Maps between LSP UTF-16 positions, compiler UTF-16 offsets, and byte offsets.
+/// Out-of-range positions clamp to the nearest valid location, matching the LSP
+/// spec's "defaults back to the line length" behavior.
+#[derive(Clone, Debug)]
 pub struct Utf16Index {
-    line_starts_utf16: Vec<u32>,
+    lines: Vec<LineSpan>,
     text_len_utf16: u32,
+    text_len_bytes: usize,
 }
 
 impl Utf16Index {
     pub fn new(source: &str) -> Self {
-        let mut line_starts_utf16 = vec![0];
-        let mut text_len_utf16 = 0u32;
+        let mut lines = Vec::new();
+        let mut start_utf16 = 0u32;
+        let mut start_byte = 0usize;
+        let mut utf16 = 0u32;
+        let mut byte = 0usize;
         let bytes = source.as_bytes();
-        let mut byte_index = 0usize;
 
-        while byte_index < source.len() {
-            let ch = source[byte_index..].chars().next().expect("valid UTF-8");
+        while byte < source.len() {
+            let ch = source[byte..].chars().next().expect("valid UTF-8");
             match ch {
-                '\r' => {
-                    byte_index += 1;
-                    if bytes.get(byte_index) == Some(&b'\n') {
-                        text_len_utf16 += 2;
-                        byte_index += 1;
-                    } else {
-                        text_len_utf16 += 1;
+                '\r' | '\n' => {
+                    let content_end_utf16 = utf16;
+                    let content_end_byte = byte;
+                    utf16 += 1;
+                    byte += 1;
+                    if ch == '\r' && bytes.get(byte) == Some(&b'\n') {
+                        utf16 += 1;
+                        byte += 1;
                     }
-                    line_starts_utf16.push(text_len_utf16);
-                }
-                '\n' => {
-                    byte_index += 1;
-                    text_len_utf16 += 1;
-                    line_starts_utf16.push(text_len_utf16);
+                    lines.push(LineSpan {
+                        start_utf16,
+                        start_byte,
+                        content_end_utf16,
+                        content_end_byte,
+                    });
+                    start_utf16 = utf16;
+                    start_byte = byte;
                 }
                 _ => {
-                    text_len_utf16 += ch.len_utf16() as u32;
-                    byte_index += ch.len_utf8();
+                    utf16 += ch.len_utf16() as u32;
+                    byte += ch.len_utf8();
                 }
             }
         }
 
+        lines.push(LineSpan {
+            start_utf16,
+            start_byte,
+            content_end_utf16: utf16,
+            content_end_byte: byte,
+        });
+
         Self {
-            line_starts_utf16,
-            text_len_utf16,
+            lines,
+            text_len_utf16: utf16,
+            text_len_bytes: byte,
         }
     }
 
-    pub fn position_to_offset(&self, position: Position) -> Option<u32> {
-        let line_index = usize::try_from(position.line).ok()?;
-        let start = *self.line_starts_utf16.get(line_index)?;
-        let end = self
-            .line_starts_utf16
-            .get(line_index + 1)
-            .copied()
-            .unwrap_or(self.text_len_utf16);
-        let line_len = end.saturating_sub(start);
-        if position.character > line_len {
-            return None;
-        }
-
-        Some(start + position.character)
+    fn line(&self, line: u32) -> Option<&LineSpan> {
+        usize::try_from(line)
+            .ok()
+            .and_then(|index| self.lines.get(index))
     }
 
-    pub fn offset_to_position(&self, offset: u32) -> Option<Position> {
-        if offset > self.text_len_utf16 {
-            return None;
+    pub fn position_to_offset(&self, position: Position) -> u32 {
+        let Some(line) = self.line(position.line) else {
+            return self.text_len_utf16;
+        };
+
+        line.start_utf16
+            .saturating_add(position.character)
+            .min(line.content_end_utf16)
+    }
+
+    pub fn position_to_byte(&self, source: &str, position: Position) -> usize {
+        let Some(line) = self.line(position.line) else {
+            return self.text_len_bytes;
+        };
+
+        let mut remaining = position.character;
+        let mut byte = line.start_byte;
+        for ch in source[line.start_byte..line.content_end_byte].chars() {
+            let units = ch.len_utf16() as u32;
+            if remaining < units {
+                break;
+            }
+            remaining -= units;
+            byte += ch.len_utf8();
         }
 
+        byte
+    }
+
+    pub fn offset_to_position(&self, offset: u32) -> Position {
+        let offset = offset.min(self.text_len_utf16);
         let line_index = self
-            .line_starts_utf16
-            .partition_point(|start| *start <= offset)
+            .lines
+            .partition_point(|line| line.start_utf16 <= offset)
             .saturating_sub(1);
-        let line_start = *self.line_starts_utf16.get(line_index)?;
+        let line = &self.lines[line_index];
+        let clamped = offset.min(line.content_end_utf16);
 
-        Some(Position::new(line_index as u32, offset - line_start))
+        Position::new(line_index as u32, clamped - line.start_utf16)
     }
 
-    pub fn range_to_lsp_range(&self, start: u32, end: u32) -> Option<Range> {
-        Some(Range::new(
-            self.offset_to_position(start)?,
-            self.offset_to_position(end)?,
-        ))
+    pub fn range_to_lsp_range(&self, start: u32, end: u32) -> Range {
+        Range::new(self.offset_to_position(start), self.offset_to_position(end))
     }
 }
 
@@ -95,7 +135,7 @@ pub fn file_uri_to_path(uri: &Url) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-pub fn editor_range_to_lsp_range(index: &Utf16Index, range: &EditorRange) -> Option<Range> {
+pub fn editor_range_to_lsp_range(index: &Utf16Index, range: &EditorRange) -> Range {
     index.range_to_lsp_range(range.start, range.end)
 }
 
@@ -119,26 +159,23 @@ mod tests {
 
         assert_eq!(
             index.position_to_offset(Position::new(0, token_start)),
-            Some(token_start)
+            token_start
         );
         assert_eq!(
             index.offset_to_position(token_start),
-            Some(Position::new(0, token_start))
+            Position::new(0, token_start)
         );
         assert_eq!(
             index.range_to_lsp_range(token_start, token_end),
-            Some(Range::new(
-                Position::new(0, token_start),
-                Position::new(0, token_end)
-            ))
+            Range::new(Position::new(0, token_start), Position::new(0, token_end))
         );
         assert_eq!(
             index.position_to_offset(Position::new(0, trailing_start)),
-            Some(trailing_start)
+            trailing_start
         );
         assert_eq!(
             index.offset_to_position(trailing_end),
-            Some(Position::new(0, trailing_end))
+            Position::new(0, trailing_end)
         );
     }
 
@@ -157,26 +194,26 @@ mod tests {
 
         assert_eq!(
             index.position_to_offset(Position::new(1, line_token_start)),
-            Some(token_start)
+            token_start
         );
         assert_eq!(
             index.offset_to_position(token_start),
-            Some(Position::new(1, line_token_start))
+            Position::new(1, line_token_start)
         );
         assert_eq!(
             index.position_to_offset(Position::new(1, line_trailing_start)),
-            Some(trailing_start)
+            trailing_start
         );
         assert_eq!(
             index.offset_to_position(trailing_end),
-            Some(Position::new(1, line_trailing_start + utf16_len("bg-")))
+            Position::new(1, line_trailing_start + utf16_len("bg-"))
         );
         assert_eq!(
             index.range_to_lsp_range(token_start, token_end),
-            Some(Range::new(
+            Range::new(
                 Position::new(1, line_token_start),
                 Position::new(1, line_token_start + utf16_len("bg-slate-700"))
-            ))
+            )
         );
     }
 
@@ -195,26 +232,75 @@ mod tests {
 
         assert_eq!(
             index.position_to_offset(Position::new(1, line_token_start)),
-            Some(token_start)
+            token_start
         );
         assert_eq!(
             index.offset_to_position(token_start),
-            Some(Position::new(1, line_token_start))
+            Position::new(1, line_token_start)
         );
         assert_eq!(
             index.position_to_offset(Position::new(1, line_trailing_start)),
-            Some(trailing_start)
+            trailing_start
         );
         assert_eq!(
             index.offset_to_position(trailing_end),
-            Some(Position::new(1, line_trailing_start + utf16_len("bg-")))
+            Position::new(1, line_trailing_start + utf16_len("bg-"))
         );
         assert_eq!(
             index.range_to_lsp_range(token_start, token_end),
-            Some(Range::new(
+            Range::new(
                 Position::new(1, line_token_start),
                 Position::new(1, line_token_start + utf16_len("bg-slate-700"))
-            ))
+            )
+        );
+    }
+
+    #[test]
+    fn clamps_out_of_range_positions() {
+        let source = "abc\r\ndef";
+        let index = Utf16Index::new(source);
+
+        // Character beyond the line content clamps to the line end, before the terminator.
+        assert_eq!(index.position_to_offset(Position::new(0, 99)), 3);
+        // Line beyond the document clamps to the document end.
+        assert_eq!(index.position_to_offset(Position::new(9, 0)), 8);
+        // Offset beyond the document clamps to the last position.
+        assert_eq!(index.offset_to_position(99), Position::new(1, 3));
+        // Offset inside a `\r\n` terminator clamps to the line content end.
+        assert_eq!(index.offset_to_position(4), Position::new(0, 3));
+    }
+
+    #[test]
+    fn maps_positions_to_byte_offsets() {
+        let source = "let a = \"🙂x\";\nlet b = 1;";
+        let index = Utf16Index::new(source);
+        let emoji_byte = source.find('🙂').unwrap();
+
+        assert_eq!(
+            index.position_to_byte(source, Position::new(0, 9)),
+            emoji_byte
+        );
+        // The emoji is one UTF-16 surrogate pair (2 units) and four bytes.
+        assert_eq!(
+            index.position_to_byte(source, Position::new(0, 11)),
+            emoji_byte + '🙂'.len_utf8()
+        );
+        // A position splitting the surrogate pair clamps to the character start.
+        assert_eq!(
+            index.position_to_byte(source, Position::new(0, 10)),
+            emoji_byte
+        );
+        assert_eq!(
+            index.position_to_byte(source, Position::new(1, 0)),
+            source.find("let b").unwrap()
+        );
+        assert_eq!(
+            index.position_to_byte(source, Position::new(0, 99)),
+            source.find('\n').unwrap()
+        );
+        assert_eq!(
+            index.position_to_byte(source, Position::new(9, 0)),
+            source.len()
         );
     }
 
@@ -232,10 +318,10 @@ mod tests {
 
         assert_eq!(
             editor_range_to_lsp_range(&index, &range),
-            Some(Range::new(
+            Range::new(
                 Position::new(1, line_start),
                 Position::new(1, line_start + utf16_len("bg-slate-700"))
-            ))
+            )
         );
     }
 
@@ -252,9 +338,7 @@ mod tests {
             project_root: None,
         });
 
-        let hover_offset = index
-            .position_to_offset(Position::new(1, hover_column))
-            .unwrap();
+        let hover_offset = index.position_to_offset(Position::new(1, hover_column));
         let hover = get_hover(HoverRequest {
             source: source.to_owned(),
             position: hover_offset,
@@ -264,9 +348,7 @@ mod tests {
         assert!(hover_contents.display.contains("BackgroundColor3"));
         assert!(!hover_contents.display.contains("UICorner.CornerRadius"));
 
-        let completion_offset = index
-            .position_to_offset(Position::new(1, completion_column))
-            .unwrap();
+        let completion_offset = index.position_to_offset(Position::new(1, completion_column));
         let completion = get_completions(CompletionRequest {
             source: source.to_owned(),
             position: completion_offset,
@@ -317,25 +399,25 @@ mod tests {
 
         assert_eq!(
             editor_range_to_lsp_range(&index, &variant_color.range),
-            Some(Range::new(
+            Range::new(
                 Position::new(1, line_one.find("md:bg-slate-700").unwrap() as u32),
                 Position::new(
                     1,
                     line_one.find("md:bg-slate-700").unwrap() as u32
                         + "md:bg-slate-700".encode_utf16().count() as u32,
                 ),
-            ))
+            )
         );
         assert_eq!(
             editor_range_to_lsp_range(&index, &text_color.range),
-            Some(Range::new(
+            Range::new(
                 Position::new(2, line_two.find("text-blue-500").unwrap() as u32),
                 Position::new(
                     2,
                     line_two.find("text-blue-500").unwrap() as u32
                         + "text-blue-500".encode_utf16().count() as u32,
                 ),
-            ))
+            )
         );
     }
 

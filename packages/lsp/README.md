@@ -6,9 +6,10 @@ Source package for the standalone vela-rbxts Rust LSP wrapper.
 
 - Completion, hover, and document colors for `className` utilities.
 - Diagnostics for unknown theme keys, unsupported utilities, and invalid values
-  (debounced while typing).
+  (debounced while typing, synced incrementally).
 - Quick-fix code actions: replace a token with the nearest valid suggestion, or
   remove it.
+- Document highlight for every occurrence of the class token under the cursor.
 - Project-config aware: the editor client loads each `vela.config.ts` and pushes
   the resolved theme via the `vela-rbxts/setConfigs` notification (and through
   `initializationOptions.configs` at startup). The server picks the config

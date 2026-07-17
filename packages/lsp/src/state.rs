@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, Url};
 
 use crate::documents::Document;
 
@@ -51,14 +51,14 @@ impl ServerState {
         document
     }
 
-    pub fn update_document(
+    pub fn apply_document_changes(
         &mut self,
         uri: &Url,
-        text: String,
+        changes: &[TextDocumentContentChangeEvent],
         version: Option<i32>,
     ) -> Option<Document> {
         let document = self.documents.get_mut(uri)?;
-        document.update(text, version);
+        document.apply_content_changes(changes, version);
         Some(document.clone())
     }
 
@@ -94,7 +94,15 @@ mod tests {
         assert_eq!(state.document(&uri).unwrap().text, "className=\"bg-\"");
 
         let updated = state
-            .update_document(&uri, "className=\"rounded-\"".to_owned(), Some(2))
+            .apply_document_changes(
+                &uri,
+                &[TextDocumentContentChangeEvent {
+                    range: None,
+                    range_length: None,
+                    text: "className=\"rounded-\"".to_owned(),
+                }],
+                Some(2),
+            )
             .unwrap();
         assert_eq!(updated.version, Some(2));
         assert_eq!(state.document(&uri).unwrap().text, "className=\"rounded-\"");
