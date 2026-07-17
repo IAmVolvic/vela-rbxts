@@ -878,7 +878,7 @@ pub(crate) fn resolve_size_fraction_scale(key: &str) -> Option<String> {
         2 => numerator == 1,
         3 => matches!(numerator, 1 | 2),
         4 => matches!(numerator, 1 | 3),
-        5 => matches!(numerator, 1 | 2 | 3 | 4),
+        5 => (1..=4).contains(&numerator),
         6 => matches!(numerator, 1 | 5),
         12 => (1..=11).contains(&numerator),
         _ => false,
@@ -1061,7 +1061,7 @@ fn format_transparency(remainder: u32) -> String {
         return "1".to_owned();
     }
 
-    if remainder % 10 == 0 {
+    if remainder.is_multiple_of(10) {
         return format!("0.{}", remainder / 10);
     }
 

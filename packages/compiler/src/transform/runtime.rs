@@ -207,43 +207,28 @@ fn apply_analyzed_token(
 ) {
     let _needs_config_lookup = analysis.needs_config_lookup;
 
-    if !analysis.supported {
-        for issue in &analysis.issues {
-            match issue {
-                SemanticIssue::UnsupportedUtilityFamily { .. } => {
-                    diagnostics.push(unsupported_utility_family_diagnostic(&analysis.parsed.raw));
-                    return;
-                }
-                SemanticIssue::UnsupportedZIndexValue { value } => {
-                    diagnostics.push(unsupported_z_index_value_diagnostic(
-                        value,
-                        &analysis.parsed.raw,
-                    ));
-                    return;
-                }
-                SemanticIssue::UnsupportedZIndexAuto => {
-                    diagnostics.push(unsupported_z_index_auto_diagnostic(&analysis.parsed.raw));
-                    return;
-                }
-                SemanticIssue::UnsupportedArbitraryZIndex => {
-                    diagnostics.push(unsupported_arbitrary_z_index_diagnostic(
-                        &analysis.parsed.raw,
-                    ));
-                    return;
-                }
-                SemanticIssue::NegativeZIndex => {
-                    diagnostics.push(negative_z_index_diagnostic(&analysis.parsed.raw));
-                    return;
-                }
-                SemanticIssue::UnsupportedBorderValue { value } => {
-                    diagnostics.push(unsupported_border_value_diagnostic(
-                        value,
-                        &analysis.parsed.raw,
-                    ));
-                    return;
-                }
+    if !analysis.supported
+        && let Some(issue) = analysis.issues.first()
+    {
+        diagnostics.push(match issue {
+            SemanticIssue::UnsupportedUtilityFamily { .. } => {
+                unsupported_utility_family_diagnostic(&analysis.parsed.raw)
             }
-        }
+            SemanticIssue::UnsupportedZIndexValue { value } => {
+                unsupported_z_index_value_diagnostic(value, &analysis.parsed.raw)
+            }
+            SemanticIssue::UnsupportedZIndexAuto => {
+                unsupported_z_index_auto_diagnostic(&analysis.parsed.raw)
+            }
+            SemanticIssue::UnsupportedArbitraryZIndex => {
+                unsupported_arbitrary_z_index_diagnostic(&analysis.parsed.raw)
+            }
+            SemanticIssue::NegativeZIndex => negative_z_index_diagnostic(&analysis.parsed.raw),
+            SemanticIssue::UnsupportedBorderValue { value } => {
+                unsupported_border_value_diagnostic(value, &analysis.parsed.raw)
+            }
+        });
+        return;
     }
 
     match &analysis.utility {
@@ -316,11 +301,10 @@ fn apply_analyzed_token(
             }
         }
         UtilityKind::ZIndex => {
-            if let Some(z_key) = analysis.payload() {
-                if let Some(value) = resolve_z_index_value(z_key, &analysis.parsed.raw, diagnostics)
-                {
-                    style.set_prop("ZIndex", value);
-                }
+            if let Some(z_key) = analysis.payload()
+                && let Some(value) = resolve_z_index_value(z_key, &analysis.parsed.raw, diagnostics)
+            {
+                style.set_prop("ZIndex", value);
             }
         }
         UtilityKind::Padding(axis) => {
