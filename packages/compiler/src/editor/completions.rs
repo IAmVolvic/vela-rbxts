@@ -65,27 +65,28 @@ fn completion_candidates(config: &TailwindConfig, element_tag: &str) -> Vec<Comp
     }
 
     for base in base_utility_candidates(config) {
-        if is_utility_allowed_on_host(element_tag, &base.utility_kind) {
-            push_completion_item(&mut items, base.item.clone());
+        if !is_utility_allowed_on_host(element_tag, &base.utility_kind) {
+            continue;
         }
 
+        items.push(base.item.clone());
+
         for variant in RUNTIME_VARIANTS {
-            let label = format!("{variant}:{}", base.item.label);
-            if is_utility_allowed_on_host(element_tag, &base.utility_kind) {
-                push_completion(
-                    &mut items,
-                    &label,
-                    &base.item.category,
-                    &base.item.kind,
-                    &format!(
-                        "Runtime variant of {}. {}",
-                        base.item.label, base.item.documentation
-                    ),
-                );
-            }
+            push_completion(
+                &mut items,
+                &format!("{variant}:{}", base.item.label),
+                &base.item.category,
+                &base.item.kind,
+                &format!(
+                    "Runtime variant of {}. {}",
+                    base.item.label, base.item.documentation
+                ),
+            );
         }
     }
 
+    let mut seen = std::collections::HashSet::new();
+    items.retain(|item| seen.insert(item.label.clone()));
     items
 }
 
@@ -738,21 +739,12 @@ fn push_completion(
     kind: &str,
     documentation: &str,
 ) {
-    push_completion_item(
-        items,
-        CompletionItem {
-            label: label.to_owned(),
-            insert_text: label.to_owned(),
-            kind: kind.to_owned(),
-            category: category.to_owned(),
-            documentation: documentation.to_owned(),
-            replacement: None,
-        },
-    );
-}
-
-fn push_completion_item(items: &mut Vec<CompletionItem>, item: CompletionItem) {
-    if !items.iter().any(|existing| existing.label == item.label) {
-        items.push(item);
-    }
+    items.push(CompletionItem {
+        label: label.to_owned(),
+        insert_text: label.to_owned(),
+        kind: kind.to_owned(),
+        category: category.to_owned(),
+        documentation: documentation.to_owned(),
+        replacement: None,
+    });
 }
