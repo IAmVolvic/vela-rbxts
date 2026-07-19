@@ -5,7 +5,7 @@ use crate::swc::builders::{
     create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
 };
 use crate::transform::jsx::{
-    is_component_element, lower_class_name, runtime_class_name_on_component_diagnostic,
+    element_expression_source, is_component_element, lower_class_name,
     unsupported_host_class_name_diagnostic,
 };
 use crate::transform::module::{
@@ -99,17 +99,16 @@ impl VisitMut for VelaTransformer {
             return;
         };
 
-        // Components are given statically resolved props, so the runtime host
-        // swap below would replace the component itself.
-        if is_component && lowered.needs_runtime_host {
-            if let Some(diagnostic) = runtime_class_name_on_component_diagnostic(
-                &element.opening.name,
-                &element.opening.attrs,
-            ) {
-                self.diagnostics.push(diagnostic);
+        // The runtime host renders this tag itself, so a component has to be
+        // forwarded as a reference rather than as a host element name.
+        let runtime_tag = if is_component {
+            match element_expression_source(&element.opening.name) {
+                Some(source) => source,
+                None => return,
             }
-            return;
-        }
+        } else {
+            format!("\"{}\"", element_tag_name(&element.opening.name))
+        };
 
         self.changed = true;
         self.ir.push(lowered.style_ir.clone());
@@ -150,10 +149,13 @@ impl VisitMut for VelaTransformer {
             }
             attrs.push(create_prop_attr(PropEntry {
                 name: "__velaTag",
-                value: format!("\"{}\"", element_tag_name(&element.opening.name)),
+                value: runtime_tag,
             }));
             element.opening.name =
                 JSXElementName::Ident(Ident::new_no_ctxt("VelaRuntimeHost".into(), DUMMY_SP));
+            if let Some(closing) = element.closing.as_mut() {
+                closing.name = element.opening.name.clone();
+            }
         } else {
             attrs.extend(
                 lowered
