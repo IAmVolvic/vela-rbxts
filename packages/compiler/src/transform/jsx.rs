@@ -5,7 +5,7 @@ use crate::editor::ClassToken;
 use crate::ir::model::{StyleEffectBundle, StyleIr};
 use crate::transform::runtime::resolve_class_tokens;
 use swc_core::ecma::ast::{
-    JSXAttr, JSXAttrOrSpread, JSXAttrValue, JSXElementName, JSXExpr, JSXExprContainer,
+    JSXAttr, JSXAttrOrSpread, JSXAttrValue, JSXElementName, JSXExpr, JSXExprContainer, JSXObject,
 };
 
 pub(crate) struct LoweredClassName {
@@ -146,24 +146,30 @@ pub(crate) fn unsupported_host_class_name_diagnostic(
     })
 }
 
-/// Components receive statically resolved props, so anything that would need the
-/// runtime host cannot be lowered into them.
-pub(crate) fn runtime_class_name_on_component_diagnostic(
-    name: &JSXElementName,
-    attrs: &[JSXAttrOrSpread],
-) -> Option<Diagnostic> {
-    let class_name_attr = find_class_name_attr(attrs)?;
-    let element = element_display_name(name);
-
-    Some(Diagnostic {
-        level: "warning".to_owned(),
-        code: "runtime-classname-on-component".to_owned(),
-        message: format!(
-            "`className` on component `{element}` must resolve statically; dynamic expressions and runtime variants such as `sm:` are only lowered on Roblox host elements."
-        ),
-        token: None,
-        range: class_name_value_range(class_name_attr),
-    })
+/// Renders a component element name as the expression the runtime host renders.
+pub(crate) fn element_expression_source(name: &JSXElementName) -> Option<String> {
+    match name {
+        JSXElementName::Ident(ident) => Some(ident.sym.to_string()),
+        JSXElementName::JSXMemberExpr(member) => {
+            let mut parts = vec![member.prop.sym.to_string()];
+            let mut object = &member.obj;
+            loop {
+                match object {
+                    JSXObject::Ident(ident) => {
+                        parts.push(ident.sym.to_string());
+                        break;
+                    }
+                    JSXObject::JSXMemberExpr(inner) => {
+                        parts.push(inner.prop.sym.to_string());
+                        object = &inner.obj;
+                    }
+                }
+            }
+            parts.reverse();
+            Some(parts.join("."))
+        }
+        JSXElementName::JSXNamespacedName(_) => None,
+    }
 }
 
 fn find_class_name_attr(attrs: &[JSXAttrOrSpread]) -> Option<&JSXAttr> {

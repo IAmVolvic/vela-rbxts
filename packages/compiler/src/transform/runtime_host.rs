@@ -34,6 +34,8 @@ type SupportedHostElementTag =
 	| "imagelabel"
 	| "imagebutton";
 
+type VelaRuntimeTag = SupportedHostElementTag | ((props: never) => unknown);
+
 type RuntimeRulePropEntry = {
 	name: string;
 	value: string;
@@ -145,7 +147,7 @@ type RuntimeResolution = {
 };
 
 type VelaRuntimeHostProps = {
-	__velaTag: SupportedHostElementTag;
+	__velaTag: VelaRuntimeTag;
 	__velaRules?: readonly RuntimeRule[];
 	className?: ClassValue;
 	children?: defined | readonly defined[];
@@ -196,7 +198,12 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			}
 		}
 
-		return __VelaReact.createElement(__velaTag, hostProps, ...allChildren);
+		// React renders a component reference the same way it renders a host tag.
+		return __VelaReact.createElement(
+			__velaTag as SupportedHostElementTag,
+			hostProps,
+			...allChildren,
+		);
 	};
 }
 
