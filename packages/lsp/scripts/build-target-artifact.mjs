@@ -32,6 +32,7 @@ async function main() {
 			PACKAGE_DIR,
 			"--variant",
 			`${config.target}=bin/${binaryFileName}`,
+			...(options.crossCompile ? ["--cross-compile"] : []),
 		]);
 
 		const sourcePath = join(tempPackageDir, "bin", binaryFileName);

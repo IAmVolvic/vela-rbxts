@@ -76,8 +76,7 @@ function buildCargoArgs(target) {
 		];
 	}
 
-	const linuxNeedsZig = process.platform !== "linux" && target.includes("linux");
-	if (linuxNeedsZig) {
+	if (needsZigCrossBuild(target)) {
 		return [
 			"zigbuild",
 			"--release",
@@ -100,6 +99,40 @@ function buildCargoArgs(target) {
 
 function shouldUseXwin(target) {
 	return process.platform !== "win32" && target.includes("windows");
+}
+
+function getHostTarget() {
+	const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
+
+	if (process.platform === "darwin") {
+		return `${arch}-apple-darwin`;
+	}
+
+	if (process.platform === "win32") {
+		return `${arch}-pc-windows-msvc`;
+	}
+
+	if (process.platform === "linux") {
+		const report = process.report?.getReport();
+		const libc = report?.header?.glibcVersionRuntime ? "gnu" : "musl";
+		return `${arch}-unknown-linux-${libc}`;
+	}
+
+	return undefined;
+}
+
+function needsZigCrossBuild(target) {
+	if (options.crossCompile) {
+		return true;
+	}
+
+	const hostTarget = getHostTarget();
+	if (hostTarget === undefined || target === hostTarget) {
+		return false;
+	}
+
+	// Apple targets build across architectures with the stock toolchain.
+	return !(target.includes("apple") && hostTarget.includes("apple"));
 }
 
 function buildEnvironment() {
@@ -128,11 +161,17 @@ function parseArgs(rawArgs) {
 		binaryName: "vela-rbxts-lsp",
 		crateDir: "../lsp",
 		packageDir: ".",
+		crossCompile: false,
 		variants: [],
 	};
 
 	for (let index = 0; index < rawArgs.length; index += 1) {
 		const arg = rawArgs[index];
+
+		if (arg === "--cross-compile") {
+			options.crossCompile = true;
+			continue;
+		}
 
 		if (arg === "--package-dir") {
 			options.packageDir = requireValue(rawArgs, ++index, arg);
