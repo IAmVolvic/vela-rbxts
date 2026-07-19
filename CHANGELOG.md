@@ -13,6 +13,11 @@ Versions are released in lockstep across every workspace package.
 
 - `className` on React components is now lowered: static utilities resolve at compile time and are passed to the component as props, with helper elements added as its first children. Dynamic expressions and runtime-aware variants are wrapped in the inline runtime helper, which renders the component with the resolved props. The component must forward what it does not consume to a Roblox host element.
 - A diagnostic for `className` on Roblox host elements that are not supported, instead of passing an unknown property through to the runtime.
+- Editor support for `className` on components: completions, hover, document colors, and diagnostics now work there too. Utilities restricted to specific host elements, such as `text-*`, stay available because a component's host element is not known.
+
+### Security
+
+- Updated development dependencies to clear 24 advisories reported against the workspace, covering `turbo`, `esbuild`, `vitest`, `@vscode/vsce`, and transitive packages pinned through pnpm overrides. None of these were runtime dependencies of the published packages.
 
 ### Fixed
 
