@@ -238,3 +238,62 @@ function createProject(): {
 		sourceFile,
 	};
 }
+
+test("anchors diagnostics with a compiler range instead of the first text match", () => {
+	const sourceText = [
+		'const unrelated = "bg-missing in a string";',
+		'export const App = () => <frame className="bg-missing" />;',
+	].join("\n");
+	const tokenStart = sourceText.lastIndexOf("bg-missing");
+
+	mockedCompilerTransform.mockReturnValueOnce({
+		code: sourceText,
+		diagnostics: [
+			{
+				level: "warning",
+				code: "unknown-theme-key",
+				message: "Unknown theme key",
+				token: "bg-missing",
+				range: { start: tokenStart, end: tokenStart + "bg-missing".length },
+			},
+		],
+		changed: false,
+		ir: [],
+		needsRuntimeHost: false,
+	});
+
+	const project = createProject();
+	const result = runLifecycleTransform(sourceText, project.root);
+
+	expect(result.diagnostics[0].start).toBe(tokenStart);
+	expect(result.diagnostics[0].length).toBe("bg-missing".length);
+
+	result.dispose();
+});
+
+test("falls back to a text match when the compiler reports no range", () => {
+	const sourceText =
+		'export const App = () => <frame className="bg-missing" />;';
+
+	mockedCompilerTransform.mockReturnValueOnce({
+		code: sourceText,
+		diagnostics: [
+			{
+				level: "warning",
+				code: "unknown-theme-key",
+				message: "Unknown theme key",
+				token: "bg-missing",
+			},
+		],
+		changed: false,
+		ir: [],
+		needsRuntimeHost: false,
+	});
+
+	const project = createProject();
+	const result = runLifecycleTransform(sourceText, project.root);
+
+	expect(result.diagnostics[0].start).toBe(sourceText.indexOf("bg-missing"));
+
+	result.dispose();
+});

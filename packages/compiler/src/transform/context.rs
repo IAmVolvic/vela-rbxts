@@ -4,7 +4,10 @@ use crate::ir::model::{PropEntry, StyleIr};
 use crate::swc::builders::{
     create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
 };
-use crate::transform::jsx::lower_class_name;
+use crate::transform::jsx::{
+    is_component_element, lower_class_name, runtime_class_name_on_component_diagnostic,
+    unsupported_host_class_name_diagnostic,
+};
 use crate::transform::module::{
     create_runtime_host_module_items, element_tag_name, is_supported_host_element,
 };
@@ -76,7 +79,14 @@ impl VisitMut for VelaTransformer {
     fn visit_mut_jsx_element(&mut self, element: &mut JSXElement) {
         element.visit_mut_children_with(self);
 
-        if !is_supported_host_element(&element.opening.name) {
+        let is_component = is_component_element(&element.opening.name);
+        if !is_supported_host_element(&element.opening.name) && !is_component {
+            if let Some(diagnostic) = unsupported_host_class_name_diagnostic(
+                &element.opening.name,
+                &element.opening.attrs,
+            ) {
+                self.diagnostics.push(diagnostic);
+            }
             return;
         }
 
@@ -88,6 +98,18 @@ impl VisitMut for VelaTransformer {
         ) else {
             return;
         };
+
+        // Components are given statically resolved props, so the runtime host
+        // swap below would replace the component itself.
+        if is_component && lowered.needs_runtime_host {
+            if let Some(diagnostic) = runtime_class_name_on_component_diagnostic(
+                &element.opening.name,
+                &element.opening.attrs,
+            ) {
+                self.diagnostics.push(diagnostic);
+            }
+            return;
+        }
 
         self.changed = true;
         self.ir.push(lowered.style_ir.clone());

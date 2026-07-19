@@ -1769,3 +1769,80 @@ test("retains the default config shape for compatibility", () => {
 		"4": "new UDim(0, 16)",
 	});
 });
+
+test("lowers className on components into props and helper children", () => {
+	const result = transform(
+		`export const A = () => <Box className="bg-slate-700 rounded-md" />;`,
+		null,
+	);
+
+	expect(result.code).toContain(
+		"BackgroundColor3={Color3.fromRGB(49, 65, 88)}",
+	);
+	expect(result.code).toContain("<uicorner CornerRadius={new UDim(0, 6)}/>");
+	expect(result.code).not.toContain("className");
+	expect(result.diagnostics).toEqual([]);
+});
+
+test("lowers className on member expression components", () => {
+	const result = transform(
+		`export const A = () => <Switch.Root className="bg-slate-700" />;`,
+		null,
+	);
+
+	expect(result.code).toContain(
+		"<Switch.Root BackgroundColor3={Color3.fromRGB(49, 65, 88)}/>",
+	);
+});
+
+test("prepends component helper children before existing children", () => {
+	const result = transform(
+		`export const A = () => <Box className="rounded-md"><textlabel Text="hi"/></Box>;`,
+		null,
+	);
+
+	expect(result.code).toContain(
+		`<uicorner CornerRadius={new UDim(0, 6)}/><textlabel Text="hi"/>`,
+	);
+});
+
+test("keeps runtime className on components untouched and warns", () => {
+	const result = transform(
+		`export const A = () => <Box className="sm:bg-slate-700" />;`,
+		null,
+	);
+
+	expect(result.code).toContain(`className="sm:bg-slate-700"`);
+	expect(result.code).not.toContain("VelaRuntimeHost");
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "runtime-classname-on-component" }),
+	]);
+});
+
+test("warns about className on unsupported host elements", () => {
+	const result = transform(
+		`export const A = () => <screengui className="bg-slate-700" />;`,
+		null,
+	);
+
+	expect(result.code).toContain(`className="bg-slate-700"`);
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "classname-on-unsupported-host" }),
+	]);
+});
+
+test("anchors diagnostics to the offending className token", () => {
+	const source = [
+		`// a comment that mentions m-4 first`,
+		`const unrelated = "m-4 in a string";`,
+		`export const A = () => <frame className="bg-slate-700 m-4" />;`,
+	].join("\n");
+	const result = transform(source, null);
+	const [diagnostic] = result.diagnostics;
+
+	expect(diagnostic.code).toBe("unsupported-utility-family");
+	expect(diagnostic.range).toBeDefined();
+	const { start, end } = diagnostic.range as { start: number; end: number };
+	expect(source.slice(start, end)).toBe("m-4");
+	expect(start).toBeGreaterThan(source.indexOf("className"));
+});
