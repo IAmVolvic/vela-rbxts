@@ -4,17 +4,36 @@
   "private": true,
   "type": "commonjs",
   "description": "Source package for the vela-rbxts Rust LSP wrapper and release staging scripts.",
+  "license": "MIT",
+  "author": "astra-void",
+  "keywords": [
+    "roblox",
+    "roblox-ts",
+    "rbxts",
+    "tailwind",
+    "tailwindcss",
+    "vela",
+    "classname",
+    "lsp",
+    "language-server"
+  ],
+  "homepage": "https://github.com/astra-void/vela-rbxts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astra-void/vela-rbxts.git",
+    "directory": "packages/lsp"
+  },
+  "bugs": {
+    "url": "https://github.com/astra-void/vela-rbxts/issues"
+  },
   "main": "./bin/vela-rbxts-lsp.js",
   "bin": {
     "vela-rbxts-lsp": "./bin/vela-rbxts-lsp.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/astra-void/vela-rbxts"
-  },
   "files": [
     "bin/vela-rbxts-lsp.js",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "cargo build --release --manifest-path Cargo.toml",

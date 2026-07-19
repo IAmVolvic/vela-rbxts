@@ -3,17 +3,34 @@
 	"version": "0.2.0",
 	"type": "commonjs",
 	"displayName": "Vela LSP",
-	"publisher": "astra-void",
 	"description": "VS Code extension that launches the standalone Vela RBXTS Rust LSP.",
+	"license": "MIT",
+	"author": "astra-void",
+	"keywords": [
+		"roblox",
+		"roblox-ts",
+		"rbxts",
+		"tailwind",
+		"tailwindcss",
+		"vela",
+		"classname",
+		"lsp",
+		"language-server"
+	],
+	"homepage": "https://github.com/astra-void/vela-rbxts#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/astra-void/vela-rbxts.git",
+		"directory": "packages/vscode-extension"
+	},
+	"bugs": {
+		"url": "https://github.com/astra-void/vela-rbxts/issues"
+	},
+	"publisher": "astra-void",
 	"main": "./dist/extension.js",
 	"engines": {
 		"vscode": "^1.90.0"
 	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/astra-void/vela-rbxts.git"
-	},
-	"license": "MIT",
 	"activationEvents": [
 		"onLanguage:typescript",
 		"onLanguage:typescriptreact"

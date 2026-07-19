@@ -2,15 +2,38 @@
   "name": "@vela-rbxts/rbxtsc-host",
   "version": "0.2.0",
   "type": "commonjs",
+  "description": "roblox-ts host adapter that bridges the vela-rbxts compiler into the rbxtsc transform pipeline.",
+  "license": "MIT",
+  "author": "astra-void",
+  "keywords": [
+    "roblox",
+    "roblox-ts",
+    "rbxts",
+    "tailwind",
+    "tailwindcss",
+    "vela",
+    "classname",
+    "transformer",
+    "rbxtsc"
+  ],
+  "homepage": "https://github.com/astra-void/vela-rbxts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astra-void/vela-rbxts.git",
+    "directory": "packages/rbxtsc-host"
+  },
+  "bugs": {
+    "url": "https://github.com/astra-void/vela-rbxts/issues"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "publishConfig": {
     "access": "public"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/astra-void/vela-rbxts"
-  },
+  "files": [
+    "dist",
+    "!dist/.tsbuildinfo"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

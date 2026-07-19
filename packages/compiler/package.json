@@ -3,22 +3,42 @@
   "version": "0.2.0",
   "private": false,
   "type": "commonjs",
-  "description": "Native compiler implementation for @vela-rbxts/compiler.",
+  "description": "Native compiler that resolves, validates, and lowers vela-rbxts utility classes.",
+  "license": "MIT",
+  "author": "astra-void",
+  "keywords": [
+    "roblox",
+    "roblox-ts",
+    "rbxts",
+    "tailwind",
+    "tailwindcss",
+    "vela",
+    "classname",
+    "compiler",
+    "napi"
+  ],
+  "homepage": "https://github.com/astra-void/vela-rbxts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astra-void/vela-rbxts.git",
+    "directory": "packages/compiler"
+  },
+  "bugs": {
+    "url": "https://github.com/astra-void/vela-rbxts/issues"
+  },
   "main": "./entry.cjs",
   "types": "./entry.d.ts",
   "publishConfig": {
     "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/astra-void/vela-rbxts"
   },
   "files": [
     "entry.cjs",
     "entry.d.ts",
     "index.js",
     "index.d.ts",
-    "*.node"
+    "*.node",
+    "README.md",
+    "LICENSE"
   ],
   "exports": {
     ".": {

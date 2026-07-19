@@ -2,8 +2,37 @@
   "name": "vela-rbxts",
   "version": "0.2.0",
   "type": "module",
+  "description": "Tailwind-style className support for roblox-ts React UI.",
+  "license": "MIT",
+  "author": "astra-void",
+  "keywords": [
+    "roblox",
+    "roblox-ts",
+    "rbxts",
+    "tailwind",
+    "tailwindcss",
+    "vela",
+    "classname",
+    "react",
+    "ui",
+    "transformer"
+  ],
+  "homepage": "https://github.com/astra-void/vela-rbxts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astra-void/vela-rbxts.git",
+    "directory": "packages/vela-rbxts"
+  },
+  "bugs": {
+    "url": "https://github.com/astra-void/vela-rbxts/issues"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "transformer",
+    "!dist/.tsbuildinfo"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -16,14 +45,6 @@
       "require": "./dist/transformer.cjs",
       "default": "./dist/transformer.cjs"
     }
-  },
-  "files": [
-    "dist",
-    "transformer"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/astra-void/vela-rbxts"
   },
   "scripts": {
     "build": "pnpm run clean && pnpm run build:types",

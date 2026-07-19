@@ -2,15 +2,37 @@
   "name": "@vela-rbxts/types",
   "version": "0.2.0",
   "type": "module",
+  "description": "Shared public types such as ClassValue and StylableProps for vela-rbxts.",
+  "license": "MIT",
+  "author": "astra-void",
+  "keywords": [
+    "roblox",
+    "roblox-ts",
+    "rbxts",
+    "tailwind",
+    "tailwindcss",
+    "vela",
+    "classname",
+    "types"
+  ],
+  "homepage": "https://github.com/astra-void/vela-rbxts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astra-void/vela-rbxts.git",
+    "directory": "packages/types"
+  },
+  "bugs": {
+    "url": "https://github.com/astra-void/vela-rbxts/issues"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "publishConfig": {
     "access": "public"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/astra-void/vela-rbxts"
-  },
+  "files": [
+    "dist",
+    "!dist/.tsbuildinfo"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
