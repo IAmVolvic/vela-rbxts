@@ -342,3 +342,11 @@ pnpm typecheck
 # Clean workspace
 pnpm clean
 ```
+
+## Changelog
+
+Release notes are kept in [CHANGELOG.md](./CHANGELOG.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
