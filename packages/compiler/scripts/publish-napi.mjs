@@ -192,6 +192,7 @@ async function copyTargetBinariesToNpmDirs() {
 			: join(PACKAGE_DIR, binaryFileName);
 		const targetDir = join(STAGE_ROOT, "npm", target.platformArchABI);
 		const destinationPath = join(targetDir, binaryFileName);
+		const licenseDestination = join(targetDir, "LICENSE");
 
 		if (!existsSync(sourcePath)) {
 			// Local staging only has the current platform binary; full publish jobs
@@ -210,6 +211,7 @@ async function copyTargetBinariesToNpmDirs() {
 
 		await mkdir(targetDir, { recursive: true });
 		await cp(sourcePath, destinationPath);
+		await cp(join(PACKAGE_DIR, "LICENSE"), licenseDestination);
 	}
 }
 

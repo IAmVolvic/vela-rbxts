@@ -38,6 +38,7 @@ await writeFile(
 	buildWrapperReadme(),
 	"utf8",
 );
+await copyFile(join(PACKAGE_DIR, "LICENSE"), join(STAGE_ROOT, "LICENSE"));
 
 for (const config of BINARY_PACKAGE_CONFIGS) {
 	const packageDir = join(STAGE_ROOT, "npm", config.directory);
@@ -50,6 +51,7 @@ for (const config of BINARY_PACKAGE_CONFIGS) {
 		}),
 	);
 	await writeFile(join(packageDir, "README.md"), buildBinaryReadme(config), "utf8");
+	await copyFile(join(PACKAGE_DIR, "LICENSE"), join(packageDir, "LICENSE"));
 }
 
 async function writeJson(filePath, value) {

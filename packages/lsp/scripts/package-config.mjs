@@ -1,6 +1,24 @@
 export const ROOT_PACKAGE_NAME = "@vela-rbxts/lsp";
 export const ROOT_BINARY_NAME = "vela-rbxts-lsp";
 
+const PUBLISH_METADATA = {
+	license: "MIT",
+	author: "astra-void",
+	keywords: [
+		"roblox",
+		"roblox-ts",
+		"rbxts",
+		"tailwind",
+		"tailwindcss",
+		"vela",
+		"classname",
+		"lsp",
+		"language-server",
+	],
+	homepage: "https://github.com/astra-void/vela-rbxts#readme",
+	bugs: { url: "https://github.com/astra-void/vela-rbxts/issues" },
+};
+
 export const BINARY_PACKAGE_CONFIGS = [
 	{
 		directory: "darwin-arm64",
@@ -98,6 +116,7 @@ export function buildWrapperPackageJson({ version, repository }) {
 		private: false,
 		type: "commonjs",
 		description: "Wrapper package for the prebuilt vela-rbxts Rust LSP binary.",
+		...PUBLISH_METADATA,
 		main: "./bin/vela-rbxts-lsp.js",
 		bin: {
 			"vela-rbxts-lsp": "./bin/vela-rbxts-lsp.js",
@@ -106,7 +125,7 @@ export function buildWrapperPackageJson({ version, repository }) {
 			access: "public",
 		},
 		repository,
-		files: ["bin/vela-rbxts-lsp.js", "README.md"],
+		files: ["bin/vela-rbxts-lsp.js", "README.md", "LICENSE"],
 		optionalDependencies,
 		exports: {
 			".": "./bin/vela-rbxts-lsp.js",
@@ -122,6 +141,7 @@ export function buildBinaryPackageJson(config, { version, repository }) {
 		name: config.name,
 		version,
 		description: `Prebuilt vela-rbxts LSP binary for ${config.target}.`,
+		...PUBLISH_METADATA,
 		os: [config.os],
 		cpu: [config.cpu],
 		main: `./bin/${binaryFileName}`,
@@ -132,7 +152,7 @@ export function buildBinaryPackageJson(config, { version, repository }) {
 			access: "public",
 		},
 		repository,
-		files: [`bin/${binaryFileName}`],
+		files: [`bin/${binaryFileName}`, "README.md", "LICENSE"],
 		exports: {
 			".": `./bin/${binaryFileName}`,
 			"./package.json": "./package.json",
