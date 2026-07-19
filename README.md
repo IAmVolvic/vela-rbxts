@@ -55,38 +55,14 @@ Add the transformer entry to `compilerOptions.plugins`:
 ```json
 {
   "compilerOptions": {
-    "allowSyntheticDefaultImports": true,
-    "jsx": "react",
-    "jsxFactory": "React.createElement",
-    "jsxFragmentFactory": "React.Fragment",
-    "module": "commonjs",
-    "moduleDetection": "force",
-    "moduleResolution": "Node",
-    "noLib": true,
-    "strict": true,
-    "target": "ESNext",
-    "typeRoots": ["node_modules/@rbxts", "node_modules/@vela-rbxts"],
-    "types": ["types", "compiler-types"],
-    "plugins": [
-      {
-        "transform": "vela-rbxts/transformer"
-      }
-    ],
-    "rootDir": "src",
-    "outDir": "out",
-    "baseUrl": "src",
-    "incremental": true,
-    "tsBuildInfoFile": "out/tsconfig.tsbuildinfo"
-  },
-  "include": ["src"]
+    "plugins": [{ "transform": "vela-rbxts/transformer" }]
+  }
 }
 ```
 
-The transformer is what lowers supported `className` usage into Roblox props during the roblox-ts build.
+That is the entire tsconfig change. Vela requires no compiler option of its own, so everything else stays as your roblox-ts project already has it. The plugin is what lowers supported `className` usage into Roblox props during the build.
 
-`moduleDetection` and `allowSyntheticDefaultImports` are enforced by roblox-ts; it refuses to build without them. `incremental` is required whenever `tsBuildInfoFile` is set, or TypeScript fails with TS5069.
-
-If you also depend on packages outside the `@rbxts` scope, roblox-ts requires every scope you import from to be listed in `typeRoots`. Add them alongside the entries above, for example `"node_modules/@your-scope"`.
+If you do not have a project yet, start from [roblox-ts's quick start](https://roblox-ts.com/docs/quick-start).
 
 ### 3. Add `vela.config.ts`
 
