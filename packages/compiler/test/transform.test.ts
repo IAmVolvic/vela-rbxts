@@ -1806,17 +1806,48 @@ test("prepends component helper children before existing children", () => {
 	);
 });
 
-test("keeps runtime className on components untouched and warns", () => {
+test("routes runtime variants on components through the runtime host", () => {
 	const result = transform(
 		`export const A = () => <Box className="sm:bg-slate-700" />;`,
 		null,
 	);
 
-	expect(result.code).toContain(`className="sm:bg-slate-700"`);
-	expect(result.code).not.toContain("VelaRuntimeHost");
-	expect(result.diagnostics).toEqual([
-		expect.objectContaining({ code: "runtime-classname-on-component" }),
-	]);
+	expect(result.code).toContain("<VelaRuntimeHost");
+	expect(result.code).toContain("__velaTag={Box}");
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+});
+
+test("routes dynamic className on components through the runtime host", () => {
+	const result = transform(
+		`export const A = ({ on }: { on: boolean }) => <Box className={on ? "bg-slate-700" : "bg-slate-900"} />;`,
+		null,
+	);
+
+	expect(result.code).toContain("__velaTag={Box}");
+	expect(result.code).toContain(
+		`className={on ? "bg-slate-700" : "bg-slate-900"}`,
+	);
+});
+
+test("forwards member expression components to the runtime host", () => {
+	const result = transform(
+		`export const A = () => <Switch.Root className="sm:bg-slate-700"><Switch.Thumb/></Switch.Root>;`,
+		null,
+	);
+
+	expect(result.code).toContain("__velaTag={Switch.Root}");
+	expect(result.code).toContain("</VelaRuntimeHost>");
+});
+
+test("renames the closing tag when swapping in the runtime host", () => {
+	const result = transform(
+		`export const A = () => <frame className="sm:bg-slate-700"><textlabel Text="x"/></frame>;`,
+		null,
+	);
+
+	expect(result.code).toContain("</VelaRuntimeHost>");
+	expect(result.code).not.toContain("</frame>");
 });
 
 test("warns about className on unsupported host elements", () => {
