@@ -225,7 +225,7 @@ The transformer resolves the utilities at compile time and passes the result to 
 
 This means the component has to forward the props and children it does not consume down to a Roblox host element, the same way `className` on the web only works because a component passes it to a DOM node. Components that drop unknown props will silently drop the styling.
 
-Because the props are resolved at compile time, a component `className` must be statically known. Dynamic expressions and runtime-aware variants are only lowered on host elements, and produce a diagnostic when used on a component.
+Dynamic `ClassValue` expressions and runtime-aware variants work on components too. Those are wrapped in the inline runtime helper, which resolves the class list at runtime and then renders the component with the resulting props.
 
 ### Runtime-Aware Variants
 
