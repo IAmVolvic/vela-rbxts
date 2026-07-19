@@ -32,17 +32,40 @@ function toDiagnosticCategory(
 	}
 }
 
+function byteOffsetToCharOffset(
+	sourceText: string,
+	byteOffset: number,
+): number {
+	return Buffer.from(sourceText, "utf8")
+		.subarray(0, byteOffset)
+		.toString("utf8").length;
+}
+
 function findDiagnosticSpan(
 	sourceText: string,
-	token: string | undefined,
+	diagnostic: HostDiagnostic,
 ): {
 	start: number;
 	length: number;
 } {
+	const range = diagnostic.range;
+	if (
+		range &&
+		range.end >= range.start &&
+		range.end <= Buffer.byteLength(sourceText)
+	) {
+		const start = byteOffsetToCharOffset(sourceText, range.start);
+		const end = byteOffsetToCharOffset(sourceText, range.end);
+		return { start, length: end - start };
+	}
+
+	const token = diagnostic.token;
 	if (!token) {
 		return { start: 0, length: 0 };
 	}
 
+	// Fallback for diagnostics the compiler could not anchor, such as dynamic
+	// className expressions. Picks the first textual match in the file.
 	const start = sourceText.indexOf(token);
 	if (start < 0) {
 		return { start: 0, length: 0 };
@@ -64,7 +87,7 @@ function mapHostDiagnosticToTsDiagnostic(
 		diagnostic.source === "compiler"
 			? "@vela-rbxts/compiler"
 			: "@vela-rbxts/rbxtsc-host";
-	const span = findDiagnosticSpan(sourceFile.text, diagnostic.token);
+	const span = findDiagnosticSpan(sourceFile.text, diagnostic);
 
 	return {
 		category: toDiagnosticCategory(ts, diagnostic.level),

@@ -11,6 +11,7 @@ pub(crate) fn unsupported_utility_family_diagnostic(token: &str) -> Diagnostic {
         code: "unsupported-utility-family".to_owned(),
         message: format!("Unsupported utility family \"{family}\" in className literal."),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -20,6 +21,7 @@ pub(crate) fn unsupported_z_index_auto_diagnostic(token: &str) -> Diagnostic {
         code: "unsupported-z-index-auto".to_owned(),
         message: "Roblox `ZIndex` does not support Tailwind `auto`.".to_owned(),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -29,6 +31,7 @@ pub(crate) fn negative_z_index_diagnostic(token: &str) -> Diagnostic {
         code: "unsupported-negative-z-index".to_owned(),
         message: "Negative z-index is not supported on Roblox `ZIndex`.".to_owned(),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -38,6 +41,7 @@ pub(crate) fn unsupported_arbitrary_z_index_diagnostic(token: &str) -> Diagnosti
         code: "unsupported-arbitrary-z-index".to_owned(),
         message: "Arbitrary z-index values are not supported yet on Roblox `ZIndex`.".to_owned(),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -49,6 +53,7 @@ pub(crate) fn unsupported_z_index_value_diagnostic(value: &str, token: &str) -> 
             "Tailwind `z-{value}` is not supported yet; supported values are z-0, z-10, z-20, z-30, z-40, and z-50."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -60,6 +65,7 @@ pub(crate) fn unsupported_rotation_value_diagnostic(value: &str, token: &str) ->
             "Tailwind `rotate-{value}` is not supported yet; supported values are rotate-0, rotate-1, rotate-2, rotate-3, rotate-6, rotate-12, rotate-45, rotate-90, and rotate-180."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -71,6 +77,7 @@ pub(crate) fn unsupported_scale_diagnostic(value: &str, token: &str) -> Diagnost
             "Tailwind `scale-{value}` is not supported; Roblox `UIScale` is uniform, and supported values are `scale-0`, `scale-50`, `scale-75`, `scale-90`, `scale-95`, `scale-100`, `scale-105`, `scale-110`, `scale-125`, and `scale-150`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -82,6 +89,7 @@ pub(crate) fn unsupported_opacity_value_diagnostic(value: &str, token: &str) -> 
             "Tailwind `opacity-{value}` is not supported; opacity must be an integer between 0 and 100."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -93,6 +101,7 @@ pub(crate) fn unsupported_aspect_value_diagnostic(value: &str, token: &str) -> D
             "Tailwind `aspect-{value}` is not supported; supported values are `aspect-square`, `aspect-video`, and arbitrary ratios such as `aspect-[4/3]`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -104,6 +113,7 @@ pub(crate) fn unsupported_flex_direction_diagnostic(value: &str, token: &str) ->
             "Tailwind `flex-{value}` is not supported; supported values are `flex`, `flex-row`, and `flex-col`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -125,6 +135,7 @@ pub(crate) fn unsupported_alignment_value_diagnostic(
             "Tailwind `{family}-{value}` is not supported; supported values are {supported}."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -136,6 +147,7 @@ pub(crate) fn unsupported_text_size_diagnostic(value: &str, token: &str) -> Diag
             "Tailwind `text-{value}` is not a supported font size; supported values are `text-xs` through `text-9xl`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -147,6 +159,7 @@ pub(crate) fn unsupported_font_weight_diagnostic(value: &str, token: &str) -> Di
             "Tailwind `font-{value}` is not supported; supported values are `font-thin`, `font-extralight`, `font-light`, `font-normal`, `font-medium`, `font-semibold`, `font-bold`, `font-extrabold`, and `font-black`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -168,6 +181,7 @@ pub(crate) fn unsupported_text_alignment_diagnostic(
             "Tailwind `{family}-{value}` is not supported; supported values are {supported}."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -179,6 +193,7 @@ pub(crate) fn unsupported_gradient_direction_diagnostic(value: &str, token: &str
             "Tailwind `bg-gradient-to-{value}` is not supported; supported directions are `t`, `tr`, `r`, `br`, `b`, `bl`, `l`, and `tl`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -188,6 +203,7 @@ pub(crate) fn unsupported_shadow_inset_diagnostic(token: &str) -> Diagnostic {
         code: "unsupported-shadow-inset".to_owned(),
         message: "Tailwind `shadow-inner` is not supported; Roblox `UIShadow` cannot render inset shadows.".to_owned(),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -199,6 +215,7 @@ pub(crate) fn unsupported_overflow_diagnostic(value: &str, token: &str) -> Diagn
             "Tailwind `overflow-{value}` is not supported; supported values are `overflow-hidden`, `overflow-clip`, and `overflow-visible`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -210,6 +227,7 @@ pub(crate) fn unsupported_anchor_value_diagnostic(value: &str, token: &str) -> D
             "`origin-{value}` is not supported; supported values are `origin-top-left`, `origin-top`, `origin-top-right`, `origin-left`, `origin-center`, `origin-right`, `origin-bottom-left`, `origin-bottom`, and `origin-bottom-right`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -225,6 +243,7 @@ pub(crate) fn unknown_theme_key_diagnostic(
             "Unknown theme key \"{key}\" for {theme_family} utility in className literal."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -236,6 +255,7 @@ pub(crate) fn unsupported_size_spacing_value_diagnostic(value: &str, token: &str
             "Spacing value \"{value}\" for size utility must be an offset-only UDim expression."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -247,6 +267,7 @@ pub(crate) fn unsupported_border_value_diagnostic(value: &str, token: &str) -> D
             "Tailwind `border-{value}` is not supported yet; supported border utilities are `border`, `border-0`, `border-1`, `border-2`, `border-4`, `border-transparent`, and `border-{{color}}`."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -262,6 +283,7 @@ pub(crate) fn unsupported_color_keyword_diagnostic(
             "Unsupported color keyword \"{key}\" for {theme_family} utility in className literal."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -277,6 +299,7 @@ pub(crate) fn color_requires_shade_diagnostic(
             "Color palette \"{key}\" for {theme_family} utility requires an explicit shade such as \"{key}-500\" in className literal."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -293,6 +316,7 @@ pub(crate) fn color_does_not_accept_shade_diagnostic(
             "Color \"{key}\" for {theme_family} utility is a singleton semantic color and does not accept shade \"{shade}\" in className literal."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }
 
@@ -309,5 +333,6 @@ pub(crate) fn color_missing_shade_diagnostic(
             "Color palette \"{key}\" for {theme_family} utility does not define shade \"{shade}\" in className literal."
         ),
         token: Some(token.to_owned()),
+        range: None,
     }
 }

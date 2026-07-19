@@ -43,6 +43,8 @@ export type HostDiagnostic = {
 	code: string;
 	message: string;
 	token?: string;
+	/** Byte range of the offending token in the source, when the compiler knows it. */
+	range?: { start: number; end: number };
 	compilerDiagnostic?: CompilerDiagnostic;
 };
 

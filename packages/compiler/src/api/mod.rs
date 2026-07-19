@@ -9,6 +9,8 @@ pub struct Diagnostic {
     pub code: String,
     pub message: String,
     pub token: Option<String>,
+    /// Byte range of the offending token in the transformed source, when known.
+    pub range: Option<EditorRange>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]

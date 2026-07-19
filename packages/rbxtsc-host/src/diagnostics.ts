@@ -10,6 +10,7 @@ export const mapCompilerDiagnosticToHostDiagnostic: HostDiagnosticMapper = (
 	code: diagnostic.code,
 	message: diagnostic.message,
 	token: diagnostic.token,
+	range: diagnostic.range,
 	compilerDiagnostic: diagnostic,
 });
 

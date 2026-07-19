@@ -47,6 +47,7 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
                     code: "tsx-parse-failed".to_owned(),
                     message: format!("Failed to parse TSX input: {error:?}"),
                     token: None,
+                    range: None,
                 }],
                 changed: false,
                 ir: Vec::new(),
@@ -63,6 +64,7 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
                 code: "tsx-parse-failed".to_owned(),
                 message: format!("Recovered parse errors in TSX input: {recovered_errors:?}"),
                 token: None,
+                range: None,
             }],
             changed: false,
             ir: Vec::new(),
@@ -86,6 +88,7 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
             code: "tsx-emit-failed".to_owned(),
             message: error,
             token: None,
+            range: None,
         });
         source
     });
