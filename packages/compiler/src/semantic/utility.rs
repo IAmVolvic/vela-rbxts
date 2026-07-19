@@ -289,7 +289,13 @@ impl UtilityKind {
     }
 }
 
-pub(crate) fn is_utility_allowed_on_host(element_tag: &str, kind: &UtilityKind) -> bool {
+/// `None` means the element is a component, whose Roblox host element is not
+/// known at this point, so every utility stays available.
+pub(crate) fn is_utility_allowed_on_host(element_tag: Option<&str>, kind: &UtilityKind) -> bool {
+    let Some(element_tag) = element_tag else {
+        return true;
+    };
+
     match kind {
         UtilityKind::TextColor
         | UtilityKind::TextSize

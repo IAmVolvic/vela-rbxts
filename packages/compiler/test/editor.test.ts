@@ -742,3 +742,63 @@ test("skips unknown colors and non-color utilities", () => {
 	expect(unknown.colors).toEqual([]);
 	expect(nonColor.colors).toEqual([]);
 });
+
+test("offers completions inside a component className", () => {
+	const source = `export const A = () => <Box className="bg-sl" />;`;
+	const response = getCompletions({
+		source,
+		position: source.indexOf("bg-sl") + "bg-sl".length,
+	});
+
+	expect(response.isInClassNameContext).toBe(true);
+	expect(response.items.map((item) => item.label)).toContain("bg-slate-500");
+});
+
+test("offers completions inside a member expression component className", () => {
+	const source = `export const A = () => <Switch.Root className="bg-sl" />;`;
+	const response = getCompletions({
+		source,
+		position: source.indexOf("bg-sl") + "bg-sl".length,
+	});
+
+	expect(response.isInClassNameContext).toBe(true);
+	expect(response.items.length).toBeGreaterThan(0);
+});
+
+test("keeps host-only utilities available on components", () => {
+	const componentSource = `export const A = () => <Box className="text-slate-500" />;`;
+	const hostSource = `export const A = () => <frame className="text-slate-500" />;`;
+
+	expect(getDiagnostics({ source: componentSource }).diagnostics).toEqual([]);
+	expect(
+		getDiagnostics({ source: hostSource }).diagnostics.map((item) => item.code),
+	).toEqual(["unsupported-host-utility"]);
+});
+
+test("describes host-only utilities on components instead of rejecting them", () => {
+	const source = `export const A = () => <Box className="text-slate-500" />;`;
+	const response = getHover({
+		source,
+		position: source.indexOf("text-slate") + 3,
+	});
+
+	expect(response.contents?.documentation).toContain("TextColor3");
+	expect(response.contents?.documentation).not.toContain("not valid");
+});
+
+test("reports document colors inside a component className", () => {
+	const source = `export const A = () => <Box className="bg-slate-700" />;`;
+	const response = getDocumentColors({ source });
+
+	expect(response.colors.map((color) => color.token)).toEqual(["bg-slate-700"]);
+});
+
+test("ignores className on elements the transformer does not lower", () => {
+	const source = `export const A = () => <screengui className="bg-slate-700" />;`;
+
+	expect(getDocumentColors({ source }).colors).toEqual([]);
+	expect(
+		getCompletions({ source, position: source.indexOf("bg-slate") + 3 })
+			.isInClassNameContext,
+	).toBe(false);
+});

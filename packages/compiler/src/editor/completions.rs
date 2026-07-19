@@ -34,7 +34,7 @@ pub(crate) fn get_completions_impl(request: CompletionRequest) -> CompletionResp
     let tokens = tokenize_class_name_with_ranges(&context.value, context.value_range.start);
     let replacement = current_token_replacement(&tokens, request.position);
     let prefix = current_prefix(&tokens, &replacement, request.position);
-    let items = completion_candidates(&config, &context.element_tag)
+    let items = completion_candidates(&config, context.element_tag.as_deref())
         .into_iter()
         .filter(|item| item.label.starts_with(&prefix))
         .map(|mut item| {
@@ -49,7 +49,10 @@ pub(crate) fn get_completions_impl(request: CompletionRequest) -> CompletionResp
     }
 }
 
-fn completion_candidates(config: &TailwindConfig, element_tag: &str) -> Vec<CompletionItem> {
+fn completion_candidates(
+    config: &TailwindConfig,
+    element_tag: Option<&str>,
+) -> Vec<CompletionItem> {
     let mut items = Vec::new();
 
     for variant in RUNTIME_VARIANTS {

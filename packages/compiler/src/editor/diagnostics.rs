@@ -19,7 +19,7 @@ pub(crate) fn get_diagnostics_impl(request: DiagnosticsRequest) -> DiagnosticsRe
             let analysis = analyze_class_token(&token.text);
 
             if let Some(diagnostic) = host_utility_diagnostic(
-                &context.element_tag,
+                context.element_tag.as_deref(),
                 &analysis.utility,
                 &token.text,
                 token.range.clone(),

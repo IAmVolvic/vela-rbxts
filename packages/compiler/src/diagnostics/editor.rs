@@ -4,7 +4,7 @@ use crate::semantic::utility::{
 };
 
 pub(crate) fn host_utility_diagnostic(
-    element_tag: &str,
+    element_tag: Option<&str>,
     utility_kind: &UtilityKind,
     token: &str,
     range: EditorRange,
@@ -12,6 +12,8 @@ pub(crate) fn host_utility_diagnostic(
     if utility_kind_allowed_on_host(element_tag, utility_kind) {
         return None;
     }
+
+    let element_tag = element_tag?;
 
     Some(EditorDiagnostic {
         level: "warning".to_owned(),

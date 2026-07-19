@@ -20,7 +20,7 @@ pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> Docume
                 continue;
             };
 
-            if !is_utility_allowed_on_host(&context.element_tag, &analysis.utility) {
+            if !is_utility_allowed_on_host(context.element_tag.as_deref(), &analysis.utility) {
                 continue;
             }
 

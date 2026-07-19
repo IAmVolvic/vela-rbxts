@@ -4,6 +4,7 @@ pub(crate) mod diagnostics;
 pub(crate) mod hover;
 
 use crate::api::{EditorOptions, EditorRange};
+use crate::transform::jsx::is_component_element;
 use crate::transform::module::{is_class_name_attr, is_supported_host_element};
 use swc_core::{
     common::{FileName, SourceMap, sync::Lrc},
@@ -16,7 +17,8 @@ use swc_core::{
 
 #[derive(Clone)]
 pub(crate) struct ClassNameContext {
-    pub(crate) element_tag: String,
+    /// `None` when the class name sits on a component rather than a host element.
+    pub(crate) element_tag: Option<String>,
     pub(crate) value: String,
     pub(crate) value_range: EditorRange,
 }
@@ -27,6 +29,24 @@ pub(crate) struct ClassToken {
     pub(crate) range: EditorRange,
 }
 
+/// Returns the element's class name context: `Some(Some(tag))` for a supported
+/// host element, `Some(None)` for a component, and `None` when the transformer
+/// would not lower the class name at all.
+fn lowered_element_tag(name: &JSXElementName) -> Option<Option<String>> {
+    if is_supported_host_element(name) {
+        return match name {
+            JSXElementName::Ident(ident) => Some(Some(ident.sym.to_string())),
+            _ => None,
+        };
+    }
+
+    if is_component_element(name) {
+        return Some(None);
+    }
+
+    None
+}
+
 pub(crate) struct ClassNameCollector<'a> {
     source: &'a str,
     source_base: u32,
@@ -35,30 +55,27 @@ pub(crate) struct ClassNameCollector<'a> {
 
 impl Visit for ClassNameCollector<'_> {
     fn visit_jsx_element(&mut self, element: &JSXElement) {
-        if let JSXElementName::Ident(ident) = &element.opening.name {
-            let element_tag = ident.sym.to_string();
-            if is_supported_host_element(&element.opening.name) {
-                for attr in &element.opening.attrs {
-                    let JSXAttrOrSpread::JSXAttr(attr) = attr else {
-                        continue;
-                    };
+        if let Some(element_tag) = lowered_element_tag(&element.opening.name) {
+            for attr in &element.opening.attrs {
+                let JSXAttrOrSpread::JSXAttr(attr) = attr else {
+                    continue;
+                };
 
-                    if !is_class_name_attr(&attr.name) {
-                        continue;
-                    }
-
-                    let Some(JSXAttrValue::Str(value)) = &attr.value else {
-                        continue;
-                    };
-
-                    let (lo, hi) = span_range(value.span, self.source_base);
-                    let value_range = literal_content_range(self.source, lo, hi);
-                    self.contexts.push(ClassNameContext {
-                        element_tag: element_tag.clone(),
-                        value: value.value.to_string_lossy().into_owned(),
-                        value_range,
-                    });
+                if !is_class_name_attr(&attr.name) {
+                    continue;
                 }
+
+                let Some(JSXAttrValue::Str(value)) = &attr.value else {
+                    continue;
+                };
+
+                let (lo, hi) = span_range(value.span, self.source_base);
+                let value_range = literal_content_range(self.source, lo, hi);
+                self.contexts.push(ClassNameContext {
+                    element_tag: element_tag.clone(),
+                    value: value.value.to_string_lossy().into_owned(),
+                    value_range,
+                });
             }
         }
 

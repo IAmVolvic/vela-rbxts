@@ -41,7 +41,8 @@ pub(crate) fn get_hover_impl(request: HoverRequest) -> HoverResponse {
         };
     };
 
-    let Some(contents) = describe_token(&token.text, &config, &context.element_tag) else {
+    let Some(contents) = describe_token(&token.text, &config, context.element_tag.as_deref())
+    else {
         return HoverResponse {
             contents: None,
             range: None,
@@ -57,12 +58,13 @@ pub(crate) fn get_hover_impl(request: HoverRequest) -> HoverResponse {
 fn describe_token(
     token: &str,
     config: &crate::config::model::TailwindConfig,
-    element_tag: &str,
+    element_tag: Option<&str>,
 ) -> Option<HoverContent> {
     let analysis = analyze_class_token(token);
     let variant_prefix = variant_prefix(&analysis);
 
     if !is_utility_allowed_on_host(element_tag, &analysis.utility) {
+        let element_tag = element_tag.unwrap_or_default();
         return Some(HoverContent {
             display: format!("`{token}`"),
             documentation: format!(
