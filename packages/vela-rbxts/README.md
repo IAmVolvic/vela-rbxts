@@ -31,11 +31,13 @@ import { defineConfig } from "vela-rbxts";
 export default defineConfig();
 ```
 
-Add a declaration file such as `src/vela-rbxts.d.ts` so `className` is available on React attributes:
+Add a declaration file such as `src/vela-env.d.ts` so `className` is available on React attributes:
 
 ```ts
 import "vela-rbxts";
 ```
+
+Do not name it `src/vela-rbxts.d.ts`. A roblox-ts project sets `baseUrl` to `src`, so under that name the import resolves back to the declaration file itself instead of the package, and `className` silently never appears.
 
 ## Usage
 

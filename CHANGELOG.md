@@ -9,6 +9,10 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Fixed
+
+- The setup guide named the declaration file `src/vela-rbxts.d.ts`, which collides with the package name under the `baseUrl` of `src` every roblox-ts project sets. The `import "vela-rbxts"` inside it resolved back to the file itself, so the augmentation never loaded and `className` was missing with no diagnostic. The guide now uses `src/vela-env.d.ts`.
+
 ## [0.2.0] - 2026-07-20
 
 First release published as a public project, with release tooling, documentation, and package metadata prepared for external consumers.
