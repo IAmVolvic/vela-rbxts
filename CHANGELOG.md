@@ -9,28 +9,15 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
-### Added
-
-- `className` on React components is now lowered: static utilities resolve at compile time and are passed to the component as props, with helper elements added as its first children. Dynamic expressions and runtime-aware variants are wrapped in the inline runtime helper, which renders the component with the resolved props. The component must forward what it does not consume to a Roblox host element.
-- A diagnostic for `className` on Roblox host elements that are not supported, instead of passing an unknown property through to the runtime.
-- Editor support for `className` on components: completions, hover, document colors, and diagnostics now work there too. Utilities restricted to specific host elements, such as `text-*`, stay available because a component's host element is not known.
-
-### Security
-
-- Updated development dependencies to clear 24 advisories reported against the workspace, covering `turbo`, `esbuild`, `vitest`, `@vscode/vsce`, and transitive packages pinned through pnpm overrides. None of these were runtime dependencies of the published packages.
-
-### Fixed
-
-- Runtime-aware `className` on an element with children no longer fails to compile. Swapping in the runtime helper renamed only the opening tag, so the mismatched closing tag produced TS17002.
-- Compile-time diagnostics are anchored to the offending token in the `className` literal. They previously used the first textual match in the file, so a comment or unrelated string containing the same text stole the position.
-- The `tsconfig.json` example in the README was missing `incremental`, which made `tsBuildInfoFile` fail with TS5069 on a fresh setup.
-
-## [0.2.0] - 2026-07-19
+## [0.2.0] - 2026-07-20
 
 First release published as a public project, with release tooling, documentation, and package metadata prepared for external consumers.
 
 ### Added
 
+- `className` on React components is now lowered: static utilities resolve at compile time and are passed to the component as props, with helper elements added as its first children. Dynamic expressions and runtime-aware variants are wrapped in the inline runtime helper, which renders the component with the resolved props. The component must forward what it does not consume to a Roblox host element.
+- Editor support for `className` on components: completions, hover, document colors, and diagnostics work there too. Utilities restricted to specific host elements, such as `text-*`, stay available because a component's host element is not known.
+- A diagnostic for `className` on Roblox host elements that are not supported, instead of passing an unknown property through to the runtime.
 - Flexbox utilities: `flex`, `flex-row`, `flex-col`, `justify-{start,center,end}`, `items-{start,center,end}`, plus flex distribution and flex-item utilities, lowered to `UIListLayout`.
 - Aspect ratio utilities `aspect-square`, `aspect-video`, and arbitrary `aspect-[W/H]`, lowered to `UIAspectRatioConstraint`.
 - Transform utilities `rotate-*` / `-rotate-*` mapped to Roblox `Rotation`.
@@ -55,10 +42,17 @@ First release published as a public project, with release tooling, documentation
 
 ### Fixed
 
+- Runtime-aware `className` on an element with children no longer fails to compile. Swapping in the runtime helper renamed only the opening tag, so the mismatched closing tag produced TS17002.
+- Compile-time diagnostics are anchored to the offending token in the `className` literal. They previously used the first textual match in the file, so a comment or unrelated string containing the same text stole the position.
+- The `tsconfig.json` example in the README was missing `incremental`, which made `tsBuildInfoFile` fail with TS5069 on a fresh setup.
 - `@vela-rbxts/rbxtsc-host` strips `vela-rbxts` imports when loading `vela.config.ts`.
 - String polyfills and locally aliased `table`/`string` methods in the emitted runtime helper.
 - LSP no longer shows a console window when spawning the server on Windows.
 - VSIX marketplace version normalization for explicit `VSIX_VERSION` overrides.
+
+### Security
+
+- Updated development dependencies to clear 24 advisories reported against the workspace, covering `turbo`, `esbuild`, `vitest`, `@vscode/vsce`, and transitive packages pinned through pnpm overrides. None of these were runtime dependencies of the published packages.
 
 ## [0.1.0] - 2026-04-24
 
