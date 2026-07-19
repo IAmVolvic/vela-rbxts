@@ -1194,16 +1194,26 @@ mod tests {
     #[test]
     fn host_allowlist_matches_utility_family() {
         assert!(is_utility_allowed_on_host(
-            "textbox",
+            Some("textbox"),
             &UtilityKind::PlaceholderColor
         ));
         assert!(!is_utility_allowed_on_host(
-            "frame",
+            Some("frame"),
             &UtilityKind::TextColor
         ));
         assert!(is_utility_allowed_on_host(
-            "frame",
+            Some("frame"),
             &UtilityKind::BackgroundColor
+        ));
+    }
+
+    #[test]
+    fn components_allow_every_utility_family() {
+        assert!(is_utility_allowed_on_host(None, &UtilityKind::TextColor));
+        assert!(is_utility_allowed_on_host(None, &UtilityKind::ImageColor));
+        assert!(is_utility_allowed_on_host(
+            None,
+            &UtilityKind::PlaceholderColor
         ));
     }
 
@@ -1347,12 +1357,15 @@ mod tests {
     #[test]
     fn restricts_text_utilities_to_text_hosts() {
         assert!(is_utility_allowed_on_host(
-            "textlabel",
+            Some("textlabel"),
             &UtilityKind::TextSize
         ));
-        assert!(!is_utility_allowed_on_host("frame", &UtilityKind::TextSize));
         assert!(!is_utility_allowed_on_host(
-            "frame",
+            Some("frame"),
+            &UtilityKind::TextSize
+        ));
+        assert!(!is_utility_allowed_on_host(
+            Some("frame"),
             &UtilityKind::FontWeight
         ));
     }
