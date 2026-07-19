@@ -172,9 +172,26 @@ Merge behavior:
 - top-level `theme.*` replaces the final scale for that family
 - when a top-level `theme.colors` is present, `theme.extend.colors` is discarded rather than layered on top — real Tailwind merges the two, this does not
 
-Built-in colors ship 26 shade palettes plus the literals `black` and `white`. Twenty-two borrow their names from Tailwind (`slate`, `gray`, `zinc`, `neutral`, `stone`, `red`, `orange`, `amber`, `yellow`, `lime`, `green`, `emerald`, `teal`, `cyan`, `sky`, `blue`, `indigo`, `violet`, `purple`, `fuchsia`, `pink`, `rose`) and four are our own (`mauve`, `olive`, `mist`, `taupe`). The names match Tailwind; the values are close but not identical. Every palette carries the shades `50`, `100` through `900` in hundreds, and `950`.
+Built-in colors ship 26 shade palettes plus the literals `black` and `white`. Twenty-two borrow their names from Tailwind (`slate`, `gray`, `zinc`, `neutral`, `stone`, `red`, `orange`, `amber`, `yellow`, `lime`, `green`, `emerald`, `teal`, `cyan`, `sky`, `blue`, `indigo`, `violet`, `purple`, `fuchsia`, `pink`, `rose`) and four are our own (`mauve`, `olive`, `mist`, `taupe`). The names match Tailwind; the values are close but not identical. Every palette carries the shades `50`, `100` through `900` in hundreds, and `950`, plus a `DEFAULT`.
 
-A palette needs a shade, so `bg-slate-700` resolves and bare `bg-slate` reports `color-missing-shade`. A singleton semantic color such as `bg-surface` resolves only after you define `surface`.
+Every palette also carries a `DEFAULT`, mirroring its `500`, and that is what a bare family name resolves to — `bg-slate` and `bg-slate-500` are the same color. Your own palettes can declare one too:
+
+```ts
+export default defineConfig({
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          DEFAULT: "Color3.fromRGB(59, 130, 246)",
+          700: "Color3.fromRGB(29, 78, 216)",
+        },
+      },
+    },
+  },
+});
+```
+
+A palette with no `DEFAULT` still reports `color-missing-shade` when you reference it bare. Note that `DEFAULT` is reachable only through the bare name: `bg-brand-DEFAULT` is not a class. A singleton semantic color such as `bg-surface` resolves only after you define `surface`.
 
 `radius` ships `none`, `xs`, `sm`, `md`, `lg`, `xl`, `2xl`, `3xl`, `4xl`, and `full`.
 
