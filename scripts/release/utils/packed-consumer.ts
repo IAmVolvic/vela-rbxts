@@ -88,7 +88,12 @@ export async function verifyPackedConsumer(): Promise<PackedConsumerVerification
 	let preserveTempDir = keepTempDir;
 
 	try {
-		await writePackedConsumerProject(consumerRootDir, consumerArtifacts, harnessManifest);
+		await writePackedConsumerProject(
+			consumerRootDir,
+			consumerArtifacts,
+			packManifest.artifacts,
+			harnessManifest,
+		);
 		await runPackedConsumerCommand(consumerRootDir, "pnpm", ["install"]);
 		await runPackedConsumerPreflightChecks(consumerRootDir);
 		await runPackedConsumerCommand(consumerRootDir, "pnpm", ["exec", "rbxtsc", "-p", "tsconfig.json"]);
@@ -174,6 +179,7 @@ function resolveConsumerArtifacts(artifactsByName: ReadonlyMap<string, PackManif
 async function writePackedConsumerProject(
 	rootDir: string,
 	consumerArtifacts: ReadonlyArray<PackManifest["artifacts"][number]>,
+	allArtifacts: ReadonlyArray<PackManifest["artifacts"][number]>,
 	harnessManifest: PackageJson,
 ) {
 	await ensureDir(rootDir);
@@ -181,8 +187,17 @@ async function writePackedConsumerProject(
 	await ensureDir(join(rootDir, "src", "client"));
 	await ensureDir(join(rootDir, "out"));
 
-	const packageJson = buildPackedConsumerPackageJson(consumerArtifacts, harnessManifest);
+	const packageJson = buildPackedConsumerPackageJson(
+		consumerArtifacts,
+		allArtifacts,
+		harnessManifest,
+	);
 	await writeJsonFile(join(rootDir, "package.json"), packageJson);
+	await writeFile(
+		join(rootDir, "pnpm-workspace.yaml"),
+		buildPackedConsumerWorkspaceYaml(packageJson.pnpm?.overrides ?? {}),
+		"utf8",
+	);
 	await writeJsonFile(join(rootDir, "tsconfig.json"), buildPackedConsumerTsConfig());
 	await writeJsonFile(join(rootDir, "default.project.json"), buildPackedConsumerProjectJson());
 	await writeFile(
@@ -256,6 +271,7 @@ root.render(<App />);
 
 function buildPackedConsumerPackageJson(
 	consumerArtifacts: ReadonlyArray<PackManifest["artifacts"][number]>,
+	allArtifacts: ReadonlyArray<PackManifest["artifacts"][number]>,
 	harnessManifest: PackageJson,
 ): PackageJson {
 	const dependencies: Record<string, string> = {
@@ -269,6 +285,12 @@ function buildPackedConsumerPackageJson(
 
 	for (const artifact of consumerArtifacts) {
 		dependencies[artifact.packageName] = pathToFileURL(artifact.tarballPath).href;
+	}
+
+	// Release versions are not on the registry yet, so cross-package deps must resolve to packed tarballs.
+	const overrides: Record<string, string> = {};
+	for (const artifact of allArtifacts) {
+		overrides[artifact.packageName] = pathToFileURL(artifact.tarballPath).href;
 	}
 
 	return {
@@ -289,7 +311,19 @@ function buildPackedConsumerPackageJson(
 			"roblox-ts": getDependencyVersion(harnessManifest, "roblox-ts"),
 			typescript: getDependencyVersion(harnessManifest, "typescript"),
 		},
+		pnpm: {
+			overrides,
+		},
 	};
+}
+
+// pnpm 11 ignores package.json "pnpm.overrides"; both files are written so either version resolves the tarballs.
+function buildPackedConsumerWorkspaceYaml(overrides: Record<string, string>) {
+	const lines = ["packages: []", "overrides:"];
+	for (const [name, specifier] of Object.entries(overrides)) {
+		lines.push(`  ${JSON.stringify(name)}: ${JSON.stringify(specifier)}`);
+	}
+	return `${lines.join("\n")}\n`;
 }
 
 function buildPackedConsumerTsConfig(): Record<string, unknown> {

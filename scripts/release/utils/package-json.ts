@@ -23,6 +23,9 @@ export type PackageJson = {
 	publishConfig?: {
 		access?: string;
 	};
+	pnpm?: {
+		overrides?: Record<string, string>;
+	};
 };
 
 export type WorkspacePackage = {
