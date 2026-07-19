@@ -70,6 +70,7 @@ Add the transformer entry to `compilerOptions.plugins`:
     "rootDir": "src",
     "outDir": "out",
     "baseUrl": "src",
+    "incremental": true,
     "tsBuildInfoFile": "out/tsconfig.tsbuildinfo"
   },
   "include": ["src"]
@@ -77,6 +78,8 @@ Add the transformer entry to `compilerOptions.plugins`:
 ```
 
 The transformer is what lowers supported `className` usage into Roblox props during the roblox-ts build.
+
+If you also depend on packages outside the `@rbxts` scope, roblox-ts requires every scope you import from to be listed in `typeRoots`. Add them alongside the entries above, for example `"node_modules/@your-scope"`.
 
 ### 3. Add `vela.config.ts`
 
@@ -200,6 +203,29 @@ The semantic boundary currently recognizes these Roblox elements:
 - `textbox`
 - `imagelabel`
 - `imagebutton`
+
+`className` on any other Roblox element is left alone and reported as a diagnostic.
+
+### Components
+
+`className` also works on your own React components:
+
+```tsx
+<Card className="bg-slate-700 rounded-md px-4" />
+```
+
+The transformer resolves the utilities at compile time and passes the result to the component as ordinary props, with helper elements added as its first children:
+
+```tsx
+<Card BackgroundColor3={Color3.fromRGB(49, 65, 88)}>
+  <uicorner CornerRadius={new UDim(0, 6)} />
+  <uipadding PaddingLeft={new UDim(0, 16)} PaddingRight={new UDim(0, 16)} />
+</Card>
+```
+
+This means the component has to forward the props and children it does not consume down to a Roblox host element, the same way `className` on the web only works because a component passes it to a DOM node. Components that drop unknown props will silently drop the styling.
+
+Because the props are resolved at compile time, a component `className` must be statically known. Dynamic expressions and runtime-aware variants are only lowered on host elements, and produce a diagnostic when used on a component.
 
 ### Runtime-Aware Variants
 

@@ -9,6 +9,16 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Added
+
+- `className` on React components is now lowered: utilities resolve at compile time and are passed to the component as props, with helper elements added as its first children. The component must forward what it does not consume to a Roblox host element.
+- Diagnostics for `className` that cannot be lowered: on unsupported Roblox host elements, and for dynamic or runtime-variant values on components.
+
+### Fixed
+
+- Compile-time diagnostics are anchored to the offending token in the `className` literal. They previously used the first textual match in the file, so a comment or unrelated string containing the same text stole the position.
+- The `tsconfig.json` example in the README was missing `incremental`, which made `tsBuildInfoFile` fail with TS5069 on a fresh setup.
+
 ## [0.2.0] - 2026-07-19
 
 First release published as a public project, with release tooling, documentation, and package metadata prepared for external consumers.
