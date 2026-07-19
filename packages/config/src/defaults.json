@@ -14,7 +14,8 @@
         "700": "Color3.fromRGB(49, 65, 88)",
         "800": "Color3.fromRGB(29, 41, 61)",
         "900": "Color3.fromRGB(15, 23, 43)",
-        "950": "Color3.fromRGB(2, 6, 24)"
+        "950": "Color3.fromRGB(2, 6, 24)",
+        "DEFAULT": "Color3.fromRGB(98, 116, 142)"
       },
       "gray": {
         "50": "Color3.fromRGB(249, 250, 251)",
@@ -27,7 +28,8 @@
         "700": "Color3.fromRGB(54, 65, 83)",
         "800": "Color3.fromRGB(30, 41, 57)",
         "900": "Color3.fromRGB(16, 24, 40)",
-        "950": "Color3.fromRGB(3, 7, 18)"
+        "950": "Color3.fromRGB(3, 7, 18)",
+        "DEFAULT": "Color3.fromRGB(106, 114, 130)"
       },
       "zinc": {
         "50": "Color3.fromRGB(250, 250, 250)",
@@ -40,7 +42,8 @@
         "700": "Color3.fromRGB(63, 63, 70)",
         "800": "Color3.fromRGB(39, 39, 42)",
         "900": "Color3.fromRGB(24, 24, 27)",
-        "950": "Color3.fromRGB(9, 9, 11)"
+        "950": "Color3.fromRGB(9, 9, 11)",
+        "DEFAULT": "Color3.fromRGB(113, 113, 123)"
       },
       "neutral": {
         "50": "Color3.fromRGB(250, 250, 250)",
@@ -53,7 +56,8 @@
         "700": "Color3.fromRGB(64, 64, 64)",
         "800": "Color3.fromRGB(38, 38, 38)",
         "900": "Color3.fromRGB(23, 23, 23)",
-        "950": "Color3.fromRGB(10, 10, 10)"
+        "950": "Color3.fromRGB(10, 10, 10)",
+        "DEFAULT": "Color3.fromRGB(115, 115, 115)"
       },
       "stone": {
         "50": "Color3.fromRGB(250, 250, 249)",
@@ -66,7 +70,8 @@
         "700": "Color3.fromRGB(68, 64, 59)",
         "800": "Color3.fromRGB(41, 37, 36)",
         "900": "Color3.fromRGB(28, 25, 23)",
-        "950": "Color3.fromRGB(12, 10, 9)"
+        "950": "Color3.fromRGB(12, 10, 9)",
+        "DEFAULT": "Color3.fromRGB(121, 113, 107)"
       },
       "red": {
         "50": "Color3.fromRGB(254, 242, 242)",
@@ -79,7 +84,8 @@
         "700": "Color3.fromRGB(193, 0, 7)",
         "800": "Color3.fromRGB(159, 7, 18)",
         "900": "Color3.fromRGB(130, 24, 26)",
-        "950": "Color3.fromRGB(70, 8, 9)"
+        "950": "Color3.fromRGB(70, 8, 9)",
+        "DEFAULT": "Color3.fromRGB(251, 44, 54)"
       },
       "orange": {
         "50": "Color3.fromRGB(255, 247, 237)",
@@ -92,7 +98,8 @@
         "700": "Color3.fromRGB(202, 53, 0)",
         "800": "Color3.fromRGB(159, 45, 0)",
         "900": "Color3.fromRGB(126, 42, 12)",
-        "950": "Color3.fromRGB(68, 19, 6)"
+        "950": "Color3.fromRGB(68, 19, 6)",
+        "DEFAULT": "Color3.fromRGB(255, 105, 0)"
       },
       "amber": {
         "50": "Color3.fromRGB(255, 251, 235)",
@@ -105,7 +112,8 @@
         "700": "Color3.fromRGB(187, 77, 0)",
         "800": "Color3.fromRGB(151, 60, 0)",
         "900": "Color3.fromRGB(123, 51, 6)",
-        "950": "Color3.fromRGB(70, 25, 1)"
+        "950": "Color3.fromRGB(70, 25, 1)",
+        "DEFAULT": "Color3.fromRGB(254, 154, 0)"
       },
       "yellow": {
         "50": "Color3.fromRGB(254, 252, 232)",
@@ -118,7 +126,8 @@
         "700": "Color3.fromRGB(166, 95, 0)",
         "800": "Color3.fromRGB(137, 75, 0)",
         "900": "Color3.fromRGB(115, 62, 10)",
-        "950": "Color3.fromRGB(67, 32, 4)"
+        "950": "Color3.fromRGB(67, 32, 4)",
+        "DEFAULT": "Color3.fromRGB(240, 177, 0)"
       },
       "lime": {
         "50": "Color3.fromRGB(247, 254, 231)",
@@ -131,7 +140,8 @@
         "700": "Color3.fromRGB(73, 125, 0)",
         "800": "Color3.fromRGB(60, 99, 0)",
         "900": "Color3.fromRGB(53, 83, 14)",
-        "950": "Color3.fromRGB(25, 46, 3)"
+        "950": "Color3.fromRGB(25, 46, 3)",
+        "DEFAULT": "Color3.fromRGB(124, 207, 0)"
       },
       "green": {
         "50": "Color3.fromRGB(240, 253, 244)",
@@ -144,7 +154,8 @@
         "700": "Color3.fromRGB(0, 130, 54)",
         "800": "Color3.fromRGB(1, 102, 48)",
         "900": "Color3.fromRGB(13, 84, 43)",
-        "950": "Color3.fromRGB(3, 46, 21)"
+        "950": "Color3.fromRGB(3, 46, 21)",
+        "DEFAULT": "Color3.fromRGB(0, 201, 80)"
       },
       "emerald": {
         "50": "Color3.fromRGB(236, 253, 245)",
@@ -157,7 +168,8 @@
         "700": "Color3.fromRGB(0, 122, 85)",
         "800": "Color3.fromRGB(0, 96, 69)",
         "900": "Color3.fromRGB(0, 79, 59)",
-        "950": "Color3.fromRGB(0, 44, 34)"
+        "950": "Color3.fromRGB(0, 44, 34)",
+        "DEFAULT": "Color3.fromRGB(0, 188, 125)"
       },
       "teal": {
         "50": "Color3.fromRGB(240, 253, 250)",
@@ -170,7 +182,8 @@
         "700": "Color3.fromRGB(0, 120, 111)",
         "800": "Color3.fromRGB(0, 95, 90)",
         "900": "Color3.fromRGB(11, 79, 74)",
-        "950": "Color3.fromRGB(2, 47, 46)"
+        "950": "Color3.fromRGB(2, 47, 46)",
+        "DEFAULT": "Color3.fromRGB(0, 187, 167)"
       },
       "cyan": {
         "50": "Color3.fromRGB(236, 254, 255)",
@@ -183,7 +196,8 @@
         "700": "Color3.fromRGB(0, 117, 149)",
         "800": "Color3.fromRGB(0, 95, 120)",
         "900": "Color3.fromRGB(16, 78, 100)",
-        "950": "Color3.fromRGB(5, 51, 69)"
+        "950": "Color3.fromRGB(5, 51, 69)",
+        "DEFAULT": "Color3.fromRGB(0, 184, 219)"
       },
       "sky": {
         "50": "Color3.fromRGB(240, 249, 255)",
@@ -196,7 +210,8 @@
         "700": "Color3.fromRGB(0, 105, 168)",
         "800": "Color3.fromRGB(0, 89, 138)",
         "900": "Color3.fromRGB(2, 74, 112)",
-        "950": "Color3.fromRGB(5, 47, 74)"
+        "950": "Color3.fromRGB(5, 47, 74)",
+        "DEFAULT": "Color3.fromRGB(0, 166, 244)"
       },
       "blue": {
         "50": "Color3.fromRGB(239, 246, 255)",
@@ -209,7 +224,8 @@
         "700": "Color3.fromRGB(20, 71, 230)",
         "800": "Color3.fromRGB(25, 60, 184)",
         "900": "Color3.fromRGB(28, 57, 142)",
-        "950": "Color3.fromRGB(22, 36, 86)"
+        "950": "Color3.fromRGB(22, 36, 86)",
+        "DEFAULT": "Color3.fromRGB(43, 127, 255)"
       },
       "indigo": {
         "50": "Color3.fromRGB(238, 242, 255)",
@@ -222,7 +238,8 @@
         "700": "Color3.fromRGB(67, 45, 215)",
         "800": "Color3.fromRGB(55, 42, 172)",
         "900": "Color3.fromRGB(49, 44, 133)",
-        "950": "Color3.fromRGB(30, 26, 77)"
+        "950": "Color3.fromRGB(30, 26, 77)",
+        "DEFAULT": "Color3.fromRGB(97, 95, 255)"
       },
       "violet": {
         "50": "Color3.fromRGB(245, 243, 255)",
@@ -235,7 +252,8 @@
         "700": "Color3.fromRGB(112, 8, 231)",
         "800": "Color3.fromRGB(93, 14, 192)",
         "900": "Color3.fromRGB(77, 23, 154)",
-        "950": "Color3.fromRGB(47, 13, 104)"
+        "950": "Color3.fromRGB(47, 13, 104)",
+        "DEFAULT": "Color3.fromRGB(142, 81, 255)"
       },
       "purple": {
         "50": "Color3.fromRGB(250, 245, 255)",
@@ -248,7 +266,8 @@
         "700": "Color3.fromRGB(130, 0, 219)",
         "800": "Color3.fromRGB(110, 17, 176)",
         "900": "Color3.fromRGB(89, 22, 139)",
-        "950": "Color3.fromRGB(60, 3, 102)"
+        "950": "Color3.fromRGB(60, 3, 102)",
+        "DEFAULT": "Color3.fromRGB(173, 70, 255)"
       },
       "fuchsia": {
         "50": "Color3.fromRGB(253, 244, 255)",
@@ -261,7 +280,8 @@
         "700": "Color3.fromRGB(168, 0, 183)",
         "800": "Color3.fromRGB(138, 1, 148)",
         "900": "Color3.fromRGB(114, 19, 120)",
-        "950": "Color3.fromRGB(75, 0, 79)"
+        "950": "Color3.fromRGB(75, 0, 79)",
+        "DEFAULT": "Color3.fromRGB(225, 42, 251)"
       },
       "pink": {
         "50": "Color3.fromRGB(253, 242, 248)",
@@ -274,7 +294,8 @@
         "700": "Color3.fromRGB(198, 0, 92)",
         "800": "Color3.fromRGB(163, 0, 76)",
         "900": "Color3.fromRGB(134, 16, 67)",
-        "950": "Color3.fromRGB(81, 4, 36)"
+        "950": "Color3.fromRGB(81, 4, 36)",
+        "DEFAULT": "Color3.fromRGB(246, 51, 154)"
       },
       "rose": {
         "50": "Color3.fromRGB(255, 241, 242)",
@@ -287,7 +308,8 @@
         "700": "Color3.fromRGB(199, 0, 54)",
         "800": "Color3.fromRGB(165, 0, 54)",
         "900": "Color3.fromRGB(139, 8, 54)",
-        "950": "Color3.fromRGB(77, 2, 24)"
+        "950": "Color3.fromRGB(77, 2, 24)",
+        "DEFAULT": "Color3.fromRGB(255, 32, 86)"
       },
       "mauve": {
         "50": "Color3.fromRGB(250, 250, 250)",
@@ -300,7 +322,8 @@
         "700": "Color3.fromRGB(70, 57, 71)",
         "800": "Color3.fromRGB(42, 33, 44)",
         "900": "Color3.fromRGB(29, 22, 30)",
-        "950": "Color3.fromRGB(12, 9, 12)"
+        "950": "Color3.fromRGB(12, 9, 12)",
+        "DEFAULT": "Color3.fromRGB(121, 105, 123)"
       },
       "olive": {
         "50": "Color3.fromRGB(251, 251, 249)",
@@ -313,7 +336,8 @@
         "700": "Color3.fromRGB(71, 71, 57)",
         "800": "Color3.fromRGB(43, 43, 34)",
         "900": "Color3.fromRGB(29, 29, 22)",
-        "950": "Color3.fromRGB(12, 12, 9)"
+        "950": "Color3.fromRGB(12, 12, 9)",
+        "DEFAULT": "Color3.fromRGB(124, 124, 103)"
       },
       "mist": {
         "50": "Color3.fromRGB(249, 251, 251)",
@@ -326,7 +350,8 @@
         "700": "Color3.fromRGB(57, 68, 71)",
         "800": "Color3.fromRGB(34, 41, 43)",
         "900": "Color3.fromRGB(22, 27, 29)",
-        "950": "Color3.fromRGB(9, 11, 12)"
+        "950": "Color3.fromRGB(9, 11, 12)",
+        "DEFAULT": "Color3.fromRGB(103, 120, 124)"
       },
       "taupe": {
         "50": "Color3.fromRGB(251, 250, 249)",
@@ -339,7 +364,8 @@
         "700": "Color3.fromRGB(71, 60, 57)",
         "800": "Color3.fromRGB(43, 36, 34)",
         "900": "Color3.fromRGB(29, 24, 22)",
-        "950": "Color3.fromRGB(12, 10, 9)"
+        "950": "Color3.fromRGB(12, 10, 9)",
+        "DEFAULT": "Color3.fromRGB(124, 109, 103)"
       }
     },
     "radius": {

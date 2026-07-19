@@ -296,7 +296,7 @@ pub(crate) fn color_requires_shade_diagnostic(
         level: "warning".to_owned(),
         code: "color-missing-shade".to_owned(),
         message: format!(
-            "Color palette \"{key}\" for {theme_family} utility requires an explicit shade such as \"{key}-500\" in className literal."
+            "Color palette \"{key}\" for {theme_family} utility has no \"DEFAULT\" shade, so it requires an explicit shade such as \"{key}-500\" in className literal."
         ),
         token: Some(token.to_owned()),
         range: None,

@@ -36,6 +36,8 @@ type SupportedHostElementTag =
 
 type VelaRuntimeTag = SupportedHostElementTag | ((props: never) => unknown);
 
+const PALETTE_DEFAULT_KEY = "DEFAULT";
+
 type RuntimeRulePropEntry = {
 	name: string;
 	value: string;
@@ -514,11 +516,11 @@ function resolveUtilityToken(
 			};
 		}
 
-		if (shade === undefined || value === undefined) {
+		if (value === undefined) {
 			return undefined;
 		}
 
-		const shadeValue = value[shade];
+		const shadeValue = value[shade ?? PALETTE_DEFAULT_KEY];
 		if (shadeValue === undefined) {
 			return undefined;
 		}
@@ -564,11 +566,11 @@ function resolveUtilityToken(
 			};
 		}
 
-		if (shade === undefined || value === undefined) {
+		if (value === undefined) {
 			return undefined;
 		}
 
-		const shadeValue = value[shade];
+		const shadeValue = value[shade ?? PALETTE_DEFAULT_KEY];
 		if (shadeValue === undefined) {
 			return undefined;
 		}

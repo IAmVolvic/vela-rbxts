@@ -1850,6 +1850,33 @@ test("renames the closing tag when swapping in the runtime host", () => {
 	expect(result.code).not.toContain("</frame>");
 });
 
+test("resolves a bare palette name through its DEFAULT shade", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-slate" />;`,
+		null,
+	);
+
+	expect(result.code).toContain("Color3.fromRGB(98, 116, 142)");
+	expect(result.code).not.toContain("className");
+	expect(result.diagnostics).toEqual([]);
+});
+
+test("still requires a shade when the palette has no DEFAULT", () => {
+	const config = defineConfig({
+		theme: {
+			extend: { colors: { brand: { 700: "Color3.fromRGB(1, 2, 3)" } } },
+		},
+	});
+	const result = transform(
+		`export const A = () => <frame className="bg-brand" />;`,
+		{ configJson: JSON.stringify(config) },
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "color-missing-shade" }),
+	]);
+});
+
 test("warns about className on unsupported host elements", () => {
 	const result = transform(
 		`export const A = () => <screengui className="bg-slate-700" />;`,

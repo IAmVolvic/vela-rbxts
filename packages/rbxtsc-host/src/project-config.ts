@@ -28,7 +28,12 @@ import type {
 	TailwindConfigInput,
 	ThemeColors,
 } from "@vela-rbxts/config";
-import { defaultConfig, defineConfig, SHADES } from "@vela-rbxts/config";
+import {
+	defaultConfig,
+	defineConfig,
+	PALETTE_DEFAULT_KEY,
+	SHADES,
+} from "@vela-rbxts/config";
 
 type TypeScriptModule = typeof import("typescript");
 type ConfigLoader = (input?: TailwindConfigInput) => TailwindConfig;
@@ -260,7 +265,8 @@ function isColorPalette(value: unknown): value is ColorPalette {
 		Object.keys(value).length > 0 &&
 		Object.entries(value).every(
 			([shade, entry]) =>
-				SHADES.includes(Number(shade) as (typeof SHADES)[number]) &&
+				(shade === PALETTE_DEFAULT_KEY ||
+					SHADES.includes(Number(shade) as (typeof SHADES)[number])) &&
 				typeof entry === "string",
 		)
 	);

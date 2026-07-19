@@ -101,6 +101,16 @@ const orderedFamilies = [
 	...paletteOrder.filter((family) => colors.has(family)),
 ];
 
+// A bare family name (`bg-slate`) resolves through DEFAULT, so mirror shade 500.
+for (const family of orderedFamilies) {
+	const value = colors.get(family);
+	if (typeof value === "string" || value?.["500"] === undefined) {
+		continue;
+	}
+
+	colors.set(family, { ...value, DEFAULT: value["500"] });
+}
+
 const defaults = {
 	theme: {
 		colors: Object.fromEntries(

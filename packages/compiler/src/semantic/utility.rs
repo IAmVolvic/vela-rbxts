@@ -207,6 +207,13 @@ pub(crate) fn color_completion_keys(config: &TailwindConfig) -> Vec<String> {
             }
             ColorValue::Palette(scale) => {
                 for shade in scale.keys() {
+                    // `slate-DEFAULT` is not a class; the DEFAULT shade is what
+                    // a bare `slate` resolves to.
+                    if shade == PALETTE_DEFAULT_KEY {
+                        push_unique(&mut keys, name.clone());
+                        continue;
+                    }
+
                     push_unique(&mut keys, format!("{name}-{shade}"));
                 }
             }
@@ -708,14 +715,17 @@ pub(crate) fn resolve_color_value(
     match split_color_key(color_key) {
         ColorKey::Semantic(color_name) => match config.theme.colors.get(color_name) {
             Some(ColorValue::Literal(value)) => Some(ColorResolution::Expression(value.clone())),
-            Some(ColorValue::Palette(_)) => {
-                diagnostics.push(color_requires_shade_diagnostic(
-                    spec.theme_family,
-                    color_name,
-                    token,
-                ));
-                None
-            }
+            Some(ColorValue::Palette(scale)) => match scale.get(PALETTE_DEFAULT_KEY) {
+                Some(value) => Some(ColorResolution::Expression(value.clone())),
+                None => {
+                    diagnostics.push(color_requires_shade_diagnostic(
+                        spec.theme_family,
+                        color_name,
+                        token,
+                    ));
+                    None
+                }
+            },
             None => {
                 diagnostics.push(unknown_theme_key_diagnostic(
                     spec.theme_family,
@@ -1106,6 +1116,9 @@ pub(crate) fn split_color_key(key: &str) -> ColorKey<'_> {
     ColorKey::Semantic(key)
 }
 
+/// Palette key a bare family name resolves to, mirroring Tailwind's `DEFAULT`.
+pub(crate) const PALETTE_DEFAULT_KEY: &str = "DEFAULT";
+
 pub(crate) fn is_shade_token(value: &str) -> bool {
     matches!(
         value,
@@ -1232,6 +1245,56 @@ mod tests {
             resolve_spacing_value(&config, "4"),
             Some("new UDim(0, 16)".to_owned())
         );
+    }
+
+    #[test]
+    fn bare_palette_name_resolves_through_default() {
+        let config = crate::config::defaults::default_config();
+        let spec = BACKGROUND_COLOR_FAMILY;
+
+        let mut diagnostics = Vec::new();
+        let resolved = resolve_color_value(&config, &mut diagnostics, spec, "slate", "bg-slate");
+
+        assert_eq!(
+            resolved,
+            Some(ColorResolution::Expression(
+                "Color3.fromRGB(98, 116, 142)".to_owned()
+            ))
+        );
+        assert_eq!(diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn palette_without_default_still_requires_a_shade() {
+        let mut config = crate::config::defaults::default_config();
+        let mut scale = std::collections::BTreeMap::new();
+        scale.insert("700".to_owned(), "Color3.fromRGB(1, 2, 3)".to_owned());
+        config
+            .theme
+            .colors
+            .insert("brand".to_owned(), ColorValue::Palette(scale));
+
+        let mut diagnostics = Vec::new();
+        let resolved = resolve_color_value(
+            &config,
+            &mut diagnostics,
+            BACKGROUND_COLOR_FAMILY,
+            "brand",
+            "bg-brand",
+        );
+
+        assert_eq!(resolved, None);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, "color-missing-shade");
+    }
+
+    #[test]
+    fn completions_offer_bare_names_not_default_shade() {
+        let keys = color_completion_keys(&crate::config::defaults::default_config());
+
+        assert!(keys.iter().any(|key| key == "slate"));
+        assert!(keys.iter().any(|key| key == "slate-700"));
+        assert!(!keys.iter().any(|key| key.ends_with("-DEFAULT")));
     }
 
     #[test]

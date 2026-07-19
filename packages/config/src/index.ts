@@ -7,7 +7,13 @@ export type Shade = (typeof SHADES)[number];
 
 export type ThemeScale = Record<string, string>;
 
-export type ColorPalette = Partial<Record<Shade, string>>;
+/** Palette key a bare family name resolves to, mirroring Tailwind's `DEFAULT`. */
+export const PALETTE_DEFAULT_KEY = "DEFAULT";
+export type PaletteDefaultKey = typeof PALETTE_DEFAULT_KEY;
+
+export type PaletteKey = Shade | PaletteDefaultKey;
+
+export type ColorPalette = Partial<Record<PaletteKey, string>>;
 
 export type ColorValue = string | ColorPalette;
 

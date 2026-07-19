@@ -548,7 +548,7 @@ test("keeps diagnostics precise for palette and singleton color mismatches", () 
 			extend: {
 				colors: {
 					surface: "Color3.fromRGB(40, 48, 66)",
-					slate: {
+					brand: {
 						500: "Color3.fromRGB(100, 116, 139)",
 					},
 				},
@@ -556,7 +556,7 @@ test("keeps diagnostics precise for palette and singleton color mismatches", () 
 		},
 	});
 	const source =
-		'<frame className="bg-sla bg-slate bg-slate-500 bg-surface-500 md:bg- rounded- px-4" />';
+		'<frame className="bg-sla bg-brand bg-slate-500 bg-surface-500 md:bg- rounded- px-4" />';
 	const result = getDiagnostics({
 		source,
 		options: {
@@ -568,7 +568,7 @@ test("keeps diagnostics precise for palette and singleton color mismatches", () 
 		expect.arrayContaining([
 			expect.objectContaining({
 				code: "color-missing-shade",
-				token: "bg-slate",
+				token: "bg-brand",
 			}),
 			expect.objectContaining({
 				code: "color-invalid-shade",
