@@ -97,7 +97,13 @@ async function resolveLspTargets(overrides: readonly string[]) {
 
 function shouldCrossCompileTarget(target: string) {
 	const hostTarget = getHostCompilerTarget();
-	return hostTarget !== undefined && target !== hostTarget;
+	if (hostTarget === undefined || target === hostTarget) {
+		return false;
+	}
+
+	// Apple targets build across architectures with the stock toolchain; every
+	// other host/target mismatch needs the zig-backed cross linker.
+	return !(target.includes("apple") && hostTarget.includes("apple"));
 }
 
 async function main() {
