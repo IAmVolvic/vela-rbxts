@@ -207,6 +207,10 @@ function prepareManifest(lspVersion, marketplaceVersion) {
 		delete stagePackageJson.scripts["vscode:prepublish"];
 	}
 
+	// The staged tree is assembled by hand, so devDependencies would only make
+	// vsce's manifest checks disagree with what is actually shipped.
+	delete stagePackageJson.devDependencies;
+
 	for (const [dependencyName, versionRange] of Object.entries(
 		stagePackageJson.dependencies ?? {},
 	)) {

@@ -63,8 +63,8 @@
 		}
 	},
 	"scripts": {
-		"build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=es2022 --packages=external --outfile=dist/extension.js --sourcemap",
-		"dev": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=es2022 --packages=external --outfile=dist/extension.js --sourcemap --watch",
+		"build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=es2022 --external:vscode --external:vscode-languageclient --external:vscode-languageclient/* --external:typescript --outfile=dist/extension.js --sourcemap",
+		"dev": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=es2022 --external:vscode --external:vscode-languageclient --external:vscode-languageclient/* --external:typescript --outfile=dist/extension.js --sourcemap --watch",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"lint": "biome check src",
 		"clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});\"",
@@ -74,10 +74,10 @@
 	},
 	"dependencies": {
 		"@vela-rbxts/lsp": "workspace:*",
-		"@vela-rbxts/rbxtsc-host": "workspace:*",
 		"vscode-languageclient": "^9.0.1"
 	},
 	"devDependencies": {
+		"@vela-rbxts/rbxtsc-host": "workspace:*",
 		"esbuild": "^0.28.1",
 		"@vscode/vsce": "^3.9.2",
 		"@types/node": "^24.10.1",
