@@ -11,7 +11,7 @@ import {
 
 const EXTENSION_ID = "vela-rbxts-lsp";
 const OUTPUT_CHANNEL_NAME = "vela-rbxts-lsp";
-const CONFIG_WATCH_GLOB = "**/vela.config.ts";
+const CONFIG_WATCH_GLOB = "**/vela.config.{ts,json}";
 
 let client: LanguageClient | undefined;
 let lifecycleTask: Promise<void> = Promise.resolve();
@@ -445,11 +445,25 @@ async function collectProjectConfigs(): Promise<ConfigEntry[]> {
 		"**/node_modules/**",
 	);
 	const entries: ConfigEntry[] = [];
-	for (const file of files) {
+	const seenDirectories = new Set<string>();
+	// Mirrors the host loader, which prefers `vela.config.ts` over the JSON form.
+	const configPriority = (fsPath: string): number =>
+		path.extname(fsPath) === ".ts" ? 0 : 1;
+	const ordered = [...files].sort(
+		(a, b) => configPriority(a.fsPath) - configPriority(b.fsPath),
+	);
+
+	for (const file of ordered) {
+		const dir = path.dirname(file.fsPath);
+		if (seenDirectories.has(dir)) {
+			continue;
+		}
+
 		try {
 			const config = resolveProjectConfig(file.fsPath);
+			seenDirectories.add(dir);
 			entries.push({
-				dir: path.dirname(file.fsPath),
+				dir,
 				json: JSON.stringify(config),
 			});
 		} catch (error) {

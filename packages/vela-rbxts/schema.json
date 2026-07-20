@@ -1,0 +1,75 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Vela project configuration",
+	"description": "Schema for vela.config.json. Theme values are roblox-ts expression strings such as \"Color3.fromRGB(59, 130, 246)\" or \"new UDim(0, 6)\".",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"theme": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"colors": {
+					"$ref": "#/definitions/colorInputMap",
+					"description": "Replaces the whole default color scale. When present, theme.extend.colors is discarded."
+				},
+				"radius": {
+					"$ref": "#/definitions/themeScale",
+					"description": "Replaces the whole default radius scale."
+				},
+				"spacing": {
+					"$ref": "#/definitions/themeScale",
+					"description": "Replaces the whole default spacing scale."
+				},
+				"extend": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"colors": {
+							"$ref": "#/definitions/colorInputMap"
+						},
+						"radius": {
+							"$ref": "#/definitions/themeScale"
+						},
+						"spacing": {
+							"$ref": "#/definitions/themeScale"
+						}
+					}
+				}
+			}
+		}
+	},
+	"definitions": {
+		"themeScale": {
+			"type": "object",
+			"additionalProperties": {
+				"type": "string"
+			}
+		},
+		"colorPalette": {
+			"type": "object",
+			"additionalProperties": false,
+			"patternProperties": {
+				"^(DEFAULT|50|100|200|300|400|500|600|700|800|900|950)$": {
+					"type": "string"
+				}
+			}
+		},
+		"colorInputMap": {
+			"type": "object",
+			"additionalProperties": {
+				"oneOf": [
+					{
+						"type": "string"
+					},
+					{
+						"$ref": "#/definitions/colorPalette"
+					}
+				]
+			}
+		}
+	}
+}

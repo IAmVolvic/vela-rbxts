@@ -93,6 +93,27 @@ Put additions under `theme.extend`. A top-level `theme.colors` **replaces** the 
 
 If you do not need custom theme values, `export default defineConfig();` is enough.
 
+#### `vela.config.json` instead
+
+The config file may also be written as `vela.config.json`, holding the same object `defineConfig()` takes:
+
+```json
+{
+  "$schema": "./node_modules/vela-rbxts/schema.json",
+  "theme": {
+    "extend": {
+      "colors": {
+        "surface": "Color3.fromRGB(40, 48, 66)"
+      }
+    }
+  }
+}
+```
+
+Prefer this form in a project with typed ESLint (`parserOptions.project`). A roblox-ts `tsconfig.json` uses `"include": ["src"]`, so a root-level `vela.config.ts` sits outside the TypeScript program and the parser reports it as not included in the project. The JSON form is never parsed by ESLint at all, and `$schema` keeps editor completion for the theme keys. Moving the file into `src` is not an alternative — roblox-ts would then try to compile it.
+
+`vela.config.ts` wins when both exist in the same directory.
+
 ### 4. Add the declaration file
 
 Add a declaration file such as `src/vela-env.d.ts` so `className` is available on React attributes:
@@ -308,11 +329,11 @@ Where it matters, branch between two fully static string literals so both branch
 
 ## Configuration
 
-The project config file is named `vela.config.ts` — that exact filename, with no `.js`, `.mjs`, or `.cjs` variant. The host resolves it by walking upward from each source file and loading the nearest one it finds, falling back to the built-in defaults when there is none. See [step 3](#3-add-velaconfigts) for the shape and [Theme Axes](#theme-axes) for the merge rules.
+The project config file is named `vela.config.ts` or `vela.config.json` — those exact filenames, with no `.js`, `.mjs`, or `.cjs` variant. The host resolves it by walking upward from each source file and loading the nearest one it finds, preferring `.ts` within a directory and falling back to the built-in defaults when there is none. See [step 3](#3-add-velaconfigts) for the shape and [Theme Axes](#theme-axes) for the merge rules.
 
 The schema is only `theme.colors`, `theme.radius`, `theme.spacing`, and their `theme.extend` counterparts. There is no `content`, `plugins`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
 
-The config is transpiled and executed rather than type-checked, so a type error in it passes silently while a syntax error fails the build. Project `paths` and ambient types are not available inside it. It is also re-read and re-executed for every eligible source file, so keep it cheap.
+The `.ts` config is transpiled and executed rather than type-checked, so a type error in it passes silently while a syntax error fails the build. The `.json` config is parsed, with a `$schema` key ignored. Project `paths` and ambient types are not available inside it. It is also re-read and re-executed for every eligible source file, so keep it cheap.
 
 Transformer options can be passed through the `tsconfig.json` plugin entry: `filter.skipNodeModules`, `filter.requireClassName`, `filter.requireJsxSyntax`, `diagnosticCodeBase` (default `89000`), `projectRoot`, and `config`.
 
@@ -320,7 +341,7 @@ Only `.tsx` files are eligible, and declaration files are always skipped. By def
 
 ## Editor Integration
 
-Install **Vela LSP** (`astra-void.vela-rbxts-lsp`) for VS Code, or point any other editor at `npx --package @vela-rbxts/lsp vela-rbxts-lsp` over stdio. The server does not read `vela.config.ts` itself — the client supplies it through `initializationOptions.configs`, which is what the VS Code extension does as it watches `**/vela.config.ts`.
+Install **Vela LSP** (`astra-void.vela-rbxts-lsp`) for VS Code, or point any other editor at `npx --package @vela-rbxts/lsp vela-rbxts-lsp` over stdio. The server does not read the config file itself — the client supplies it through `initializationOptions.configs`, which is what the VS Code extension does as it watches `**/vela.config.{ts,json}`.
 
 The standalone Rust LSP lives in `packages/lsp`. It reuses the native compiler as the semantic engine and only handles transport, document state, and protocol translation, so what the editor tells you about a class is what the compiler would do with it.
 

@@ -251,6 +251,63 @@ test("loads vela.config.ts when present", () => {
 	expect(result.sourceText).toBe(mockTransformedCode);
 });
 
+test("loads vela.config.json when present", () => {
+	const project = createProject(
+		JSON.stringify({
+			$schema: "./node_modules/vela-rbxts/schema.json",
+			theme: {
+				extend: {
+					colors: {
+						secondary: "Color3.fromRGB(16, 185, 129)",
+					},
+				},
+			},
+		}),
+		"vela.config.json",
+	);
+
+	const result = transformSourceForHost({
+		fileName: project.sourceFile,
+		sourceText: sourceFile.sourceText,
+	});
+
+	expect(transform).toHaveBeenCalledWith(sourceFile.sourceText, {
+		configJson: JSON.stringify(
+			defineConfig({
+				theme: {
+					extend: {
+						colors: {
+							secondary: "Color3.fromRGB(16, 185, 129)",
+						},
+					},
+				},
+			}),
+		),
+	});
+	expect(result.skipped).toBe(false);
+});
+
+test("prefers vela.config.ts over vela.config.json in the same directory", () => {
+	const project = createProject(
+		`export default { theme: { extend: { colors: { primary: "Color3.fromRGB(1, 1, 1)" } } } };`,
+	);
+	fs.writeFileSync(
+		path.join(project.root, "vela.config.json"),
+		JSON.stringify({
+			theme: { extend: { colors: { primary: "Color3.fromRGB(2, 2, 2)" } } },
+		}),
+		"utf8",
+	);
+
+	transformSourceForHost({
+		fileName: project.sourceFile,
+		sourceText: sourceFile.sourceText,
+	});
+
+	const [, options] = vi.mocked(transform).mock.calls[0] ?? [];
+	expect(options?.configJson).toContain("Color3.fromRGB(1, 1, 1)");
+});
+
 test("normalizes nearest vela.config.ts authoring-shaped color input", () => {
 	const project = createProject(
 		`export default {
@@ -340,7 +397,10 @@ test("does not expose semantic utility resolution functions from the host", asyn
 	expect(hostExports).not.toHaveProperty("parseClassName");
 });
 
-function createProject(configFileText?: string): {
+function createProject(
+	configFileText?: string,
+	configFileName = "vela.config.ts",
+): {
 	sourceFile: string;
 	root: string;
 } {
@@ -349,7 +409,7 @@ function createProject(configFileText?: string): {
 	fs.mkdirSync(path.dirname(sourceFile), { recursive: true });
 
 	if (configFileText !== undefined) {
-		fs.writeFileSync(path.join(root, "vela.config.ts"), configFileText, "utf8");
+		fs.writeFileSync(path.join(root, configFileName), configFileText, "utf8");
 	}
 
 	return {

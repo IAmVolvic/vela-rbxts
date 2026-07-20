@@ -39,6 +39,9 @@ type TypeScriptModule = typeof import("typescript");
 type ConfigLoader = (input?: TailwindConfigInput) => TailwindConfig;
 
 const CONFIG_FILE_NAME = "vela.config.ts";
+// `vela.config.json` lets a project keep the config out of the TypeScript
+// program, which typed ESLint setups reject for files outside `include`.
+const CONFIG_FILE_NAMES = [CONFIG_FILE_NAME, "vela.config.json"];
 
 export function resolveProjectConfig(sourceFileName: string): TailwindConfig {
 	const configFilePath = findProjectConfigFile(sourceFileName);
@@ -72,6 +75,10 @@ export function resolveProjectConfigInfo(sourceFileName: string): {
 }
 
 function loadProjectConfig(configFilePath: string): TailwindConfig {
+	if (configFilePath.endsWith(".json")) {
+		return loadJsonProjectConfig(configFilePath);
+	}
+
 	const ts = loadTypeScript();
 	const sourceText = stripVelaRbxtsImports(
 		fs.readFileSync(configFilePath, "utf8"),
@@ -133,6 +140,32 @@ function loadProjectConfig(configFilePath: string): TailwindConfig {
 	);
 }
 
+function loadJsonProjectConfig(configFilePath: string): TailwindConfig {
+	const sourceText = fs.readFileSync(configFilePath, "utf8");
+	let parsed: unknown;
+
+	try {
+		parsed = JSON.parse(sourceText);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+
+		throw new Error(
+			`Failed to parse ${path.basename(configFilePath)}: ${message}`,
+		);
+	}
+
+	return coerceTailwindConfig(stripSchemaKey(parsed), configFilePath);
+}
+
+function stripSchemaKey(value: unknown): unknown {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return value;
+	}
+
+	const { $schema, ...rest } = value as Record<string, unknown>;
+	return rest;
+}
+
 function stripVelaRbxtsImports(sourceText: string): string {
 	const ts = loadTypeScript();
 	const sourceFile = ts.createSourceFile(
@@ -177,9 +210,11 @@ function findProjectConfigFile(sourceFileName: string): string | undefined {
 	let currentDirectory = path.dirname(path.resolve(sourceFileName));
 
 	while (true) {
-		const candidate = path.join(currentDirectory, CONFIG_FILE_NAME);
-		if (isExistingFile(candidate)) {
-			return candidate;
+		for (const fileName of CONFIG_FILE_NAMES) {
+			const candidate = path.join(currentDirectory, fileName);
+			if (isExistingFile(candidate)) {
+				return candidate;
+			}
 		}
 
 		const parentDirectory = path.dirname(currentDirectory);
