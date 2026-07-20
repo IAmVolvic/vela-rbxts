@@ -53,7 +53,7 @@ jobs:
       # Only the landing of a release PR cuts a tag. Keying off the absence of
       # changesets alone would release on any ordinary push to main.
       - name: Tag release
-        if: steps.changesets.outputs.hasChangesets == 'false' && startsWith(github.event.head_commit.message, 'chore(release): version packages')
+        if: "${{ steps.changesets.outputs.hasChangesets == 'false' && startsWith(github.event.head_commit.message, 'chore(release): version packages') }}"
         run: |
           version="$(pnpm -s release:current-version)"
           tag="v${version}"
