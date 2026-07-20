@@ -92,8 +92,6 @@ function listVsixFiles(artifactDir) {
 function main() {
 	const rawArgs = process.argv.slice(2);
 	const { dryRun, artifactDir } = parseArgs(rawArgs);
-	const releaseTag = process.env.RELEASE_TAG?.trim() ?? "";
-	const prerelease = releaseTag.includes("-");
 
 	if (!dryRun) {
 		requireEnv("VSCE_PAT");
@@ -106,9 +104,7 @@ function main() {
 
 	if (dryRun) {
 		for (const vsix of vsixFiles) {
-			console.log(
-				`[dry-run] would publish ${vsix}${prerelease ? " as pre-release" : ""}`,
-			);
+			console.log(`[dry-run] would publish ${vsix}`);
 		}
 		return;
 	}
@@ -121,11 +117,7 @@ function main() {
 
 	for (const vsix of vsixFiles) {
 		console.log(`Publishing ${vsix}`);
-		const args = ["publish", "--packagePath", vsix];
-		if (prerelease) {
-			args.push("--pre-release");
-		}
-		run(vsceBinaryPath, args, extensionDir);
+		run(vsceBinaryPath, ["publish", "--packagePath", vsix], extensionDir);
 	}
 }
 

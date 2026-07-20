@@ -21,7 +21,6 @@ import {
 import type { PackageJson } from "./utils/package-json";
 import { verifyPackedConsumer } from "./utils/packed-consumer";
 import { detectLinuxRuntimeKind } from "./utils/platform";
-import { resolveMarketplaceVsixVersion } from "./utils/vsix-version.cjs";
 
 type TarballPackageInfo = {
 	artifact: PackedArtifact;
@@ -226,27 +225,41 @@ async function main() {
 			SUPPORTED_VSCODE_TARGETS: string[];
 		};
 
-		const extensionManifest = await readJsonFile<PackageJson>(
-			join(REPO_ROOT, "packages/vscode-extension/package.json"),
-		);
-		const version = String(extensionManifest.version ?? "0.1.0");
-		const marketplaceVersion = resolveMarketplaceVsixVersion({
-			sourceVersion: version,
-			releaseTag: process.env.RELEASE_TAG?.trim() ?? "",
-			overrideVersion: process.env.VSIX_VERSION?.trim() ?? "",
-		});
-		const expectedVsixFileNames = new Set(
-			vsixTargetsModule.SUPPORTED_VSCODE_TARGETS.map(
-				(target) => `vela-rbxts-lsp-${marketplaceVersion}-${target}.vsix`,
-			),
-		);
-
 		const actualVsixFileNames = new Set(
 			vsixFiles.map((filePath) => {
 				const segments = filePath.split(/[\\/]/);
 				const fileName = segments[segments.length - 1];
 				return fileName ?? filePath;
 			}),
+		);
+
+		// Read the version off the artifacts instead of recomputing it. The VSIX
+		// version is date-derived, so a verify run that crosses UTC midnight would
+		// otherwise reject a perfectly good set of files.
+		const observedVersions = new Set<string>();
+		for (const fileName of actualVsixFileNames) {
+			const match = fileName.match(
+				/^vela-rbxts-lsp-(\d+\.\d+\.\d+)-(.+)\.vsix$/,
+			);
+			if (!match) {
+				throw new Error(
+					`Unexpected VSIX artifact found: ${join(ARTIFACT_DIRS.vsix, fileName)}`,
+				);
+			}
+			observedVersions.add(match[1]);
+		}
+
+		if (observedVersions.size !== 1) {
+			throw new Error(
+				`VSIX artifacts span multiple versions: ${[...observedVersions].sort().join(", ")}.`,
+			);
+		}
+
+		const [marketplaceVersion] = [...observedVersions];
+		const expectedVsixFileNames = new Set(
+			vsixTargetsModule.SUPPORTED_VSCODE_TARGETS.map(
+				(target) => `vela-rbxts-lsp-${marketplaceVersion}-${target}.vsix`,
+			),
 		);
 
 		for (const expectedFile of Array.from(expectedVsixFileNames)) {

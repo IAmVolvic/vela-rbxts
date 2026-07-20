@@ -11,7 +11,7 @@ async function main() {
 	}
 
 	if (versions.size !== 1) {
-		const details = [...versions.entries()]
+		const details = Array.from(versions.entries())
 			.sort(([left], [right]) => left.localeCompare(right))
 			.map(([version, names]) => `${version}\n  ${names.join("\n  ")}`)
 			.join("\n");
@@ -20,7 +20,7 @@ async function main() {
 		);
 	}
 
-	const [version] = [...versions.keys()];
+	const [version] = Array.from(versions.keys());
 	if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
 		throw new Error(`Release version "${version}" is not a valid semver version.`);
 	}

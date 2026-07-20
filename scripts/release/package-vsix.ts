@@ -167,9 +167,7 @@ async function main() {
 		join(REPO_ROOT, "packages/vscode-extension/package.json"),
 	);
 	const sourceVersion = String(extensionManifest.version ?? "0.1.0");
-	const releaseTag = process.env.RELEASE_TAG?.trim() ?? "";
 	const vsixVersionOverride = process.env.VSIX_VERSION?.trim() ?? "";
-	const prerelease = releaseTag.includes("-");
 	const marketplaceVersion = resolveMarketplaceVsixVersion({
 		overrideVersion: vsixVersionOverride,
 		buildNumber: process.env.VSIX_BUILD_NUMBER,
@@ -216,7 +214,6 @@ async function main() {
 			console.log(`VSIX version override: using VSIX_VERSION=${vsixVersionOverride}`);
 		}
 		console.log(`VSIX Marketplace manifest version: ${marketplaceVersion}`);
-		console.log(`VSIX pre-release: ${prerelease}`);
 		console.log("[dry-run] VSIX packaging prerequisites validated and LSP artifacts staged.");
 		for (const target of SUPPORTED_VSCODE_TARGETS) {
 			const targetConfig = VSCODE_TARGETS[target];

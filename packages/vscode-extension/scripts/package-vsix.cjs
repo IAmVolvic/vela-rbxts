@@ -506,9 +506,7 @@ function main() {
 		fs.readFileSync(extensionPackageJsonPath, "utf8"),
 	);
 	const extensionVersion = String(extensionPackageJson.version ?? "0.1.0");
-	const releaseTag = process.env.RELEASE_TAG?.trim() ?? "";
 	const vsixVersionOverride = process.env.VSIX_VERSION?.trim() ?? "";
-	const prerelease = releaseTag.includes("-");
 	const marketplaceVersion = resolveMarketplaceVsixVersion({
 		overrideVersion: vsixVersionOverride,
 		buildNumber: process.env.VSIX_BUILD_NUMBER,
@@ -524,7 +522,6 @@ function main() {
 		console.log(`VSIX version override: using VSIX_VERSION=${vsixVersionOverride}`);
 	}
 	console.log(`VSIX Marketplace manifest version: ${marketplaceVersion}`);
-	console.log(`VSIX pre-release: ${prerelease}`);
 
 	const resolvedOutputPath = path.resolve(
 		outputPath ??
@@ -553,11 +550,14 @@ function main() {
 
 		if (dryRun) {
 			console.log(
-				`[dry-run] Would package target ${resolvedTarget} to ${resolvedOutputPath}${prerelease ? " as pre-release" : ""}`,
+				`[dry-run] Would package target ${resolvedTarget} to ${resolvedOutputPath}`,
 			);
 			return;
 		}
 
+		// Everything ships on the stable channel. A date version cannot honour the
+		// odd/even minor split the Marketplace expects of a pre-release, and both
+		// channels would collide on one version number the same day.
 		const packageArgs = [
 			"package",
 			"--target",
@@ -566,9 +566,6 @@ function main() {
 			"--out",
 			resolvedOutputPath,
 		];
-		if (prerelease) {
-			packageArgs.push("--pre-release");
-		}
 
 		run(vsceBinaryPath, packageArgs, stageDir);
 		console.log(`Packaged ${resolvedTarget} VSIX at ${resolvedOutputPath}`);

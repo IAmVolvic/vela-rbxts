@@ -76,10 +76,14 @@ This applies to the staged manifest only — `packages/vscode-extension/package.
 semver version and still moves in lockstep with the other packages.
 
 Marketplace versions can never be reused or rolled back, so a second release on the same UTC
-date needs `VSIX_BUILD_NUMBER=2` (1-999). `VSIX_VERSION=2026.7.20005` overrides the whole
-version explicitly when you need an exact value.
+date needs `VSIX_BUILD_NUMBER=2` (1-999) — including a stable release that follows a
+prerelease on that date. `VSIX_VERSION=2026.7.20005` overrides the whole version explicitly
+when you need an exact value.
 
-`RELEASE_TAG` still controls Marketplace pre-release publishing through `--pre-release`.
+Every VSIX goes to the stable Marketplace channel; `--pre-release` is never passed. The
+Marketplace separates channels by an odd/even minor version, which a date version cannot
+express, and the two channels would otherwise collide on one number. A `vX.Y.Z-next.N` tag
+still selects the `next` npm dist-tag — only the Marketplace channel is unaffected by it.
 
 ## Manual Dispatch Options
 
