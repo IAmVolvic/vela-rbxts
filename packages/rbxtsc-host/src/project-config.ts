@@ -79,8 +79,9 @@ function loadProjectConfig(configFilePath: string): TailwindConfig {
 		return loadJsonProjectConfig(configFilePath);
 	}
 
-	const ts = loadTypeScript();
+	const ts = loadTypeScript(configFilePath);
 	const sourceText = stripVelaRbxtsImports(
+		ts,
 		fs.readFileSync(configFilePath, "utf8"),
 	);
 	const transpiled = ts.transpileModule(sourceText, {
@@ -166,8 +167,10 @@ function stripSchemaKey(value: unknown): unknown {
 	return rest;
 }
 
-function stripVelaRbxtsImports(sourceText: string): string {
-	const ts = loadTypeScript();
+function stripVelaRbxtsImports(
+	ts: TypeScriptModule,
+	sourceText: string,
+): string {
 	const sourceFile = ts.createSourceFile(
 		CONFIG_FILE_NAME,
 		sourceText,
@@ -234,18 +237,23 @@ function isExistingFile(filePath: string): boolean {
 	}
 }
 
-function loadTypeScript(): TypeScriptModule {
-	const require = createRequire(__filename);
+// Resolve from the config's own project first: the VS Code extension bundles
+// this loader, so its own install tree has no TypeScript to fall back on.
+function loadTypeScript(configFilePath?: string): TypeScriptModule {
+	const bases = configFilePath ? [configFilePath, __filename] : [__filename];
+	let lastMessage = "";
 
-	try {
-		return require("typescript") as TypeScriptModule;
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-
-		throw new Error(
-			`Failed to load the TypeScript runtime needed for vela.config.ts: ${message}`,
-		);
+	for (const base of bases) {
+		try {
+			return createRequire(base)("typescript") as TypeScriptModule;
+		} catch (error) {
+			lastMessage = error instanceof Error ? error.message : String(error);
+		}
 	}
+
+	throw new Error(
+		`Failed to load the TypeScript runtime needed for ${CONFIG_FILE_NAME}: ${lastMessage}`,
+	);
 }
 
 function coerceTailwindConfig(
