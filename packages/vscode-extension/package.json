@@ -1,6 +1,6 @@
 {
 	"name": "vela-rbxts-lsp",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"type": "commonjs",
 	"displayName": "Vela LSP",
 	"description": "VS Code extension that launches the standalone Vela RBXTS Rust LSP.",

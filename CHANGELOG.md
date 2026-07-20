@@ -9,6 +9,8 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-20
+
 ### Added
 
 - The project config may be written as `vela.config.json`, holding the same object `defineConfig()` takes. `vela.config.ts` still wins when both sit in the same directory. A roblox-ts `tsconfig.json` includes only `src`, so a root-level `vela.config.ts` makes typed ESLint setups report the file as not included in the project; the JSON form avoids that entirely. `vela-rbxts/schema.json` ships alongside it for editor completion through `$schema`.
@@ -18,6 +20,14 @@ Versions are released in lockstep across every workspace package.
 
 - The setup guide named the declaration file `src/vela-rbxts.d.ts`, which collides with the package name under the `baseUrl` of `src` every roblox-ts project sets. The `import "vela-rbxts"` inside it resolved back to the file itself, so the augmentation never loaded and `className` was missing with no diagnostic. The guide now uses `src/vela-env.d.ts`.
 - Repaired the compiler unit tests, which stopped compiling when `is_utility_allowed_on_host` began taking an `Option<&str>` for component support. `cargo test` had been failing while CI stayed green, because CI builds the napi binding rather than the test target.
+- The VS Code extension declared `@vela-rbxts/rbxtsc-host` as a runtime dependency but never shipped it, so `vsce package` failed on the missing package and the config loader could not have resolved even if packaging had succeeded. The loader is now bundled into the extension.
+- The config loader resolved `typescript` from its own install directory, which holds no TypeScript once the extension bundles it, so every `vela.config.ts` silently fell back to the built-in defaults in the editor. It now resolves from the config file's own project.
+- Security overrides no longer cross major versions. The blanket ranges substituted incompatible APIs: `brace-expansion` 5 is ESM-only and broke `minimatch` 5 inside `vscode-languageclient`, `linkify-it` 6 broke the README renderer in `vsce`, and `js-yaml` 5 broke `read-yaml-file`, which made `changeset version` fail outright.
+
+### Changed
+
+- The packaged VS Code extension is versioned by date as `YYYY.M.DDNNN` — a UTC date plus a same-day build counter — rather than by the release tag. `packages/vscode-extension/package.json` keeps its semver version and still moves in lockstep with every other package. Set `VSIX_BUILD_NUMBER` to release more than once on a single date.
+- Package versions are bumped in lockstep by changesets, and a release tag is cut automatically once the release pull request lands.
 
 ## [0.2.0] - 2026-07-20
 
@@ -79,6 +89,7 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/astra-void/vela-rbxts/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/astra-void/vela-rbxts/releases/tag/v0.2.0
 [0.1.0]: https://www.npmjs.com/package/vela-rbxts/v/0.1.0
