@@ -510,9 +510,8 @@ function main() {
 	const vsixVersionOverride = process.env.VSIX_VERSION?.trim() ?? "";
 	const prerelease = releaseTag.includes("-");
 	const marketplaceVersion = resolveMarketplaceVsixVersion({
-		sourceVersion: extensionVersion,
-		releaseTag,
 		overrideVersion: vsixVersionOverride,
+		buildNumber: process.env.VSIX_BUILD_NUMBER,
 	});
 	if (!STRICT_VSIX_VERSION_RE.test(marketplaceVersion)) {
 		throw new Error(
@@ -520,17 +519,12 @@ function main() {
 		);
 	}
 
-	console.log(`VSIX version source: ${extensionVersion}`);
+	console.log(`Extension source version: ${extensionVersion}`);
 	if (vsixVersionOverride) {
 		console.log(`VSIX version override: using VSIX_VERSION=${vsixVersionOverride}`);
 	}
 	console.log(`VSIX Marketplace manifest version: ${marketplaceVersion}`);
 	console.log(`VSIX pre-release: ${prerelease}`);
-	if (!vsixVersionOverride && /^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/.test(extensionVersion.trim().replace(/^v/, ""))) {
-		console.warn(
-			`Warning: VS Code Marketplace does not support semver prerelease suffixes. Packaged VSIX manifest version was normalized from ${extensionVersion} to ${marketplaceVersion}. Ensure this Marketplace version has not already been published.`,
-		);
-	}
 
 	const resolvedOutputPath = path.resolve(
 		outputPath ??

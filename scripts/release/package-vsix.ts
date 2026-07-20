@@ -30,9 +30,9 @@ const {
 };
 const { resolveMarketplaceVsixVersion } = require("./utils/vsix-version.cjs") as {
 	resolveMarketplaceVsixVersion: (input: {
-		sourceVersion?: string;
-		releaseTag?: string;
 		overrideVersion?: string;
+		now?: Date;
+		buildNumber?: string | number;
 	}) => string;
 };
 
@@ -171,9 +171,8 @@ async function main() {
 	const vsixVersionOverride = process.env.VSIX_VERSION?.trim() ?? "";
 	const prerelease = releaseTag.includes("-");
 	const marketplaceVersion = resolveMarketplaceVsixVersion({
-		sourceVersion,
-		releaseTag,
 		overrideVersion: vsixVersionOverride,
+		buildNumber: process.env.VSIX_BUILD_NUMBER,
 	});
 
 	const lspPackageConfig = (await import(
@@ -212,17 +211,12 @@ async function main() {
 	});
 
 	if (dryRun) {
-		console.log(`VSIX version source: ${sourceVersion}`);
+		console.log(`Extension source version: ${sourceVersion}`);
 		if (vsixVersionOverride) {
 			console.log(`VSIX version override: using VSIX_VERSION=${vsixVersionOverride}`);
 		}
 		console.log(`VSIX Marketplace manifest version: ${marketplaceVersion}`);
 		console.log(`VSIX pre-release: ${prerelease}`);
-		if (!vsixVersionOverride && /^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/.test(sourceVersion.trim().replace(/^v/, ""))) {
-			console.warn(
-				`Warning: VS Code Marketplace does not support semver prerelease suffixes. Packaged VSIX manifest version was normalized from ${sourceVersion} to ${marketplaceVersion}. Ensure this Marketplace version has not already been published.`,
-			);
-		}
 		console.log("[dry-run] VSIX packaging prerequisites validated and LSP artifacts staged.");
 		for (const target of SUPPORTED_VSCODE_TARGETS) {
 			const targetConfig = VSCODE_TARGETS[target];
@@ -248,7 +242,12 @@ async function main() {
 				"--out",
 				outputPath,
 			],
-			{ cwd: REPO_ROOT },
+			{
+				cwd: REPO_ROOT,
+				// Pin the already-resolved version so every target lands on one
+				// version even if the run straddles a UTC midnight.
+				env: { ...process.env, VSIX_VERSION: marketplaceVersion },
+			},
 		);
 
 		if (!exists(outputPath)) {

@@ -70,11 +70,16 @@ The VSIX packaging phase stages those binaries through `@vela-rbxts/lsp` and fai
 
 ## VSIX Versioning
 
-Workspace packages may keep prerelease semver versions such as `0.1.0-next.0`.
-VS Code Marketplace packaging normalizes the staged extension manifest to a plain `major.minor.patch` version in the staging directory only, so `packages/vscode-extension/package.json` stays unchanged.
+The packaged extension uses a date version, `YYYY.M.DDNNN`, rather than the release tag:
+a UTC date plus a same-day build counter, so `2026-07-20` first packages as `2026.7.20001`.
+This applies to the staged manifest only — `packages/vscode-extension/package.json` keeps its
+semver version and still moves in lockstep with the other packages.
+
+Marketplace versions can never be reused or rolled back, so a second release on the same UTC
+date needs `VSIX_BUILD_NUMBER=2` (1-999). `VSIX_VERSION=2026.7.20005` overrides the whole
+version explicitly when you need an exact value.
 
 `RELEASE_TAG` still controls Marketplace pre-release publishing through `--pre-release`.
-If you need a unique Marketplace version for repeated prerelease publishes, set `VSIX_VERSION=0.1.1` to override the staged manifest version explicitly.
 
 ## Manual Dispatch Options
 
@@ -82,6 +87,7 @@ For `workflow_dispatch` on `.github/workflows/publish.yaml`:
 
 - `dry_run=true`: validates release flow and runs VSIX packaging checks without real npm/Marketplace publishing.
 - `vsix_version`: optional Marketplace-compatible `major.minor.patch` override for staged VSIX manifest version.
+- `vsix_build_number`: same-day build counter (1-999) for the generated date version; bump it to re-release on one UTC date.
 - `publish_vscode_extension=false`: package and upload VSIX artifacts only; skip Marketplace publish.
 - `publish_vscode_extension=true`: publish VSIX artifacts to VS Code Marketplace, unless `dry_run=true`.
 - `VSCE_PAT` is required only for real VS Code Marketplace publishing.
