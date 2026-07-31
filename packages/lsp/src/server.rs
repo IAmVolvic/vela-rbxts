@@ -10,8 +10,8 @@ use tower_lsp::lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, Color, ColorInformation, ColorPresentation,
     ColorPresentationParams, ColorProviderCapability, CompletionItem, CompletionItemKind,
-    CompletionOptions, CompletionParams, CompletionResponse, CompletionTextEdit, Diagnostic,
-    DiagnosticSeverity, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
+    CompletionList, CompletionOptions, CompletionParams, CompletionResponse, CompletionTextEdit,
+    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentColorParams, DocumentHighlight,
     DocumentHighlightKind, DocumentHighlightParams, Hover, HoverContents, HoverParams,
     HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, MarkupContent,
@@ -307,7 +307,12 @@ impl LanguageServer for RbxtsLanguageServer {
             .map(|item| compiler_completion_item_to_lsp(&document, item))
             .collect();
 
-        Ok(Some(CompletionResponse::Array(items)))
+        // Re-requested on every keystroke so the compiler's matcher, which is
+        // looser than the client's word filter, stays in charge of the list.
+        Ok(Some(CompletionResponse::List(CompletionList {
+            is_incomplete: true,
+            items,
+        })))
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
@@ -376,7 +381,12 @@ impl LanguageServer for RbxtsLanguageServer {
                 .into_iter()
                 .map(|item| item.label)
                 .collect();
-            let suggestions = rank_suggestions(&token, &labels, MAX_REPLACEMENT_SUGGESTIONS);
+            let code = match &diagnostic.code {
+                Some(NumberOrString::String(code)) => Some(code.as_str()),
+                _ => None,
+            };
+            let suggestions =
+                replacement_suggestions(code, &token, &labels, MAX_REPLACEMENT_SUGGESTIONS);
 
             for (index, suggestion) in suggestions.into_iter().enumerate() {
                 actions.push(CodeActionOrCommand::CodeAction(replace_action(
@@ -444,26 +454,27 @@ impl LanguageServer for RbxtsLanguageServer {
 
         let response = get_document_colors(DocumentColorsRequest {
             source: document.text.clone(),
+            options: Some(options.clone()),
+        });
+
+        let Some(color) = response.colors.into_iter().find(|color| {
+            document.range_to_lsp_range(color.range.start, color.range.end) == params.range
+        }) else {
+            return Ok(Vec::new());
+        };
+
+        let completions = get_completions(CompletionRequest {
+            source: document.text.clone(),
+            position: color.range.start,
             options: Some(options),
         });
 
-        let presentations = response
-            .colors
-            .into_iter()
-            .filter_map(|color| {
-                let range = document.range_to_lsp_range(color.range.start, color.range.end);
-                if range != params.range {
-                    return None;
-                }
-
-                Some(ColorPresentation {
-                    label: color.presentation,
-                    ..Default::default()
-                })
-            })
-            .collect();
-
-        Ok(presentations)
+        Ok(theme_color_presentations(
+            &color,
+            &params.color,
+            params.range,
+            completions.items,
+        ))
     }
 }
 
@@ -528,6 +539,181 @@ fn same_token_highlights(
     )
 }
 
+const MAX_COLOR_PRESENTATIONS: usize = 3;
+
+/// Maps the picked RGB back onto theme tokens of the same utility family, so
+/// the color picker swaps between theme colors instead of producing free-hand
+/// values the compiler cannot lower. The current token stays available; the
+/// nearest candidates lead once the user actually moves the picker.
+fn theme_color_presentations(
+    color: &CompilerDocumentColor,
+    picked: &Color,
+    range: Range,
+    items: Vec<vela_rbxts_compiler::CompletionItem>,
+) -> Vec<ColorPresentation> {
+    let (variant_prefix, utility) = split_variant_prefix(&color.token);
+    let family = utility.split('-').next().unwrap_or_default();
+    let picked_rgb = (
+        unit_to_byte(f64::from(picked.red)),
+        unit_to_byte(f64::from(picked.green)),
+        unit_to_byte(f64::from(picked.blue)),
+    );
+    let current_rgb = (
+        unit_to_byte(color.red),
+        unit_to_byte(color.green),
+        unit_to_byte(color.blue),
+    );
+
+    let mut candidates: Vec<(u32, String)> = items
+        .into_iter()
+        .filter_map(|item| {
+            let hex = item.color?;
+            let rest = item.label.strip_prefix(family)?;
+            if !rest.starts_with('-') || item.label == utility {
+                return None;
+            }
+            let rgb = parse_hex_color(&hex)?;
+            Some((
+                color_distance(rgb, picked_rgb),
+                format!("{variant_prefix}{}", item.label),
+            ))
+        })
+        .collect();
+    candidates.sort();
+    candidates.truncate(MAX_COLOR_PRESENTATIONS);
+
+    let current = ColorPresentation {
+        label: color.presentation.clone(),
+        ..Default::default()
+    };
+    let theme_edits = candidates
+        .into_iter()
+        .map(|(_, label)| presentation_edit(label, range));
+
+    let mut presentations = Vec::new();
+    if picked_rgb == current_rgb {
+        presentations.push(current);
+        presentations.extend(theme_edits);
+    } else {
+        presentations.extend(theme_edits);
+        presentations.push(current);
+    }
+    presentations
+}
+
+fn presentation_edit(label: String, range: Range) -> ColorPresentation {
+    ColorPresentation {
+        text_edit: Some(TextEdit {
+            range,
+            new_text: label.clone(),
+        }),
+        label,
+        ..Default::default()
+    }
+}
+
+fn unit_to_byte(value: f64) -> u8 {
+    (value.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+fn parse_hex_color(hex: &str) -> Option<(u8, u8, u8)> {
+    let hex = hex.strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    let value = u32::from_str_radix(hex, 16).ok()?;
+    Some(((value >> 16) as u8, (value >> 8) as u8, value as u8))
+}
+
+fn color_distance(a: (u8, u8, u8), b: (u8, u8, u8)) -> u32 {
+    let dr = i32::from(a.0) - i32::from(b.0);
+    let dg = i32::from(a.1) - i32::from(b.1);
+    let db = i32::from(a.2) - i32::from(b.2);
+    (dr * dr + dg * dg + db * db) as u32
+}
+
+/// Splits `md:hover:px-4` into its variant prefix (`md:hover:`) and utility
+/// (`px-4`). Colons inside brackets belong to arbitrary values and do not split.
+fn split_variant_prefix(token: &str) -> (&str, &str) {
+    let mut depth = 0usize;
+    let mut split = 0;
+    for (index, ch) in token.char_indices() {
+        match ch {
+            '[' | '(' => depth += 1,
+            ']' | ')' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => split = index + 1,
+            _ => {}
+        }
+    }
+    token.split_at(split)
+}
+
+/// Builds replacement texts for a diagnosed token, keeping the variants the
+/// user already typed: utility suggestions are ranked against the utility part
+/// alone, and `unknown-variant` diagnostics get their variant repaired or
+/// dropped instead of fuzzy-matching the whole token.
+fn replacement_suggestions(
+    code: Option<&str>,
+    token: &str,
+    labels: &[String],
+    max: usize,
+) -> Vec<String> {
+    let (variant_prefix, utility) = split_variant_prefix(token);
+    let (variant_labels, utility_labels): (Vec<String>, Vec<String>) = labels
+        .iter()
+        .cloned()
+        .partition(|label| label.ends_with(':'));
+
+    if code != Some("unknown-variant") {
+        return rank_suggestions(utility, &utility_labels, max)
+            .into_iter()
+            .map(|suggestion| format!("{variant_prefix}{suggestion}"))
+            .collect();
+    }
+
+    let known: Vec<String> = variant_labels
+        .iter()
+        .map(|label| label.trim_end_matches(':').to_owned())
+        .collect();
+    let segments: Vec<&str> = variant_prefix
+        .split(':')
+        .filter(|segment| !segment.is_empty())
+        .collect();
+
+    let mut suggestions = Vec::new();
+
+    let repaired: Option<Vec<String>> = segments
+        .iter()
+        .map(|segment| {
+            if known.iter().any(|variant| variant == segment) {
+                Some((*segment).to_owned())
+            } else {
+                rank_suggestions(segment, &known, 1).into_iter().next()
+            }
+        })
+        .collect();
+    if let Some(repaired) = repaired {
+        suggestions.push(format!("{}:{utility}", repaired.join(":")));
+    }
+
+    let kept: Vec<&str> = segments
+        .iter()
+        .copied()
+        .filter(|segment| known.iter().any(|variant| variant == segment))
+        .collect();
+    let dropped = if kept.is_empty() {
+        utility.to_owned()
+    } else {
+        format!("{}:{utility}", kept.join(":"))
+    };
+    if !suggestions.contains(&dropped) {
+        suggestions.push(dropped);
+    }
+
+    suggestions.truncate(max);
+    suggestions
+}
+
 fn diagnostic_token(diagnostic: &Diagnostic) -> Option<String> {
     diagnostic
         .data
@@ -588,20 +774,30 @@ fn compiler_completion_item_to_lsp(
         })
     });
 
-    CompletionItem {
-        label: label.clone(),
-        kind: Some(map_completion_kind(&category)),
-        detail: Some(category.clone()),
-        documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
-            MarkupContent {
+    // VS Code draws the suggest-widget swatch only when the label or a plain
+    // string documentation is exactly `#rrggbb`, so color items carry the bare
+    // hex as documentation. The hex stays in `detail` for clients that read it
+    // from there.
+    let (detail, documentation) = match &item.color {
+        Some(color) => (
+            color.clone(),
+            tower_lsp::lsp_types::Documentation::String(color.clone()),
+        ),
+        None => (
+            category.clone(),
+            tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: documentation,
-            },
-        )),
-        sort_text: Some(match category.as_str() {
-            "variant" => format!("0-{}", label),
-            _ => format!("1-{}", label),
-        }),
+            }),
+        ),
+    };
+
+    CompletionItem {
+        label: label.clone(),
+        kind: Some(map_completion_kind(&category, item.color.is_some())),
+        detail: Some(detail),
+        documentation: Some(documentation),
+        sort_text: item.sort_text,
         filter_text: Some(label),
         insert_text: Some(insert_text),
         text_edit,
@@ -609,12 +805,16 @@ fn compiler_completion_item_to_lsp(
     }
 }
 
-fn map_completion_kind(category: &str) -> CompletionItemKind {
+fn map_completion_kind(category: &str, has_color: bool) -> CompletionItemKind {
+    if has_color {
+        return CompletionItemKind::COLOR;
+    }
+
     match category {
         "variant" => CompletionItemKind::KEYWORD,
-        "radius" | "spacing" | "size" | "color" | "stacking" | "transform" | "effects"
-        | "layout" | "utility" => CompletionItemKind::PROPERTY,
-        _ => CompletionItemKind::TEXT,
+        "color" => CompletionItemKind::COLOR,
+        "typography" => CompletionItemKind::TEXT,
+        _ => CompletionItemKind::PROPERTY,
     }
 }
 
@@ -686,6 +886,122 @@ mod tests {
             Some("bg-surfac")
         );
         assert_eq!(diagnostic_token(&sample_diagnostic(None)), None);
+    }
+
+    fn color_item(label: &str, hex: Option<&str>) -> vela_rbxts_compiler::CompletionItem {
+        vela_rbxts_compiler::CompletionItem {
+            label: label.to_owned(),
+            insert_text: label.to_owned(),
+            kind: "utility".to_owned(),
+            category: "color".to_owned(),
+            documentation: String::new(),
+            replacement: None,
+            color: hex.map(str::to_owned),
+            sort_text: None,
+        }
+    }
+
+    #[test]
+    fn maps_picked_colors_onto_same_family_theme_tokens() {
+        let color = CompilerDocumentColor {
+            range: vela_rbxts_compiler::EditorRange { start: 18, end: 33 },
+            red: 49.0 / 255.0,
+            green: 65.0 / 255.0,
+            blue: 88.0 / 255.0,
+            alpha: 1.0,
+            token: "md:bg-slate-700".to_owned(),
+            presentation: "md:bg-slate-700".to_owned(),
+        };
+        let range = Range::new(Position::new(0, 18), Position::new(0, 33));
+        let items = vec![
+            color_item("bg-slate-500", Some("#62748e")),
+            color_item("bg-slate-700", Some("#314158")),
+            color_item("bg-rose-500", Some("#f43f5e")),
+            color_item("text-slate-500", Some("#62748e")),
+            color_item("bg-gradient-to-r", None),
+        ];
+
+        // Picker moved onto slate-500: the nearest theme token leads with an edit
+        // that keeps the typed variant.
+        let picked = Color {
+            red: 98.0 / 255.0,
+            green: 116.0 / 255.0,
+            blue: 142.0 / 255.0,
+            alpha: 1.0,
+        };
+        let presentations = theme_color_presentations(&color, &picked, range, items.clone());
+        assert_eq!(presentations[0].label, "md:bg-slate-500");
+        assert_eq!(
+            presentations[0].text_edit.as_ref().unwrap().new_text,
+            "md:bg-slate-500"
+        );
+        assert!(presentations.iter().any(|p| p.label == "md:bg-slate-700"));
+        assert!(presentations.iter().all(|p| !p.label.contains("text-")));
+
+        // An untouched picker keeps the current token first.
+        let same = Color {
+            red: 49.0 / 255.0,
+            green: 65.0 / 255.0,
+            blue: 88.0 / 255.0,
+            alpha: 1.0,
+        };
+        let presentations = theme_color_presentations(&color, &same, range, items);
+        assert_eq!(presentations[0].label, "md:bg-slate-700");
+        assert!(presentations[0].text_edit.is_none());
+    }
+
+    #[test]
+    fn parses_hex_swatches() {
+        assert_eq!(parse_hex_color("#62748e"), Some((0x62, 0x74, 0x8e)));
+        assert_eq!(parse_hex_color("62748e"), None);
+        assert_eq!(parse_hex_color("#fff"), None);
+    }
+
+    #[test]
+    fn splits_variant_prefixes_for_quickfixes() {
+        assert_eq!(split_variant_prefix("px-4"), ("", "px-4"));
+        assert_eq!(split_variant_prefix("md:hover:px-4"), ("md:hover:", "px-4"));
+        assert_eq!(split_variant_prefix("bg-[rgb(1:2)]"), ("", "bg-[rgb(1:2)]"));
+    }
+
+    #[test]
+    fn keeps_typed_variants_in_utility_replacements() {
+        let labels = vec![
+            "md:".to_owned(),
+            "rounded-md".to_owned(),
+            "rounded-lg".to_owned(),
+        ];
+
+        let suggestions =
+            replacement_suggestions(Some("unknown-theme-key"), "md:rounded-mdd", &labels, 3);
+        assert_eq!(suggestions.first().map(String::as_str), Some("md:rounded-md"));
+        assert!(suggestions.iter().all(|s| s.starts_with("md:")));
+    }
+
+    #[test]
+    fn repairs_or_drops_unknown_variants() {
+        let labels = vec![
+            "md:".to_owned(),
+            "mouse:".to_owned(),
+            "px-4".to_owned(),
+            "px-8".to_owned(),
+        ];
+
+        // A near-miss variant is repaired; dropping it is offered as well.
+        assert_eq!(
+            replacement_suggestions(Some("unknown-variant"), "mous:px-4", &labels, 3),
+            vec!["mouse:px-4".to_owned(), "px-4".to_owned()]
+        );
+        // A variant with no close match is dropped, keeping the valid ones.
+        assert_eq!(
+            replacement_suggestions(Some("unknown-variant"), "md:hover:px-4", &labels, 3),
+            vec!["md:px-4".to_owned()]
+        );
+        // The utility itself is never fuzzy-replaced on a variant diagnostic.
+        assert!(
+            !replacement_suggestions(Some("unknown-variant"), "hover:px-4", &labels, 3)
+                .contains(&"px-8".to_owned())
+        );
     }
 
     #[test]
