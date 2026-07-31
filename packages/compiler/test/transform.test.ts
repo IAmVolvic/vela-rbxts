@@ -33,6 +33,7 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 				primary: "Color3.fromRGB(99, 102, 241)",
 			},
 			radius: {
+				DEFAULT: "new UDim(0, 4)",
 				none: "new UDim(0, 0)",
 				xs: "new UDim(0, 2)",
 				sm: "new UDim(0, 4)",
@@ -857,7 +858,7 @@ test("lets full width override only the width axis after size", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.new\(1, 0, 0, 16\)\}/);
+	expect(result.code).toMatch(/Size=\{new UDim2\(1, 0, 0, 16\)\}/);
 });
 
 test("lets height spacing utilities override only the height axis after full size", () => {
@@ -866,7 +867,7 @@ test("lets height spacing utilities override only the height axis after full siz
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.new\(1, 0, 0, 16\)\}/);
+	expect(result.code).toMatch(/Size=\{new UDim2\(1, 0, 0, 16\)\}/);
 });
 
 test("lets fractional height override only the height axis after size", () => {
@@ -875,7 +876,7 @@ test("lets fractional height override only the height axis after size", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.new\(0, 16, 0\.5, 0\)\}/);
+	expect(result.code).toMatch(/Size=\{new UDim2\(0, 16, 0\.5, 0\)\}/);
 });
 
 test("prefers explicit spacing config for size utilities", () => {
@@ -1754,6 +1755,7 @@ test("retains the default config shape for compatibility", () => {
 	);
 	expect(defaultConfig.theme.colors.surface).toBeUndefined();
 	expect(defaultConfig.theme.radius).toEqual({
+		DEFAULT: "new UDim(0, 4)",
 		none: "new UDim(0, 0)",
 		xs: "new UDim(0, 2)",
 		sm: "new UDim(0, 4)",
@@ -1898,9 +1900,663 @@ test("anchors diagnostics to the offending className token", () => {
 	const result = transform(source, null);
 	const [diagnostic] = result.diagnostics;
 
-	expect(diagnostic.code).toBe("unsupported-utility-family");
+	expect(diagnostic.code).toBe("no-roblox-equivalent");
 	expect(diagnostic.range).toBeDefined();
 	const { start, end } = diagnostic.range as { start: number; end: number };
 	expect(source.slice(start, end)).toBe("m-4");
 	expect(start).toBeGreaterThan(source.indexOf("className"));
+});
+
+test("lowers right/bottom utilities relative to the far edges", () => {
+	const result = transform(
+		`export const A = () => <frame className="right-4 bottom-2" />;`,
+		null,
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/Position=\{new UDim2\(1, -16, 1, -8\)\}/);
+});
+
+test("lowers negative and fractional right utilities", () => {
+	const negative = transform(
+		`export const A = () => <frame className="-right-4" />;`,
+		null,
+	);
+	expect(negative.diagnostics).toEqual([]);
+	expect(negative.code).toMatch(/Position=\{new UDim2\(1, 16, 0, 0\)\}/);
+
+	const fractional = transform(
+		`export const B = () => <frame className="bottom-1/2" />;`,
+		null,
+	);
+	expect(fractional.diagnostics).toEqual([]);
+	expect(fractional.code).toMatch(/Position=\{UDim2\.fromScale\(0, 0\.5\)\}/);
+});
+
+test("lowers order utilities into LayoutOrder", () => {
+	const result = transform(
+		`export const A = () => (
+			<frame>
+				<frame className="order-2" />
+				<frame className="order-first" />
+				<frame className="-order-3" />
+				<frame className="order-none" />
+			</frame>
+		);`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/LayoutOrder=\{2\}/);
+	expect(result.code).toMatch(/LayoutOrder=\{-9999\}/);
+	expect(result.code).toMatch(/LayoutOrder=\{-3\}/);
+	expect(result.code).toMatch(/LayoutOrder=\{0\}/);
+});
+
+test("rejects non-integer order values with a diagnostic", () => {
+	const result = transform(
+		`export const A = () => <frame className="order-firstish" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-layout-order-value" }),
+	]);
+});
+
+test("lowers content utilities into UIListLayout cross-axis packing", () => {
+	const flex = transform(
+		`export const A = () => <frame className="content-between" />;`,
+		null,
+	);
+	expect(flex.diagnostics).toEqual([]);
+	expect(flex.code).toMatch(
+		/VerticalFlex=\{Enum\.UIFlexAlignment\.SpaceBetween\}/,
+	);
+
+	const stretch = transform(
+		`export const B = () => <frame className="content-stretch" />;`,
+		null,
+	);
+	expect(stretch.code).toMatch(/VerticalFlex=\{Enum\.UIFlexAlignment\.Fill\}/);
+
+	const aligned = transform(
+		`export const C = () => <frame className="content-center" />;`,
+		null,
+	);
+	expect(aligned.code).toMatch(
+		/VerticalAlignment=\{Enum\.VerticalAlignment\.Center\}/,
+	);
+});
+
+test("lowers self utilities into UIFlexItem.ItemLineAlignment", () => {
+	const result = transform(
+		`export const A = () => <frame className="self-center" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/<uiflexitem\b[^>]*ItemLineAlignment=\{Enum\.ItemLineAlignment\.Center\}[^>]*\/>/i,
+	);
+
+	const invalid = transform(
+		`export const B = () => <frame className="self-baseline" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-alignment-value" }),
+	]);
+});
+
+test("lowers leading utilities into LineHeight on text hosts", () => {
+	const result = transform(
+		`export const A = () => <textlabel className="leading-tight" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/LineHeight=\{1\.25\}/);
+
+	const invalid = transform(
+		`export const B = () => <textlabel className="leading-7" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-line-height-value" }),
+	]);
+});
+
+test("merges italic with font weight into a single FontFace", () => {
+	const merged = transform(
+		`export const A = () => <textlabel className="italic font-bold" />;`,
+		null,
+	);
+	expect(merged.diagnostics).toEqual([]);
+	expect(merged.code).toMatch(
+		/FontFace=\{new Font\("rbxasset:\/\/fonts\/families\/SourceSansPro\.json", Enum\.FontWeight\.Bold, Enum\.FontStyle\.Italic\)\}/,
+	);
+
+	const italicOnly = transform(
+		`export const B = () => <textlabel className="italic" />;`,
+		null,
+	);
+	expect(italicOnly.code).toMatch(
+		/FontFace=\{new Font\("rbxasset:\/\/fonts\/families\/SourceSansPro\.json", Enum\.FontWeight\.Regular, Enum\.FontStyle\.Italic\)\}/,
+	);
+
+	const weightOnly = transform(
+		`export const C = () => <textlabel className="font-bold" />;`,
+		null,
+	);
+	expect(weightOnly.code).toMatch(
+		/FontFace=\{new Font\("rbxasset:\/\/fonts\/families\/SourceSansPro\.json", Enum\.FontWeight\.Bold\)\}/,
+	);
+});
+
+test("reports unlowered grid subtokens as known Tailwind without an equivalent", () => {
+	const result = transform(
+		`export const A = () => <frame className="grid-flow-row" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "no-roblox-equivalent" }),
+	]);
+});
+
+test("lowers grid utilities into UIGridLayout", () => {
+	const result = transform(
+		`export const A = () => <frame className="grid grid-cols-3 gap-2" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/<uigridlayout\b[^>]*SortOrder=\{Enum\.SortOrder\.LayoutOrder\}[^>]*\/>/i,
+	);
+	expect(result.code).toMatch(
+		/FillDirection=\{Enum\.FillDirection\.Horizontal\}/,
+	);
+	expect(result.code).toMatch(/FillDirectionMaxCells=\{3\}/);
+	expect(result.code).toMatch(/CellPadding=\{UDim2\.fromOffset\(8, 8\)\}/);
+
+	const rows = transform(
+		`export const B = () => <frame className="grid-rows-2" />;`,
+		null,
+	);
+	expect(rows.code).toMatch(/FillDirection=\{Enum\.FillDirection\.Vertical\}/);
+	expect(rows.code).toMatch(/FillDirectionMaxCells=\{2\}/);
+});
+
+test("keeps gap on UIListLayout when no grid is present", () => {
+	const result = transform(
+		`export const A = () => <frame className="flex gap-2" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("uigridlayout");
+	expect(result.code).not.toContain("CellPadding");
+});
+
+test("rejects out-of-range grid cell counts", () => {
+	const result = transform(
+		`export const A = () => <frame className="grid-cols-0 grid-rows-13" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-grid-value" }),
+		expect.objectContaining({ code: "unsupported-grid-value" }),
+	]);
+});
+
+test("lowers basis utilities like the width axis", () => {
+	const fractional = transform(
+		`export const A = () => <frame className="basis-1/2" />;`,
+		null,
+	);
+	expect(fractional.diagnostics).toEqual([]);
+	expect(fractional.code).toMatch(/Size=\{UDim2\.fromScale\(0\.5, 0\)\}/);
+
+	const auto = transform(
+		`export const B = () => <frame className="basis-auto" />;`,
+		null,
+	);
+	expect(auto.code).toMatch(/AutomaticSize=\{Enum\.AutomaticSize\.X\}/);
+});
+
+test("lowers pixel translates into Position offsets", () => {
+	const result = transform(
+		`export const A = () => <frame className="translate-x-4 -translate-y-2" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/Position=\{UDim2\.fromOffset\(16, -8\)\}/);
+
+	const combined = transform(
+		`export const B = () => <frame className="left-1/2 translate-x-4" />;`,
+		null,
+	);
+	expect(combined.code).toMatch(/Position=\{new UDim2\(0\.5, 16, 0, 0\)\}/);
+});
+
+test("lowers fractional translates into AnchorPoint", () => {
+	const centered = transform(
+		`export const A = () => <frame className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />;`,
+		null,
+	);
+
+	expect(centered.diagnostics).toEqual([]);
+	expect(centered.code).toMatch(/AnchorPoint=\{new Vector2\(0\.5, 0\.5\)\}/);
+	expect(centered.code).toMatch(/Position=\{UDim2\.fromScale\(0\.5, 0\.5\)\}/);
+
+	const positive = transform(
+		`export const B = () => <frame className="translate-x-full" />;`,
+		null,
+	);
+	expect(positive.code).toMatch(/AnchorPoint=\{new Vector2\(-1, 0\)\}/);
+});
+
+test("parses top utilities as position instead of a gradient stop", () => {
+	const result = transform(
+		`export const A = () => <frame className="top-4" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/Position=\{UDim2\.fromOffset\(0, 16\)\}/);
+});
+
+test("lowers object fit utilities into ScaleType on image hosts", () => {
+	const result = transform(
+		`export const A = () => <imagelabel className="object-cover" />;`,
+		null,
+	);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/ScaleType=\{Enum\.ScaleType\.Crop\}/);
+
+	const tile = transform(
+		`export const B = () => <imagebutton className="object-tile" />;`,
+		null,
+	);
+	expect(tile.code).toMatch(/ScaleType=\{Enum\.ScaleType\.Tile\}/);
+
+	const invalid = transform(
+		`export const C = () => <imagelabel className="object-left" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-object-fit-value" }),
+	]);
+});
+
+test("lowers pointer events into Interactable", () => {
+	const result = transform(
+		`export const A = () => <frame className="pointer-events-none" />;`,
+		null,
+	);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/Interactable=\{false\}/);
+
+	const auto = transform(
+		`export const B = () => <frame className="pointer-events-auto" />;`,
+		null,
+	);
+	expect(auto.code).toMatch(/Interactable=\{true\}/);
+});
+
+test("lowers space utilities into UIListLayout padding with a direction", () => {
+	const horizontal = transform(
+		`export const A = () => <frame className="space-x-4" />;`,
+		null,
+	);
+	expect(horizontal.diagnostics).toEqual([]);
+	expect(horizontal.code).toMatch(/Padding=\{new UDim\(0, 16\)\}/);
+	expect(horizontal.code).toMatch(
+		/FillDirection=\{Enum\.FillDirection\.Horizontal\}/,
+	);
+
+	const vertical = transform(
+		`export const B = () => <frame className="space-y-2" />;`,
+		null,
+	);
+	expect(vertical.code).toMatch(/Padding=\{new UDim\(0, 8\)\}/);
+	expect(vertical.code).toMatch(
+		/FillDirection=\{Enum\.FillDirection\.Vertical\}/,
+	);
+
+	const reverse = transform(
+		`export const C = () => <frame className="space-x-reverse" />;`,
+		null,
+	);
+	expect(reverse.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-space-value" }),
+	]);
+});
+
+test("lowers whitespace utilities into TextWrapped", () => {
+	const result = transform(
+		`export const A = () => <textlabel className="whitespace-nowrap" />;`,
+		null,
+	);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/TextWrapped=\{false\}/);
+
+	const invalid = transform(
+		`export const B = () => <textlabel className="whitespace-pre" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-whitespace-value" }),
+	]);
+});
+
+test("lowers overscroll utilities into ElasticBehavior on scrolling frames", () => {
+	const result = transform(
+		`export const A = () => <scrollingframe className="overscroll-none" />;`,
+		null,
+	);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/ElasticBehavior=\{Enum\.ElasticBehavior\.Never\}/,
+	);
+
+	const contain = transform(
+		`export const B = () => <scrollingframe className="overscroll-contain" />;`,
+		null,
+	);
+	expect(contain.code).toMatch(
+		/ElasticBehavior=\{Enum\.ElasticBehavior\.WhenScrollable\}/,
+	);
+});
+
+test("lowers ring and outline utilities into the shared UIStroke", () => {
+	const ring = transform(
+		`export const A = () => <frame className="ring ring-rose-500" />;`,
+		null,
+	);
+	expect(ring.diagnostics).toEqual([]);
+	expect(ring.code).toMatch(/Thickness=\{3\}/);
+	expect(ring.code).toMatch(
+		/ApplyStrokeMode=\{Enum\.ApplyStrokeMode\.Border\}/,
+	);
+	expect(ring.code).toMatch(/<uistroke\b[^>]*Color=\{Color3\.fromRGB\(/i);
+
+	const outline = transform(
+		`export const B = () => <frame className="outline-4" />;`,
+		null,
+	);
+	expect(outline.code).toMatch(/Thickness=\{4\}/);
+
+	const none = transform(
+		`export const C = () => <frame className="outline-none" />;`,
+		null,
+	);
+	expect(none.code).toMatch(/Thickness=\{0\}/);
+
+	const invalid = transform(
+		`export const D = () => <frame className="ring-offset-2 outline-dashed" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-stroke-value" }),
+		expect.objectContaining({ code: "unsupported-stroke-value" }),
+	]);
+});
+
+test("centers elements with mx-auto and my-auto", () => {
+	const both = transform(
+		`export const A = () => <frame className="mx-auto my-auto" />;`,
+		null,
+	);
+	expect(both.diagnostics).toEqual([]);
+	expect(both.code).toMatch(/AnchorPoint=\{new Vector2\(0\.5, 0\.5\)\}/);
+	expect(both.code).toMatch(/Position=\{UDim2\.fromScale\(0\.5, 0\.5\)\}/);
+
+	const horizontal = transform(
+		`export const B = () => <frame className="mx-auto" />;`,
+		null,
+	);
+	expect(horizontal.code).toMatch(/AnchorPoint=\{new Vector2\(0\.5, 0\)\}/);
+	expect(horizontal.code).toMatch(/Position=\{UDim2\.fromScale\(0\.5, 0\)\}/);
+
+	const margins = transform(
+		`export const C = () => <frame className="mx-4" />;`,
+		null,
+	);
+	expect(margins.diagnostics).toEqual([
+		expect.objectContaining({ code: "no-roblox-equivalent" }),
+	]);
+});
+
+test("attaches a transition config to the runtime host", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-slate-700 md:bg-blue-600 transition duration-300 ease-out" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__velaTransition={");
+	expect(result.code).toMatch(/"time": 0\.3/);
+	expect(result.code).toMatch(/"style": "Quad"/);
+	expect(result.code).toMatch(/"direction": "Out"/);
+});
+
+test("duration alone enables the transition and defaults the easing", () => {
+	const result = transform(
+		`export const A = () => <frame className="md:bg-blue-600 duration-500" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toContain("__velaTransition={");
+	expect(result.code).toMatch(/"time": 0\.5/);
+	expect(result.code).toMatch(/"direction": "Out"/);
+});
+
+test("transition-none disables the transition", () => {
+	const result = transform(
+		`export const A = () => <frame className="md:bg-blue-600 transition duration-300 transition-none" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("__velaTransition={");
+});
+
+test("warns when transition utilities cannot ever fire", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-slate-700 transition" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "transition-without-runtime" }),
+	]);
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).not.toContain("__velaTransition={");
+});
+
+test("keeps transitions on dynamic class values in the runtime host", () => {
+	const result = transform(
+		`export const A = (props: { active: boolean }) => (
+			<frame className={["transition duration-300", props.active && "bg-blue-600"]} />
+		);`,
+		null,
+	);
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__createVelaRuntimeHost");
+	expect(result.code).toContain("TweenService");
+});
+
+test("rejects invalid transition values with diagnostics", () => {
+	const result = transform(
+		`export const A = () => <frame className="md:bg-blue-600 duration-fast ease-bounce transition-weird" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-transition-value",
+			token: "duration-fast",
+		}),
+		expect.objectContaining({
+			code: "unsupported-transition-value",
+			token: "ease-bounce",
+		}),
+		expect.objectContaining({
+			code: "unsupported-transition-value",
+			token: "transition-weird",
+		}),
+	]);
+});
+
+test("promotes animate presets to the runtime host", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-blue-600 animate-spin" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toMatch(/__velaAnimation=\{"spin"\}/);
+	expect(result.code).toContain("startPresetAnimation");
+});
+
+test("animate-none cancels an earlier preset", () => {
+	const result = transform(
+		`export const A = () => <frame className="animate-pulse animate-none" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).not.toContain("__velaAnimation=");
+});
+
+test("rejects unsupported animate presets", () => {
+	const result = transform(
+		`export const A = () => <frame className="animate-ping" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-animation-value",
+			token: "animate-ping",
+		}),
+	]);
+});
+
+test("renders the runtime host through forwardRef for slotting compatibility", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-blue-600 animate-spin" />;`,
+		null,
+	);
+
+	expect(result.code).toContain("forwardRef((props: VelaRuntimeHostProps");
+	expect(result.code).toContain("assignForwardedRef");
+});
+
+test("warns and strips motion utilities on component elements", () => {
+	const animated = transform(
+		`export const A = () => <Box className="animate-spin" />;`,
+		null,
+	);
+	expect(animated.diagnostics).toEqual([
+		expect.objectContaining({ code: "motion-on-component" }),
+	]);
+	expect(animated.code).not.toContain("__velaAnimation=");
+
+	const transitioned = transform(
+		`export const B = () => <Box className="md:bg-blue-600 transition" />;`,
+		null,
+	);
+	expect(transitioned.diagnostics).toEqual([
+		expect.objectContaining({ code: "motion-on-component" }),
+	]);
+	expect(transitioned.code).not.toContain("__velaTransition={");
+	expect(transitioned.code).toContain("__velaRules");
+});
+
+test("transforms a literal Text at compile time without a runtime host", () => {
+	const upper = transform(
+		`export const A = () => <textlabel Text="hello world" className="uppercase" />;`,
+		null,
+	);
+	expect(upper.diagnostics).toEqual([]);
+	expect(upper.needsRuntimeHost).toBe(false);
+	expect(upper.code).toContain('Text="HELLO WORLD"');
+
+	const capitalized = transform(
+		`export const B = () => <textlabel Text="hello brave world" className="capitalize" />;`,
+		null,
+	);
+	expect(capitalized.code).toContain('Text="Hello Brave World"');
+});
+
+test("wraps a literal Text in escaped RichText markup for decorations", () => {
+	const result = transform(
+		`export const A = () => <textlabel Text="a < b & c" className="underline" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).toContain('Text="<u>a &lt; b &amp; c</u>"');
+	expect(result.code).toMatch(/RichText=\{true\}/);
+
+	const strike = transform(
+		`export const B = () => <textlabel Text="done" className="line-through uppercase" />;`,
+		null,
+	);
+	expect(strike.code).toContain('Text="<s>DONE</s>"');
+});
+
+test("backs off decorations on consumer-managed RichText", () => {
+	const result = transform(
+		`export const A = () => <textlabel RichText Text="<b>hi</b>" className="underline uppercase" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "decoration-on-richtext" }),
+	]);
+	expect(result.code).not.toContain("<u>");
+	// The transform still applies, but the markup stays unescaped and unwrapped.
+	expect(result.code).toContain('Text="<B>HI</B>"');
+});
+
+test("defers dynamic Text to the runtime pipeline", () => {
+	const result = transform(
+		`export const A = (props: { label: string }) => (
+			<textlabel Text={props.label} className="uppercase underline" />
+		);`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__velaText={");
+	expect(result.code).toMatch(/"transform": "upper"/);
+	expect(result.code).toMatch(/"decoration": "underline"/);
+	expect(result.code).toContain("applyTextConfig");
+});
+
+test("normal-case and no-underline cancel earlier text utilities", () => {
+	const result = transform(
+		`export const A = () => <textlabel Text="hi" className="uppercase underline normal-case no-underline" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).toContain('Text="hi"');
+	expect(result.code).not.toContain("__velaText");
 });

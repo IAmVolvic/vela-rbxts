@@ -131,10 +131,18 @@ test("completes semantic and palette color tokens with variant-aware prefixes", 
 		},
 	});
 
+	// A typed variant stays in place: the completion replaces only the utility
+	// after the last colon.
+	const variantSource = '<frame className="md:bg-" />';
 	expect(variantColorResult.items).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({
-				label: "md:bg-surface",
+				label: "bg-surface",
+				insertText: "bg-surface",
+				replacement: {
+					start: variantSource.indexOf("bg-"),
+					end: variantSource.indexOf("bg-") + "bg-".length,
+				},
 			}),
 		]),
 	);
@@ -150,10 +158,16 @@ test("completes semantic and palette color tokens with variant-aware prefixes", 
 	expect(variantSizeResult.items).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({
-				label: "portrait:w-full",
+				label: "w-full",
 			}),
 		]),
 	);
+	// Variants already applied are not offered again.
+	expect(
+		variantSizeResult.items.some(
+			(item: { label: string }) => item.label === "portrait:",
+		),
+	).toBe(false);
 });
 
 test("completes radius utilities inside className", () => {
@@ -801,4 +815,391 @@ test("ignores className on elements the transformer does not lower", () => {
 		getCompletions({ source, position: source.indexOf("bg-slate") + 3 })
 			.isInClassNameContext,
 	).toBe(false);
+});
+
+test("completes the new layout utilities inside className", () => {
+	const source = '<frame className="" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="'),
+	});
+
+	const labels = result.items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining([
+			"right-4",
+			"-right-4",
+			"bottom-4",
+			"content-between",
+			"self-center",
+			"order-first",
+			"order-2",
+		]),
+	);
+});
+
+test("completes typography utilities only on text hosts", () => {
+	const textSource = '<textlabel className="" />';
+	const textResult = getCompletions({
+		source: textSource,
+		position: positionAfter(textSource, 'className="'),
+	});
+	const textLabels = textResult.items.map(
+		(item: { label: string }) => item.label,
+	);
+	expect(textLabels).toEqual(
+		expect.arrayContaining(["leading-tight", "italic", "not-italic"]),
+	);
+
+	const frameSource = '<frame className="" />';
+	const frameResult = getCompletions({
+		source: frameSource,
+		position: positionAfter(frameSource, 'className="'),
+	});
+	const frameLabels = frameResult.items.map(
+		(item: { label: string }) => item.label,
+	);
+	expect(frameLabels).not.toContain("leading-tight");
+	expect(frameLabels).not.toContain("italic");
+});
+
+test("hovers the new utilities with their Roblox targets", () => {
+	const source =
+		'<textlabel className="right-4 order-2 self-center leading-tight italic" />';
+
+	const right = getHover({
+		source,
+		position: positionAfter(source, "right-"),
+	});
+	expect(right.contents?.documentation).toContain("right edge");
+
+	const order = getHover({
+		source,
+		position: positionAfter(source, "order-2") - 1,
+	});
+	expect(order.contents?.display).toContain("LayoutOrder");
+
+	const self = getHover({
+		source,
+		position: positionAfter(source, "self-cent"),
+	});
+	expect(self.contents?.documentation).toContain(
+		"Enum.ItemLineAlignment.Center",
+	);
+
+	const leading = getHover({
+		source,
+		position: positionAfter(source, "leading-t"),
+	});
+	expect(leading.contents?.documentation).toContain("1.25");
+
+	const italic = getHover({
+		source,
+		position: positionAfter(source, "italic") - 1,
+	});
+	expect(italic.contents?.documentation).toContain("Enum.FontStyle.Italic");
+});
+
+test("rejects leading utilities on non-text hosts", () => {
+	const source = '<frame className="leading-tight" />';
+	const result = getDiagnostics({ source });
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-host-utility" }),
+	]);
+});
+
+test("completes grid, basis, and translate utilities", () => {
+	const source = '<frame className="" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="'),
+	});
+
+	const labels = result.items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining([
+			"grid",
+			"grid-cols-3",
+			"grid-rows-2",
+			"basis-1/2",
+			"translate-x-4",
+			"-translate-x-1/2",
+		]),
+	);
+});
+
+test("hovers grid and translate utilities with their Roblox targets", () => {
+	const source =
+		'<frame className="grid-cols-3 -translate-x-1/2 translate-y-4 basis-1/3" />';
+
+	const grid = getHover({
+		source,
+		position: positionAfter(source, "grid-cols-"),
+	});
+	expect(grid.contents?.documentation).toContain("FillDirectionMaxCells = 3");
+
+	const anchor = getHover({
+		source,
+		position: positionAfter(source, "-translate-x-1"),
+	});
+	expect(anchor.contents?.documentation).toContain("AnchorPoint");
+
+	const shift = getHover({
+		source,
+		position: positionAfter(source, "translate-y-"),
+	});
+	expect(shift.contents?.documentation).toContain("16");
+
+	const basis = getHover({
+		source,
+		position: positionAfter(source, "basis-1/"),
+	});
+	expect(basis.contents?.display).toContain("Size.X");
+});
+
+test("documents runtime variant conditions in completions and hovers", () => {
+	const source = '<frame className="m" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="m'),
+	});
+
+	const md = result.items.find(
+		(item: { label: string }) => item.label === "md:",
+	);
+	expect(md?.documentation).toContain("at least 768px wide");
+	const mouse = result.items.find(
+		(item: { label: string }) => item.label === "mouse:",
+	);
+	expect(mouse?.documentation).toContain("mouse or keyboard");
+
+	const hoverSource = '<frame className="md:bg-blue-600" />';
+	const hover = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "md:bg-blue-600") - 1,
+	});
+	expect(hover.contents?.documentation).toContain(
+		"Runtime variant `md`; applies when the viewport is at least 768px wide.",
+	);
+});
+
+test("hovers unknown variants without claiming they run", () => {
+	const source = '<frame className="hover:px-4" />';
+	const hover = getHover({
+		source,
+		position: positionAfter(source, "hover:px-4") - 1,
+	});
+
+	expect(hover.contents?.documentation).toContain("Unknown variant `hover`");
+	expect(hover.contents?.documentation).toContain("never applies at runtime");
+	expect(hover.contents?.documentation).not.toContain("Runtime variant");
+});
+
+test("returns document colors for shadow and gradient color stops", () => {
+	const result = getDocumentColors({
+		source:
+			'<frame className="shadow-slate-700 from-blue-600 via-rose-500 to-slate-500 shadow-md" />',
+	});
+
+	expect(result.colors.map((color) => color.token)).toEqual([
+		"shadow-slate-700",
+		"from-blue-600",
+		"via-rose-500",
+		"to-slate-500",
+	]);
+});
+
+test("completes Phase 1 utilities with host awareness", () => {
+	const imageSource = '<imagelabel className="" />';
+	const imageResult = getCompletions({
+		source: imageSource,
+		position: positionAfter(imageSource, 'className="'),
+	});
+	const imageLabels = imageResult.items.map(
+		(item: { label: string }) => item.label,
+	);
+	expect(imageLabels).toEqual(
+		expect.arrayContaining(["object-cover", "object-tile"]),
+	);
+
+	const frameSource = '<frame className="" />';
+	const frameResult = getCompletions({
+		source: frameSource,
+		position: positionAfter(frameSource, 'className="'),
+	});
+	const frameLabels = frameResult.items.map(
+		(item: { label: string }) => item.label,
+	);
+	expect(frameLabels).toEqual(
+		expect.arrayContaining([
+			"pointer-events-none",
+			"space-x-4",
+			"space-y-2",
+			"ring",
+			"ring-rose-500",
+			"outline-4",
+			"mx-auto",
+			"my-auto",
+		]),
+	);
+	expect(frameLabels).not.toContain("object-cover");
+	expect(frameLabels).not.toContain("overscroll-none");
+	expect(frameLabels).not.toContain("whitespace-nowrap");
+
+	const scrollSource = '<scrollingframe className="" />';
+	const scrollResult = getCompletions({
+		source: scrollSource,
+		position: positionAfter(scrollSource, 'className="'),
+	});
+	const scrollLabels = scrollResult.items.map(
+		(item: { label: string }) => item.label,
+	);
+	expect(scrollLabels).toEqual(expect.arrayContaining(["overscroll-none"]));
+});
+
+test("hovers Phase 1 utilities with their Roblox targets", () => {
+	const source =
+		'<scrollingframe className="pointer-events-none space-x-4 overscroll-contain ring-2 mx-auto" />';
+
+	const pointer = getHover({
+		source,
+		position: positionAfter(source, "pointer-events-n"),
+	});
+	expect(pointer.contents?.documentation).toContain("Interactable");
+
+	const space = getHover({
+		source,
+		position: positionAfter(source, "space-x-"),
+	});
+	expect(space.contents?.documentation).toContain("UIListLayout.Padding");
+
+	const overscroll = getHover({
+		source,
+		position: positionAfter(source, "overscroll-c"),
+	});
+	expect(overscroll.contents?.documentation).toContain(
+		"Enum.ElasticBehavior.WhenScrollable",
+	);
+
+	const ring = getHover({
+		source,
+		position: positionAfter(source, "ring-2") - 1,
+	});
+	expect(ring.contents?.documentation).toContain("UIStroke.Thickness");
+
+	const center = getHover({
+		source,
+		position: positionAfter(source, "mx-aut"),
+	});
+	expect(center.contents?.documentation).toContain("AnchorPoint.X = 0.5");
+});
+
+test("completes and hovers transition utilities", () => {
+	const source = '<frame className="" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="'),
+	});
+	const labels = result.items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining([
+			"transition",
+			"transition-none",
+			"duration-300",
+			"delay-150",
+			"ease-out",
+		]),
+	);
+
+	const hoverSource =
+		'<frame className="md:bg-blue-600 transition duration-300 ease-in-out" />';
+	const transitionHover = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "transition d") - 2,
+	});
+	expect(transitionHover.contents?.documentation).toContain("TweenService");
+
+	const durationHover = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "duration-3"),
+	});
+	expect(durationHover.contents?.documentation).toContain("0.3s");
+
+	const easeHover = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "ease-in-o"),
+	});
+	expect(easeHover.contents?.documentation).toContain(
+		"Enum.EasingDirection.InOut",
+	);
+});
+
+test("completes and hovers animate presets", () => {
+	const source = '<frame className="" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="'),
+	});
+	const labels = result.items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining([
+			"animate-spin",
+			"animate-pulse",
+			"animate-bounce",
+			"animate-none",
+		]),
+	);
+
+	const hoverSource = '<frame className="animate-spin" />';
+	const hover = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "animate-sp"),
+	});
+	expect(hover.contents?.display).toContain("TweenService loop");
+	expect(hover.contents?.documentation).toContain("Rotation");
+});
+
+test("completes and hovers text pipeline utilities on text hosts", () => {
+	const source = '<textlabel className="" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="'),
+	});
+	const labels = result.items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining([
+			"uppercase",
+			"lowercase",
+			"capitalize",
+			"normal-case",
+			"underline",
+			"line-through",
+			"no-underline",
+		]),
+	);
+
+	const frameSource = '<frame className="" />';
+	const frameResult = getCompletions({
+		source: frameSource,
+		position: positionAfter(frameSource, 'className="'),
+	});
+	const frameLabels = frameResult.items.map(
+		(item: { label: string }) => item.label,
+	);
+	expect(frameLabels).not.toContain("uppercase");
+	expect(frameLabels).not.toContain("underline");
+
+	const hoverSource = '<textlabel className="uppercase underline" />';
+	const upper = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "upperc"),
+	});
+	expect(upper.contents?.documentation).toContain("Uppercases");
+
+	const underline = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "underli"),
+	});
+	expect(underline.contents?.documentation).toContain("<u>");
 });
