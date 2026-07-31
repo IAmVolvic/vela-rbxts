@@ -412,6 +412,12 @@ pnpm clean
 
 Release notes are kept in [CHANGELOG.md](./CHANGELOG.md).
 
+## Contributing
+
+Setup, test, and pull request expectations are in [CONTRIBUTING.md](./CONTRIBUTING.md).
+Participation is governed by the [Code of Conduct](./CODE_OF_CONDUCT.md).
+Security issues should be reported privately as described in [SECURITY.md](./SECURITY.md).
+
 ## License
 
 MIT. See [LICENSE](./LICENSE).

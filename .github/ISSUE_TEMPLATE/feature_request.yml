@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose a utility family, variant, or editor capability.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The supported surface is intentionally narrow and targets Roblox UI
+        rather than full Tailwind parity. Check the "Supported Surface" and
+        "Not Implemented" sections of the README and `docs/utilities-roadmap.md`
+        before filing.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Utility family
+        - Variant
+        - Diagnostic
+        - Editor capability
+        - Config option
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should be supported, and what should it lower to?
+      placeholder: |
+        Class: shadow-md
+        Roblox mapping: UIStroke / ImageLabel with a 9-slice shadow asset
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What are you building, and what do you do today without this?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing utilities, inline props, or runtime workarounds you tried.

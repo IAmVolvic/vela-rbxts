@@ -1,0 +1,75 @@
+name: Bug report
+description: Something compiles, lowers, or reports diagnostics incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. For security issues, use
+        [private reporting](https://github.com/astra-void/vela-rbxts/security/advisories/new)
+        instead of this form.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project is affected?
+      options:
+        - Compiler / transformer lowering
+        - Diagnostics
+        - Language server (completions, hover, colors, quickfixes)
+        - VS Code extension
+        - Config (vela.config.ts)
+        - Packaging / install
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: vela-rbxts version
+      placeholder: "0.4.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you observe, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: |
+        The class string and the TSX element are usually enough. Include the
+        relevant part of `vela.config.ts` if you changed the theme.
+      render: tsx
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Emitted Luau or diagnostic output
+      description: Paste the emitted output or the diagnostic text, if relevant.
+      render: shell
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        OS and architecture, Node.js version, roblox-ts version, and the editor
+        you are using if the issue is editor-side.
+      placeholder: |
+        OS: macOS 15 (arm64)
+        Node: 24.12.0
+        roblox-ts: 3.0.0
+        Editor: VS Code 1.100
+    validations:
+      required: true
