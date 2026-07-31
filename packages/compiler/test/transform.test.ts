@@ -1893,9 +1893,9 @@ test("warns about className on unsupported host elements", () => {
 
 test("anchors diagnostics to the offending className token", () => {
 	const source = [
-		`// a comment that mentions m-4 first`,
-		`const unrelated = "m-4 in a string";`,
-		`export const A = () => <frame className="bg-slate-700 m-4" />;`,
+		`// a comment that mentions tracking-wide first`,
+		`const unrelated = "tracking-wide in a string";`,
+		`export const A = () => <frame className="bg-slate-700 tracking-wide" />;`,
 	].join("\n");
 	const result = transform(source, null);
 	const [diagnostic] = result.diagnostics;
@@ -1903,7 +1903,7 @@ test("anchors diagnostics to the offending className token", () => {
 	expect(diagnostic.code).toBe("no-roblox-equivalent");
 	expect(diagnostic.range).toBeDefined();
 	const { start, end } = diagnostic.range as { start: number; end: number };
-	expect(source.slice(start, end)).toBe("m-4");
+	expect(source.slice(start, end)).toBe("tracking-wide");
 	expect(start).toBeGreaterThan(source.indexOf("className"));
 });
 
@@ -2324,11 +2324,11 @@ test("centers elements with mx-auto and my-auto", () => {
 	expect(horizontal.code).toMatch(/AnchorPoint=\{new Vector2\(0\.5, 0\)\}/);
 	expect(horizontal.code).toMatch(/Position=\{UDim2\.fromScale\(0\.5, 0\)\}/);
 
-	const margins = transform(
-		`export const C = () => <frame className="mx-4" />;`,
+	const logical = transform(
+		`export const C = () => <frame className="ms-4" />;`,
 		null,
 	);
-	expect(margins.diagnostics).toEqual([
+	expect(logical.diagnostics).toEqual([
 		expect.objectContaining({ code: "no-roblox-equivalent" }),
 	]);
 });
@@ -2559,4 +2559,138 @@ test("normal-case and no-underline cancel earlier text utilities", () => {
 	expect(result.needsRuntimeHost).toBe(false);
 	expect(result.code).toContain('Text="hi"');
 	expect(result.code).not.toContain("__velaText");
+});
+
+test("promotes margined elements to the runtime host with a margin spec", () => {
+	const result = transform(
+		`export const A = () => <frame className="m-4 w-40 h-20 bg-slate-700" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__velaMargin={");
+	expect(result.code).toMatch(/"top": 16\.0/);
+	expect(result.code).toMatch(/"left": 16\.0/);
+	expect(result.code).toContain("prepareMarginWrapper");
+	expect(result.code).toContain("renderMarginWrapper");
+});
+
+test("merges per-side margins with last-wins semantics", () => {
+	const result = transform(
+		`export const A = () => <frame className="mx-2 mt-4 mx-6" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/"top": 16\.0/);
+	expect(result.code).toMatch(/"left": 24\.0/);
+	expect(result.code).toMatch(/"right": 24\.0/);
+	expect(result.code).toMatch(/"bottom": 0\.0/);
+});
+
+test("negative top and left margins shift Position instead of wrapping", () => {
+	const result = transform(
+		`export const A = () => <frame className="-mt-2 -ml-4" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).toMatch(/Position=\{UDim2\.fromOffset\(-16, -8\)\}/);
+	expect(result.code).not.toContain("__velaMargin");
+});
+
+test("rejects inexpressible negative margins and margin auto", () => {
+	const negative = transform(
+		`export const A = () => <frame className="-mb-2 -m-4" />;`,
+		null,
+	);
+	expect(negative.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-negative-margin",
+			token: "-mb-2",
+		}),
+		expect.objectContaining({
+			code: "unsupported-negative-margin",
+			token: "-m-4",
+		}),
+	]);
+
+	const auto = transform(
+		`export const B = () => <frame className="m-auto" />;`,
+		null,
+	);
+	expect(auto.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-margin-value" }),
+	]);
+});
+
+test("keeps margins working on component elements", () => {
+	const result = transform(
+		`export const A = () => <Box className="m-4" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__velaMargin={");
+	expect(result.code).toContain("__velaTag={Box}");
+});
+
+test("promotes divided containers to the runtime host with a divide spec", () => {
+	const result = transform(
+		`export const A = () => (
+			<frame className="flex-col divide-y-2 divide-slate-500">
+				<frame />
+				<frame />
+			</frame>
+		);`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__velaDivide={");
+	expect(result.code).toMatch(/"axis": "y"/);
+	expect(result.code).toMatch(/"thickness": 2\.0/);
+	expect(result.code).toMatch(/"color": "Color3\.fromRGB\(/);
+	expect(result.code).toContain("interleaveDivideSeparators");
+});
+
+test("bare divide-x defaults to a one pixel separator", () => {
+	const result = transform(
+		`export const A = () => <frame className="divide-x" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/"axis": "x"/);
+	expect(result.code).toMatch(/"thickness": 1\.0/);
+	expect(result.code).not.toMatch(/"color":/);
+});
+
+test("divide color without an axis paints nothing", () => {
+	const result = transform(
+		`export const A = () => <frame className="divide-rose-500" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).not.toContain("__velaDivide");
+});
+
+test("rejects unsupported divide thickness values", () => {
+	const result = transform(
+		`export const A = () => <frame className="divide-x-3" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-divide-value",
+			token: "divide-x-3",
+		}),
+	]);
 });

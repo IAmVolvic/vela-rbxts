@@ -1203,3 +1203,55 @@ test("completes and hovers text pipeline utilities on text hosts", () => {
 	});
 	expect(underline.contents?.documentation).toContain("<u>");
 });
+
+test("completes and hovers margin utilities", () => {
+	const source = '<frame className="" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="'),
+	});
+	const labels = result.items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining(["m-4", "mx-2", "mt-4", "-mt-2", "-ml-4"]),
+	);
+	expect(labels).not.toContain("-mb-2");
+
+	const hoverSource = '<frame className="m-4 -ml-2" />';
+	const margin = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "m-"),
+	});
+	expect(margin.contents?.documentation).toContain("margin box");
+
+	const negative = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "-ml-"),
+	});
+	expect(negative.contents?.documentation).toContain("Shifts `Position`");
+});
+
+test("completes and hovers divide utilities", () => {
+	const source = '<frame className="" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, 'className="'),
+	});
+	const labels = result.items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining(["divide-x", "divide-y-2", "divide-slate-500"]),
+	);
+
+	const hoverSource = '<frame className="divide-y-2 divide-slate-500" />';
+	const axis = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "divide-y"),
+	});
+	expect(axis.contents?.documentation).toContain("separator frame");
+	expect(axis.contents?.documentation).toContain("LayoutOrder");
+
+	const color = getHover({
+		source: hoverSource,
+		position: positionAfter(hoverSource, "divide-slate-5"),
+	});
+	expect(color.contents?.documentation).toContain("Color3.fromRGB");
+});
