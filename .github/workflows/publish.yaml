@@ -169,6 +169,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `pnpm test` builds every package, including the wasm compiler.
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
       - name: Release plan
         run: pnpm release:plan --tag "${{ needs.release-metadata.outputs.npm_tag }}" --release-tag "${{ needs.release-metadata.outputs.release_tag }}"
 
@@ -325,6 +336,18 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # `release:pack` builds the workspace npm packages itself, and the wasm
+      # compiler is one of them.
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
 
       - name: Download native artifacts
         uses: actions/download-artifact@v4
