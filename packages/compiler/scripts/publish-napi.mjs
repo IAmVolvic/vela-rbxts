@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,7 +49,6 @@ async function prepareStage() {
 	await rm(STAGE_ROOT, { force: true, recursive: true });
 	await mkdir(STAGE_ROOT, { recursive: true });
 	await copyRootPublishFiles();
-	await copyNativeBinaries();
 
 	runNapi(["create-npm-dirs", "--npm-dir", "./npm"], { cwd: STAGE_ROOT });
 	await copyTargetBinariesToNpmDirs();
@@ -162,24 +161,6 @@ function getRootPublishFiles() {
 	files.add(packageJson.types);
 
 	return [...files].filter(Boolean).sort();
-}
-
-async function copyNativeBinaries() {
-	const nodeEntries = (await readdir(PACKAGE_DIR)).filter((entry) =>
-		entry.endsWith(".node"),
-	);
-
-	if (nodeEntries.length === 0) {
-		throw new Error(
-			"Missing compiled native binaries in packages/compiler. Run build:native before publishing.",
-		);
-	}
-
-	await Promise.all(
-		nodeEntries.map(async (entry) => {
-			await cp(join(PACKAGE_DIR, entry), join(STAGE_ROOT, entry));
-		}),
-	);
 }
 
 async function copyTargetBinariesToNpmDirs() {
