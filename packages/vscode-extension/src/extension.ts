@@ -490,7 +490,6 @@ async function pushProjectConfigs(): Promise<void> {
 
 function log(message: string): void {
 	const timestamp = new Date().toISOString();
-	console.log(`[${OUTPUT_CHANNEL_NAME}] ${message}`);
 	outputChannel?.appendLine(`[${timestamp}] ${message}`);
 }
 

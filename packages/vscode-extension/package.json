@@ -1,6 +1,7 @@
 {
 	"name": "vela-rbxts-lsp",
 	"version": "0.4.0",
+	"private": true,
 	"type": "commonjs",
 	"displayName": "Vela LSP",
 	"description": "VS Code extension that launches the standalone Vela RBXTS Rust LSP.",
@@ -27,6 +28,11 @@
 		"url": "https://github.com/astra-void/vela-rbxts/issues"
 	},
 	"publisher": "astra-void",
+	"categories": [
+		"Programming Languages",
+		"Linters"
+	],
+	"icon": "icon.png",
 	"main": "./dist/extension.js",
 	"engines": {
 		"vscode": "^1.90.0"
