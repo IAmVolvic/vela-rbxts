@@ -16,13 +16,8 @@ const extensionDir = path.resolve(__dirname, "..");
 const distDir = path.join(extensionDir, "dist");
 const stageDir = path.join(extensionDir, ".vsix-stage");
 const extensionPackageJsonPath = path.join(extensionDir, "package.json");
-const vsceBinaryPath = path.join(
-	extensionDir,
-	"node_modules",
-	".bin",
-	process.platform === "win32" ? "vsce.cmd" : "vsce",
-);
 const repoRoot = path.resolve(extensionDir, "..", "..");
+const vsceBinaryPath = resolveVsceBinary();
 const lspPublishDir = path.join(repoRoot, "packages", "lsp", ".npm", "publish");
 const lspPublishPackageJsonPath = path.join(lspPublishDir, "package.json");
 const sourceWrapperPath = path.join(
@@ -93,6 +88,25 @@ function assertDirEntries(targetPath, requiredEntries, context) {
 	}
 }
 
+// `nodeLinker: hoisted` puts workspace binaries in the repo root's .bin instead
+// of beside the package, so both layouts have to be searched.
+function resolveVsceBinary() {
+	const binaryName = process.platform === "win32" ? "vsce.cmd" : "vsce";
+	const candidates = [
+		path.join(extensionDir, "node_modules", ".bin", binaryName),
+		path.join(repoRoot, "node_modules", ".bin", binaryName),
+	];
+	const found = candidates.find((candidate) => fs.existsSync(candidate));
+
+	if (!found) {
+		throw new Error(
+			`Could not find the vsce binary. Looked in:\n  ${candidates.join("\n  ")}`,
+		);
+	}
+
+	return found;
+}
+
 function run(command, args, cwd) {
 	const result = spawnSync(command, args, {
 		cwd,
@@ -100,6 +114,12 @@ function run(command, args, cwd) {
 		env: process.env,
 		shell: process.platform === "win32",
 	});
+
+	// Without this an unspawnable command exits 1 with no output at all, because
+	// stdio is inherited and nothing ever ran to write to it.
+	if (result.error) {
+		throw new Error(`Could not run ${command}: ${result.error.message}`);
+	}
 
 	if (result.status !== 0) {
 		throw new Error(
@@ -114,6 +134,20 @@ function copyRequiredFiles() {
 		if (fs.existsSync(sourcePath)) {
 			fs.cpSync(sourcePath, path.join(stageDir, fileName));
 		}
+	}
+
+	// Taken from the manifest rather than the list above: vsce hard-fails when
+	// `icon` names a file the stage does not contain, so a declared icon has to
+	// be copied, and a missing one is worth reporting here rather than as vsce's
+	// "wasn't found in the extension".
+	const { icon } = JSON.parse(fs.readFileSync(extensionPackageJsonPath, "utf8"));
+	if (icon) {
+		const iconSource = path.join(extensionDir, icon);
+		if (!fs.existsSync(iconSource)) {
+			throw new Error(`Manifest declares icon "${icon}" but ${iconSource} does not exist.`);
+		}
+		fs.mkdirSync(path.dirname(path.join(stageDir, icon)), { recursive: true });
+		fs.cpSync(iconSource, path.join(stageDir, icon));
 	}
 
 	fs.cpSync(path.join(extensionDir, "dist"), path.join(stageDir, "dist"), {
