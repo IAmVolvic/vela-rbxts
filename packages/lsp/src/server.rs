@@ -974,7 +974,10 @@ mod tests {
 
         let suggestions =
             replacement_suggestions(Some("unknown-theme-key"), "md:rounded-mdd", &labels, 3);
-        assert_eq!(suggestions.first().map(String::as_str), Some("md:rounded-md"));
+        assert_eq!(
+            suggestions.first().map(String::as_str),
+            Some("md:rounded-md")
+        );
         assert!(suggestions.iter().all(|s| s.starts_with("md:")));
     }
 
