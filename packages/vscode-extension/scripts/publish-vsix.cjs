@@ -1,16 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { resolveVsceBinary } = require("./vsce-binary.cjs");
 
 const extensionDir = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(extensionDir, "..", "..");
 const defaultVsixDir = path.join(repoRoot, "artifacts", "vsix");
-const vsceBinaryPath = path.join(
-	extensionDir,
-	"node_modules",
-	".bin",
-	process.platform === "win32" ? "vsce.cmd" : "vsce",
-);
 
 function parseArgs(rawArgs) {
 	let dryRun = false;
@@ -102,17 +97,16 @@ function main() {
 		throw new Error(`No VSIX files found in ${artifactDir}.`);
 	}
 
+	// Resolved before the dry-run branch so a dry run actually exercises it: a
+	// missing binary is exactly the kind of environment fault the dry run exists
+	// to surface before the real publish.
+	const vsceBinaryPath = resolveVsceBinary();
+
 	if (dryRun) {
 		for (const vsix of vsixFiles) {
 			console.log(`[dry-run] would publish ${vsix}`);
 		}
 		return;
-	}
-
-	if (!fs.existsSync(vsceBinaryPath)) {
-		throw new Error(
-			`Could not find vsce binary at ${vsceBinaryPath}. Run pnpm install first.`,
-		);
 	}
 
 	for (const vsix of vsixFiles) {

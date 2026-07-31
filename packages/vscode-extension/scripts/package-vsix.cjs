@@ -11,6 +11,7 @@ const {
 	resolveMarketplaceVsixVersion,
 	STRICT_VSIX_VERSION_RE,
 } = require("../../../scripts/release/utils/vsix-version.cjs");
+const { resolveVsceBinary } = require("./vsce-binary.cjs");
 
 const extensionDir = path.resolve(__dirname, "..");
 const distDir = path.join(extensionDir, "dist");
@@ -86,25 +87,6 @@ function assertDirEntries(targetPath, requiredEntries, context) {
 			throw new Error(`Missing ${context} entry "${required}" in ${targetPath}.`);
 		}
 	}
-}
-
-// `nodeLinker: hoisted` puts workspace binaries in the repo root's .bin instead
-// of beside the package, so both layouts have to be searched.
-function resolveVsceBinary() {
-	const binaryName = process.platform === "win32" ? "vsce.cmd" : "vsce";
-	const candidates = [
-		path.join(extensionDir, "node_modules", ".bin", binaryName),
-		path.join(repoRoot, "node_modules", ".bin", binaryName),
-	];
-	const found = candidates.find((candidate) => fs.existsSync(candidate));
-
-	if (!found) {
-		throw new Error(
-			`Could not find the vsce binary. Looked in:\n  ${candidates.join("\n  ")}`,
-		);
-	}
-
-	return found;
 }
 
 function run(command, args, cwd) {
