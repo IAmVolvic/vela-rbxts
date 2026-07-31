@@ -5,19 +5,40 @@ pub(crate) mod module;
 pub(crate) mod runtime;
 pub(crate) mod runtime_host;
 
-use crate::api::{Diagnostic, TransformOptions, TransformResult};
-use crate::config::resolve::parse_config;
+use crate::api::{Diagnostic, EditorRange, TransformOptions, TransformResult};
+use crate::config::resolve::parse_config_with_diagnostic;
 use crate::transform::context::VelaTransformer;
 use swc_core::{
-    common::{FileName, SourceMap, sync::Lrc},
+    common::{BytePos, FileName, SourceMap, Spanned, sync::Lrc},
     ecma::{
-        parser::{Syntax, TsSyntax, parse_file_as_module},
+        parser::{Syntax, TsSyntax, error::Error as ParseError, parse_file_as_module},
         visit::VisitMutWith,
     },
 };
 
+fn parse_error_diagnostic(cm: &SourceMap, file_start: BytePos, error: &ParseError) -> Diagnostic {
+    let span = error.span();
+    let location = cm.lookup_char_pos(span.lo());
+
+    Diagnostic {
+        level: "error".to_owned(),
+        code: "tsx-parse-failed".to_owned(),
+        message: format!(
+            "Failed to parse TSX input at line {}, column {}: {}",
+            location.line,
+            location.col_display + 1,
+            error.kind().msg()
+        ),
+        token: None,
+        range: Some(EditorRange {
+            start: span.lo().0.saturating_sub(file_start.0),
+            end: span.hi().0.saturating_sub(file_start.0),
+        }),
+    }
+}
+
 pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) -> TransformResult {
-    let config = parse_config(
+    let (config, config_diagnostic) = parse_config_with_diagnostic(
         options
             .as_ref()
             .and_then(|value| value.config_json.as_deref()),
@@ -37,18 +58,15 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
         &mut recovered_errors,
     );
 
+    let mut diagnostics: Vec<Diagnostic> = config_diagnostic.into_iter().collect();
+
     let mut module = match parsed_module {
         Ok(module) => module,
         Err(error) => {
+            diagnostics.push(parse_error_diagnostic(&cm, fm.start_pos, &error));
             return TransformResult {
                 code: source,
-                diagnostics: vec![Diagnostic {
-                    level: "error".to_owned(),
-                    code: "tsx-parse-failed".to_owned(),
-                    message: format!("Failed to parse TSX input: {error:?}"),
-                    token: None,
-                    range: None,
-                }],
+                diagnostics,
                 changed: false,
                 ir: Vec::new(),
                 needs_runtime_host: false,
@@ -57,15 +75,14 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
     };
 
     if !recovered_errors.is_empty() {
+        diagnostics.extend(
+            recovered_errors
+                .iter()
+                .map(|error| parse_error_diagnostic(&cm, fm.start_pos, error)),
+        );
         return TransformResult {
             code: source,
-            diagnostics: vec![Diagnostic {
-                level: "error".to_owned(),
-                code: "tsx-parse-failed".to_owned(),
-                message: format!("Recovered parse errors in TSX input: {recovered_errors:?}"),
-                token: None,
-                range: None,
-            }],
+            diagnostics,
             changed: false,
             ir: Vec::new(),
             needs_runtime_host: false,
@@ -75,7 +92,7 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
     let mut transformer = VelaTransformer {
         changed: false,
         config,
-        diagnostics: Vec::new(),
+        diagnostics,
         ir: Vec::new(),
         runtime_host_needed: false,
         class_value_scopes: crate::class_value::scope::ClassValueScopeStack::default(),
@@ -103,5 +120,47 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
             .map(|style| serde_json::to_string(&style).expect("style IR must serialize to JSON"))
             .collect(),
         needs_runtime_host: transformer.runtime_host_needed,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transform_impl;
+    use crate::api::TransformOptions;
+
+    #[test]
+    fn invalid_config_json_reports_a_diagnostic_and_uses_defaults() {
+        let source = "const ui = <frame className=\"bg-slate-500\" />;".to_owned();
+        let result = transform_impl(
+            source,
+            Some(TransformOptions {
+                config_json: Some("{ not json".to_owned()),
+            }),
+        );
+
+        let diagnostic = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == "invalid-config-json")
+            .expect("malformed configJson must be reported");
+        assert_eq!(diagnostic.level, "error");
+        assert!(result.changed, "compilation still proceeds with defaults");
+    }
+
+    #[test]
+    fn parse_failure_reports_line_and_column() {
+        let result = transform_impl("const broken = <frame\n  className=;".to_owned(), None);
+
+        let diagnostic = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == "tsx-parse-failed")
+            .expect("broken TSX must be reported");
+        assert!(
+            diagnostic.message.contains("line 2"),
+            "message should locate the error: {}",
+            diagnostic.message
+        );
+        assert!(diagnostic.range.is_some(), "range should anchor the error");
     }
 }
