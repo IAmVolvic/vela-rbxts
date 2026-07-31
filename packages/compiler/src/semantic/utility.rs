@@ -293,8 +293,6 @@ pub(crate) const DIVIDE_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
     color_prop: "BackgroundColor3",
     transparency_prop: None,
 };
-/// Tailwind's default divide color (gray-200).
-pub(crate) const DEFAULT_DIVIDE_COLOR: &str = "Color3.fromRGB(229, 231, 235)";
 pub(crate) const ANCHOR_ORIGIN_VALUES: [&str; 9] = [
     "top-left",
     "top",
