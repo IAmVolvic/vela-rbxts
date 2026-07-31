@@ -63,6 +63,14 @@ If LSP artifacts fail:
 1. Re-run `pnpm release:build` and confirm each target binary exists under `artifacts/lsp/<target>/`.
 2. Verify Rust target toolchain installation for the failed target.
 
+If `@vela-rbxts/compiler-wasm` fails:
+
+1. Install [`wasm-pack`](https://drager.github.io/wasm-pack/installer/) (`cargo install wasm-pack`) and the
+   `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`). The build script checks both
+   and names whichever is missing.
+2. Re-run `pnpm --filter @vela-rbxts/compiler-wasm run build` and confirm `packages/compiler-wasm/dist` holds
+   `vela_compiler.js`, its `.d.ts`, and `vela_compiler_bg.wasm`.
+
 ## VSIX Dependency On LSP
 
 `pnpm release:vsix` requires already built LSP artifacts in `artifacts/lsp`.

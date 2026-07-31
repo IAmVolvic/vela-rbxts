@@ -140,6 +140,9 @@ async function main() {
 			"@vela-rbxts/ir",
 			"@vela-rbxts/core",
 			"@vela-rbxts/rbxtsc-host",
+			// Wasm build of the compiler crate, so a missing wasm toolchain
+			// fails here beside the native targets rather than at pack time.
+			"@vela-rbxts/compiler-wasm",
 			"vela-rbxts",
 			"vela-rbxts-lsp",
 		];
