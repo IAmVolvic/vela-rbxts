@@ -166,7 +166,7 @@ Text prop을 호스트에서 가공해야 하는 것들. 런타임 호스트에 
   내고 변환을 건너뛴다.
 - `overline`은 RichText 태그가 없음 → 미지원 유지.
 
-## Phase 4 — 구조 변형 (등급 C, 별도 결정 필요)
+## Phase 4 — 구조 변형 (등급 C) — **구현 완료** (4.1 margin, 4.2 divide), 리뷰: `phase4-structural-review.md`
 
 ### `m-*` (마진) — 래퍼 프레임 방식
 
