@@ -163,4 +163,40 @@ mod tests {
         );
         assert!(diagnostic.range.is_some(), "range should anchor the error");
     }
+
+    fn element_ir(class_name: &str) -> String {
+        let result = transform_impl(
+            format!("const ui = <frame className=\"{class_name}\" />;"),
+            None,
+        );
+        result
+            .ir
+            .into_iter()
+            .next()
+            .expect("the element must produce a style IR")
+    }
+
+    #[test]
+    fn a_variant_color_clears_the_base_opacity_modifier() {
+        let ir = element_ir("bg-blue-600/50 hover:bg-blue-600");
+        let rules = ir
+            .split_once("\"runtimeRules\"")
+            .expect("the hover variant must survive as a runtime rule")
+            .1;
+
+        assert!(
+            rules.contains("BackgroundTransparency"),
+            "the variant must state the opaque value to override the base /50: {ir}"
+        );
+    }
+
+    #[test]
+    fn a_variant_color_leaves_opacity_alone_when_the_base_never_set_it() {
+        let ir = element_ir("bg-blue-600 hover:bg-rose-500");
+
+        assert!(
+            !ir.contains("BackgroundTransparency"),
+            "nothing set a transparency, so none should be emitted: {ir}"
+        );
+    }
 }

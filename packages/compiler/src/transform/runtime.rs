@@ -22,17 +22,18 @@ use crate::diagnostics::compiler::{
     unsupported_z_index_auto_diagnostic, unsupported_z_index_value_diagnostic,
 };
 use crate::ir::model::{
-    DivideSpec, MarginSpec, RuntimeRule, SizeAxisValue, StyleIr, TextSpec, TransitionSpec,
+    DivideSpec, MarginSpec, PropEntry, RuntimeRule, SizeAxisValue, StyleIr, TextSpec,
+    TransitionSpec,
 };
 use crate::semantic::{
     analyze::analyze_class_token,
     result::{AnalyzedClassToken, SemanticIssue},
     utility::{
-        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, DEFAULT_TRANSITION_TIME,
-        DIVIDE_COLOR_FAMILY, GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, OUTLINE_COLOR_FAMILY,
-        PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY, RING_THICKNESS_VALUES,
-        SHADOW_COLOR_FAMILY, ShadowPreset, StrokePayload, TEXT_COLOR_FAMILY, UtilityKind,
-        classify_stroke_payload, end_relative_position_axis, font_face_expression,
+        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorFamilySpec, ColorResolution,
+        DEFAULT_TRANSITION_TIME, DIVIDE_COLOR_FAMILY, GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY,
+        OUTLINE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY,
+        RING_THICKNESS_VALUES, SHADOW_COLOR_FAMILY, ShadowPreset, StrokePayload, TEXT_COLOR_FAMILY,
+        UtilityKind, classify_stroke_payload, end_relative_position_axis, font_face_expression,
         is_automatic_size_key, is_known_unsupported_border_payload,
         resolve_align_content_flex_value, resolve_align_items_value, resolve_align_self_value,
         resolve_anchor_point_value, resolve_animation_value, resolve_aspect_ratio_value,
@@ -88,7 +89,51 @@ where
     }
 
     pending.flush(&mut style);
+    reset_variant_color_opacity(&mut style);
     style
+}
+
+const COLOR_OPACITY_FAMILIES: [ColorFamilySpec; 3] = [
+    BACKGROUND_COLOR_FAMILY,
+    TEXT_COLOR_FAMILY,
+    IMAGE_COLOR_FAMILY,
+];
+
+/// A variant bundle overlays the base at runtime, so dropping the transparency
+/// prop from the variant's own bundle — all a bare `hover:bg-blue-600` can do
+/// while it is resolved in isolation — leaves the base `/50` standing. The
+/// variant has to state the opaque value for the override to reach it.
+fn reset_variant_color_opacity(style: &mut StyleIr) {
+    for spec in COLOR_OPACITY_FAMILIES {
+        let Some(transparency_prop) = spec.transparency_prop else {
+            continue;
+        };
+
+        let sets_transparency =
+            |props: &[PropEntry]| props.iter().any(|prop| prop.name == transparency_prop);
+        let anything_sets_transparency = sets_transparency(&style.base.props)
+            || style
+                .runtime_rules
+                .iter()
+                .any(|rule| sets_transparency(&rule.effects.props));
+        if !anything_sets_transparency {
+            continue;
+        }
+
+        for rule in &mut style.runtime_rules {
+            let sets_color = rule
+                .effects
+                .props
+                .iter()
+                .any(|prop| prop.name == spec.color_prop);
+            if sets_color && !sets_transparency(&rule.effects.props) {
+                rule.effects.props.push(PropEntry {
+                    name: transparency_prop,
+                    value: "0".to_owned(),
+                });
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1272,7 +1317,7 @@ fn apply_color_utility(
     style: &mut StyleIr,
     config: &TailwindConfig,
     diagnostics: &mut Vec<Diagnostic>,
-    spec: crate::semantic::utility::ColorFamilySpec,
+    spec: ColorFamilySpec,
     color_key: &str,
     token: &str,
 ) {
