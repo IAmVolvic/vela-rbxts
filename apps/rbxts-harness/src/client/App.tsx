@@ -46,6 +46,42 @@ export const App = () => {
 					BackgroundTransparency={1}
 					className={{ "px-4": roomy, "px-2": !roomy }}
 				/>
+				<frame BackgroundTransparency={1} className="rounded" />
+				<frame
+					BackgroundTransparency={1}
+					className="m-4 hover:px-4 bg-[#ff0000] bg-blue-600/50 blorb-2"
+				/>
+				<frame
+					BackgroundTransparency={1}
+					className="right-4 bottom-2 order-2 self-center content-between"
+				/>
+				<frame BackgroundTransparency={1} className="grid grid-cols-3 gap-2" />
+				<frame
+					BackgroundTransparency={1}
+					className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 basis-1/2"
+				/>
+				<frame
+					BackgroundTransparency={1}
+					className="mx-auto pointer-events-none space-y-2 ring-2 ring-rose-500"
+				/>
+				<imagelabel BackgroundTransparency={1} className="object-cover" />
+				<frame className="bg-slate-700 md:bg-blue-600 transition duration-300 ease-out" />
+				<frame className="bg-blue-600 animate-spin" />
+				<textlabel
+					BackgroundTransparency={1}
+					Text="static & <styled>"
+					className="uppercase underline"
+				/>
+				<textlabel
+					BackgroundTransparency={1}
+					Text={roomy ? "roomy" : "tight"}
+					className="capitalize line-through"
+				/>
+				<textlabel
+					BackgroundTransparency={1}
+					Text="typography probe"
+					className="leading-tight italic font-bold"
+				/>
 			</frame>
 		</screengui>
 	);

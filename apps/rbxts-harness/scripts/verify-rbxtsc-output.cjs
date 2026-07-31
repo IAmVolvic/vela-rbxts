@@ -1,3 +1,4 @@
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -7,10 +8,59 @@ const transformer =
 		? transformerModule
 		: transformerModule.default;
 
-const appLuauPath = path.join(__dirname, "..", "out", "client", "App.luau");
+const projectRoot = path.join(__dirname, "..");
+
+// A clean build so the transformer runs on every file and its diagnostics all
+// land in this invocation's output.
+fs.rmSync(path.join(projectRoot, "out"), { recursive: true, force: true });
+const build = spawnSync(
+	path.join(projectRoot, "node_modules", ".bin", "rbxtsc"),
+	["-p", "tsconfig.json"],
+	{ cwd: projectRoot, encoding: "utf8" },
+);
+const buildOutput = `${build.stdout ?? ""}${build.stderr ?? ""}`;
+
+if (build.status !== 0) {
+	console.error(buildOutput);
+	console.error("rbxtsc build failed");
+	process.exit(1);
+}
+
+const appLuauPath = path.join(projectRoot, "out", "client", "App.luau");
 const source = fs.readFileSync(appLuauPath, "utf8");
 
+const requiredDiagnostics = [
+	'Tailwind "m" utilities have no Roblox equivalent, so "m-4" is ignored.',
+	'Unknown variant "hover" in "hover:px-4"',
+	'Arbitrary value "[#ff0000]" is not supported yet',
+	'Color opacity modifier "/50" is not supported',
+	'Unsupported utility family "blorb" in className literal.',
+];
+
+// Bare `rounded` must resolve to the default radius, not a theme-key error.
+const forbiddenDiagnostics = ['"DEFAULT"', "unknown-theme-key"];
+
 const requiredFragments = [
+	"CornerRadius = UDim.new(0, 4)",
+	"Position = UDim2.new(1, -16, 1, -8)",
+	"SortOrder = Enum.SortOrder.LayoutOrder",
+	"FillDirectionMaxCells = 3",
+	"CellPadding = UDim2.fromOffset(8, 8)",
+	"AnchorPoint = Vector2.new(0.5, 0.5)",
+	"Position = UDim2.fromScale(0.5, 0.5)",
+	"Size = UDim2.fromScale(0.5, 0)",
+	"AnchorPoint = Vector2.new(0.5, 0)",
+	"Interactable = false",
+	"Padding = UDim.new(0, 8)",
+	"FillDirection = Enum.FillDirection.Vertical",
+	"ApplyStrokeMode = Enum.ApplyStrokeMode.Border",
+	"ScaleType = Enum.ScaleType.Crop",
+	"LayoutOrder = 2",
+	"ItemLineAlignment = Enum.ItemLineAlignment.Center",
+	"VerticalFlex = Enum.UIFlexAlignment.SpaceBetween",
+	"LineHeight = 1.25",
+	"Enum.FontWeight.Bold",
+	"Enum.FontStyle.Italic",
 	"BackgroundColor3 = Color3.fromRGB(49, 65, 88)",
 	"Size = UDim2.fromOffset(320, 108)",
 	"CornerRadius = UDim.new(0, 6)",
@@ -28,10 +78,21 @@ const requiredFragments = [
 	"React.createElement(VelaRuntimeHost",
 	"__velaRules",
 	"__velaTag",
+	"__velaTransition",
+	"TweenService",
+	'__velaAnimation = "spin"',
+	"startPresetAnimation",
+	'Text = "<u>STATIC &amp; &lt;STYLED&gt;</u>"',
+	"RichText = true",
+	"__velaText",
+	'transform = "capitalize"',
+	'decoration = "strike"',
+	"applyTextConfig",
 ];
 
 // Intentional regression checks for the deleted runtime package and artifact paths.
 const forbiddenFragments = [
+	"Color3.fromRGB(255, 0, 0)",
 	'React.createElement("RbxtsTailwindRuntimeHost"',
 	"__rbxtsTailwindRuntimeHost",
 	"RbxtsTailwindRuntimeHost",
@@ -56,6 +117,14 @@ const requiredPatterns = [
 	{
 		description: "runtime helper is inlined into the Luau output",
 		pattern: /__createVelaRuntimeHost/,
+	},
+	{
+		description: "transition config reaches the runtime host element",
+		pattern: /__velaTransition\s*=\s*\{[\s\S]{0,160}?0\.3/,
+	},
+	{
+		description: "transition easing direction is serialized",
+		pattern: /__velaTransition\s*=\s*\{[\s\S]{0,160}?direction\s*=\s*"Out"/,
 	},
 	{
 		description: "runtime className keeps dynamic rounded-md condition",
@@ -138,6 +207,20 @@ const failures = [];
 
 if (typeof transformer !== "function") {
 	failures.push("vela-rbxts/transformer does not export a program transformer");
+}
+
+for (const fragment of requiredDiagnostics) {
+	if (!buildOutput.includes(fragment)) {
+		failures.push(`rbxtsc output is missing expected diagnostic: ${fragment}`);
+	}
+}
+
+for (const fragment of forbiddenDiagnostics) {
+	if (buildOutput.includes(fragment)) {
+		failures.push(
+			`rbxtsc output contains forbidden diagnostic text: ${fragment}`,
+		);
+	}
 }
 
 for (const fragment of requiredFragments) {
