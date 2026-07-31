@@ -9,6 +9,18 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-31
+
+### Added
+
+- `hover:` runtime variant: the runtime host tracks per-element MouseEnter/MouseLeave state (composing with any Event handlers the consumer declared, and attaching listeners only when a hover rule actually exists), so `hover:bg-*` works on its own and tweens when combined with `transition`.
+- Arbitrary hex colors: `[#rgb]` and `[#rrggbb]` payloads resolve to `Color3.fromRGB` in every color family (`bg-[#ff0000]`, `border-[#0f0]`, `divide-[#333]`, ...). Non-hex arbitrary values keep the `unsupported-arbitrary-value` diagnostic.
+- Color opacity modifiers: a trailing `/N` (0-100) lowers to the family's transparency prop — `bg-blue-600/50` sets `BackgroundTransparency = 0.5`, `ring-rose-500/25` sets the UIStroke `Transparency`. Families without a transparency prop (gradient stops, divide) keep the `unsupported-opacity-modifier` diagnostic.
+
+### Changed
+
+- `border-[N]`-style numeric arbitraries now report `unsupported-arbitrary-value` instead of `unsupported-border-value`, since bracket payloads are parsed as arbitrary colors first.
+
 ## [0.3.0] - 2026-07-31
 
 ### Added
@@ -111,7 +123,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/astra-void/vela-rbxts/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/astra-void/vela-rbxts/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/astra-void/vela-rbxts/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/astra-void/vela-rbxts/releases/tag/v0.2.0
