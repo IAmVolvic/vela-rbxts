@@ -308,6 +308,21 @@ test("prefers vela.config.ts over vela.config.json in the same directory", () =>
 	expect(options?.configJson).toContain("Color3.fromRGB(1, 1, 1)");
 });
 
+test("names the failing theme key when vela.config.ts is invalid", () => {
+	const project = createProject(
+		`export default { theme: { extend: { colors: { surface: { 55: "Color3.fromRGB(7, 8, 9)" } } } } };`,
+	);
+
+	const result = transformSourceForHost({
+		fileName: project.sourceFile,
+		sourceText: sourceFile.sourceText,
+	});
+
+	expect(result.diagnostics[0]?.message).toContain(
+		"`theme.extend.colors.surface.55` is not a valid shade",
+	);
+});
+
 test("normalizes nearest vela.config.ts authoring-shaped color input", () => {
 	const project = createProject(
 		`export default {

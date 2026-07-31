@@ -268,9 +268,107 @@ function coerceTailwindConfig(
 		return defineConfig(value);
 	}
 
+	const problem = describeConfigProblem(value);
+
 	throw new Error(
-		`Expected ${sourcePath} to export a TailwindConfig-compatible object.`,
+		`Expected ${sourcePath} to export a TailwindConfig-compatible object${
+			problem ? `: ${problem}` : "."
+		}`,
 	);
+}
+
+function describeConfigProblem(value: unknown): string | undefined {
+	if (!isRecord(value)) {
+		return "the export is not an object";
+	}
+
+	if (!isRecord(value.theme)) {
+		return "`theme` is not an object";
+	}
+
+	return describeThemeProblem(value.theme, "theme");
+}
+
+function describeThemeProblem(
+	theme: Record<string, unknown>,
+	path: string,
+): string | undefined {
+	const colorsProblem =
+		theme.colors === undefined
+			? undefined
+			: describeColorsProblem(theme.colors, `${path}.colors`);
+
+	if (colorsProblem) {
+		return colorsProblem;
+	}
+
+	for (const key of ["radius", "spacing"] as const) {
+		const scale = theme[key];
+
+		if (scale === undefined) {
+			continue;
+		}
+
+		if (!isRecord(scale)) {
+			return `\`${path}.${key}\` is not an object`;
+		}
+
+		const invalid = Object.entries(scale).find(
+			([, entry]) => typeof entry !== "string",
+		);
+
+		if (invalid) {
+			return `\`${path}.${key}.${invalid[0]}\` must be a string`;
+		}
+	}
+
+	if (path === "theme" && theme.extend !== undefined) {
+		if (!isRecord(theme.extend)) {
+			return "`theme.extend` is not an object";
+		}
+
+		return describeThemeProblem(theme.extend, "theme.extend");
+	}
+
+	return undefined;
+}
+
+function describeColorsProblem(
+	colors: unknown,
+	path: string,
+): string | undefined {
+	if (!isRecord(colors)) {
+		return `\`${path}\` is not an object`;
+	}
+
+	for (const [family, entry] of Object.entries(colors)) {
+		if (typeof entry === "string") {
+			continue;
+		}
+
+		if (!isRecord(entry)) {
+			return `\`${path}.${family}\` must be a hex string or a shade palette`;
+		}
+
+		if (Object.keys(entry).length === 0) {
+			return `\`${path}.${family}\` is an empty palette`;
+		}
+
+		for (const [shade, color] of Object.entries(entry)) {
+			if (
+				shade !== PALETTE_DEFAULT_KEY &&
+				!SHADES.includes(Number(shade) as (typeof SHADES)[number])
+			) {
+				return `\`${path}.${family}.${shade}\` is not a valid shade; use ${SHADES.join(", ")}, or DEFAULT`;
+			}
+
+			if (typeof color !== "string") {
+				return `\`${path}.${family}.${shade}\` must be a string`;
+			}
+		}
+	}
+
+	return undefined;
 }
 
 function normalizeConfigExport(value: unknown): unknown {
