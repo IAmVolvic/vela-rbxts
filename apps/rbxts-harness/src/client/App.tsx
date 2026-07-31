@@ -5,11 +5,20 @@ export const App = () => {
 	const [roomy, setRoomy] = React.useState(false);
 
 	React.useEffect(() => {
-		while (true) {
-			task.wait(1);
-			setActive((v) => !v);
-			setRoomy((v) => !v);
-		}
+		// Yielding directly in the effect never returns, which wedges React's
+		// commit phase and freezes every later state update.
+		let running = true;
+		task.spawn(() => {
+			while (running) {
+				task.wait(1);
+				setActive((v) => !v);
+				setRoomy((v) => !v);
+			}
+		});
+
+		return () => {
+			running = false;
+		};
 	}, []);
 
 	return (
