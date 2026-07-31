@@ -3,8 +3,8 @@ use crate::editor::{collect_class_name_contexts, tokenize_class_name_with_ranges
 use crate::semantic::analyze::analyze_class_token;
 use crate::semantic::utility::{
     BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorFamilySpec, ColorResolution,
-    IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, TEXT_COLOR_FAMILY, UtilityKind,
-    is_utility_allowed_on_host, resolve_color_value,
+    GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, SHADOW_COLOR_FAMILY,
+    TEXT_COLOR_FAMILY, UtilityKind, is_utility_allowed_on_host, resolve_color_value,
 };
 
 pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> DocumentColorsResponse {
@@ -65,6 +65,10 @@ fn color_family_spec(kind: &UtilityKind) -> Option<ColorFamilySpec> {
         UtilityKind::ImageColor => Some(IMAGE_COLOR_FAMILY),
         UtilityKind::PlaceholderColor => Some(PLACEHOLDER_COLOR_FAMILY),
         UtilityKind::Border => Some(BORDER_COLOR_FAMILY),
+        UtilityKind::ShadowColor => Some(SHADOW_COLOR_FAMILY),
+        UtilityKind::GradientFrom | UtilityKind::GradientVia | UtilityKind::GradientTo => {
+            Some(GRADIENT_COLOR_FAMILY)
+        }
         _ => None,
     }
 }
@@ -85,7 +89,7 @@ fn resolution_to_rgba(resolution: ColorResolution) -> Option<(f64, f64, f64, f64
     }
 }
 
-fn parse_color3_from_rgb(value: &str) -> Option<(u8, u8, u8)> {
+pub(crate) fn parse_color3_from_rgb(value: &str) -> Option<(u8, u8, u8)> {
     let value = value.trim();
     let inner = value.strip_prefix("Color3.fromRGB(")?.strip_suffix(')')?;
     let mut parts = inner.split(',').map(str::trim);

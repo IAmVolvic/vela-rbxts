@@ -91,6 +91,11 @@ pub struct CompletionItem {
     pub category: String,
     pub documentation: String,
     pub replacement: Option<EditorRange>,
+    /// `#rrggbb` for utilities that resolve to a theme color, so the editor can
+    /// render a swatch.
+    pub color: Option<String>,
+    /// Relevance order decided by the matcher; lower sorts first.
+    pub sort_text: Option<String>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]

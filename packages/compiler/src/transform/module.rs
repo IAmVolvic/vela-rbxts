@@ -18,19 +18,19 @@ pub(crate) fn is_class_name_attr(name: &JSXAttrName) -> bool {
 }
 
 pub(crate) fn is_supported_host_element(name: &JSXElementName) -> bool {
+    matches!(name, JSXElementName::Ident(ident) if is_supported_host_tag(ident.sym.as_ref()))
+}
+
+pub(crate) fn is_supported_host_tag(tag: &str) -> bool {
     matches!(
-        name,
-        JSXElementName::Ident(ident)
-            if matches!(
-                ident.sym.as_ref(),
-                "frame"
-                    | "scrollingframe"
-                    | "canvasgroup"
-                    | "textlabel"
-                    | "textbutton"
-                    | "textbox"
-                    | "imagelabel"
-                    | "imagebutton"
-            )
+        tag,
+        "frame"
+            | "scrollingframe"
+            | "canvasgroup"
+            | "textlabel"
+            | "textbutton"
+            | "textbox"
+            | "imagelabel"
+            | "imagebutton"
     )
 }

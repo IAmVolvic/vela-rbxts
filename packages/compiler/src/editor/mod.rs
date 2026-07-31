@@ -5,11 +5,16 @@ pub(crate) mod hover;
 
 use crate::api::{EditorOptions, EditorRange};
 use crate::transform::jsx::is_component_element;
-use crate::transform::module::{is_class_name_attr, is_supported_host_element};
+use crate::transform::module::{
+    is_class_name_attr, is_supported_host_element, is_supported_host_tag,
+};
 use swc_core::{
     common::{FileName, SourceMap, sync::Lrc},
     ecma::{
-        ast::{JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementName},
+        ast::{
+            BinaryOp, Expr, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementName, JSXExpr,
+            Lit, Prop, PropName, PropOrSpread,
+        },
         parser::{Syntax, TsSyntax, parse_file_as_module},
         visit::{Visit, VisitWith},
     },
@@ -53,6 +58,94 @@ pub(crate) struct ClassNameCollector<'a> {
     contexts: Vec<ClassNameContext>,
 }
 
+impl ClassNameCollector<'_> {
+    fn push_literal(&mut self, element_tag: &Option<String>, span: swc_core::common::Span) {
+        let (lo, hi) = span_range(span, self.source_base);
+        let (start, end) = literal_content_bytes(self.source, lo, hi);
+        self.push_bytes(element_tag, start, end);
+    }
+
+    fn push_raw(&mut self, element_tag: &Option<String>, span: swc_core::common::Span) {
+        let (lo, hi) = span_range(span, self.source_base);
+        self.push_bytes(
+            element_tag,
+            lo.min(self.source.len()),
+            hi.min(self.source.len()),
+        );
+    }
+
+    fn push_bytes(&mut self, element_tag: &Option<String>, start: usize, end: usize) {
+        let Some(value) = self.source.get(start..end) else {
+            return;
+        };
+
+        self.contexts.push(ClassNameContext {
+            element_tag: element_tag.clone(),
+            value: value.to_owned(),
+            value_range: EditorRange {
+                start: byte_to_utf16_position(self.source, start),
+                end: byte_to_utf16_position(self.source, end),
+            },
+        });
+    }
+
+    /// Walks the shapes `className={...}` takes in practice — template literals,
+    /// conditionals, and `cn()`/`clsx()`-style helpers — so every statically
+    /// visible class string reaches the editor features.
+    fn collect_expr(&mut self, element_tag: &Option<String>, expr: &Expr) {
+        match expr {
+            Expr::Paren(paren) => self.collect_expr(element_tag, &paren.expr),
+            Expr::TsAs(cast) => self.collect_expr(element_tag, &cast.expr),
+            Expr::TsNonNull(non_null) => self.collect_expr(element_tag, &non_null.expr),
+            Expr::Lit(Lit::Str(value)) => self.push_literal(element_tag, value.span),
+            Expr::Tpl(tpl) => {
+                for quasi in &tpl.quasis {
+                    self.push_raw(element_tag, quasi.span);
+                }
+            }
+            Expr::Cond(cond) => {
+                self.collect_expr(element_tag, &cond.cons);
+                self.collect_expr(element_tag, &cond.alt);
+            }
+            Expr::Bin(bin)
+                if matches!(
+                    bin.op,
+                    BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+                ) =>
+            {
+                self.collect_expr(element_tag, &bin.left);
+                self.collect_expr(element_tag, &bin.right);
+            }
+            Expr::Array(array) => {
+                for element in array.elems.iter().flatten() {
+                    self.collect_expr(element_tag, &element.expr);
+                }
+            }
+            Expr::Object(object) => {
+                for prop in &object.props {
+                    let PropOrSpread::Prop(prop) = prop else {
+                        continue;
+                    };
+                    let Prop::KeyValue(entry) = &**prop else {
+                        continue;
+                    };
+                    match &entry.key {
+                        PropName::Str(key) => self.push_literal(element_tag, key.span),
+                        PropName::Ident(key) => self.push_raw(element_tag, key.span),
+                        _ => {}
+                    }
+                }
+            }
+            Expr::Call(call) => {
+                for arg in &call.args {
+                    self.collect_expr(element_tag, &arg.expr);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Visit for ClassNameCollector<'_> {
     fn visit_jsx_element(&mut self, element: &JSXElement) {
         if let Some(element_tag) = lowered_element_tag(&element.opening.name) {
@@ -65,17 +158,17 @@ impl Visit for ClassNameCollector<'_> {
                     continue;
                 }
 
-                let Some(JSXAttrValue::Str(value)) = &attr.value else {
-                    continue;
-                };
-
-                let (lo, hi) = span_range(value.span, self.source_base);
-                let value_range = literal_content_range(self.source, lo, hi);
-                self.contexts.push(ClassNameContext {
-                    element_tag: element_tag.clone(),
-                    value: value.value.to_string_lossy().into_owned(),
-                    value_range,
-                });
+                match &attr.value {
+                    Some(JSXAttrValue::Str(value)) => {
+                        self.push_literal(&element_tag, value.span);
+                    }
+                    Some(JSXAttrValue::JSXExprContainer(container)) => {
+                        if let JSXExpr::Expr(expr) = &container.expr {
+                            self.collect_expr(&element_tag, expr);
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -115,6 +208,8 @@ pub(crate) fn collect_class_name_contexts(source: &str) -> Vec<ClassNameContext>
         FileName::Custom("input.tsx".into()).into(),
         source.to_owned(),
     );
+    // Recovered errors are kept: a half-typed file elsewhere in the module must
+    // not blank out the editor features for the JSX that does parse.
     let mut recovered_errors = Vec::new();
     let Ok(module) = parse_file_as_module(
         &fm,
@@ -127,12 +222,8 @@ pub(crate) fn collect_class_name_contexts(source: &str) -> Vec<ClassNameContext>
         None,
         &mut recovered_errors,
     ) else {
-        return Vec::new();
+        return lexical_class_name_contexts(source);
     };
-
-    if !recovered_errors.is_empty() {
-        return Vec::new();
-    }
 
     let mut collector = ClassNameCollector {
         source,
@@ -143,13 +234,146 @@ pub(crate) fn collect_class_name_contexts(source: &str) -> Vec<ClassNameContext>
     collector.contexts
 }
 
+/// Last-resort scan for when the file does not parse at all. It cannot tell a
+/// host element from a component reliably, so it reports every `className`
+/// value it finds and leaves the tag to the caller's best effort.
+fn lexical_class_name_contexts(source: &str) -> Vec<ClassNameContext> {
+    const ATTR: &str = "className";
+    let bytes = source.as_bytes();
+    let mut contexts = Vec::new();
+    let mut cursor = 0;
+
+    while let Some(found) = source[cursor..].find(ATTR) {
+        let start = cursor + found;
+        cursor = start + ATTR.len();
+
+        let preceded_by_ident = start
+            .checked_sub(1)
+            .is_some_and(|index| is_ident_byte(bytes[index]));
+        if preceded_by_ident {
+            continue;
+        }
+
+        let mut index = skip_spaces(bytes, cursor);
+        if bytes.get(index) != Some(&b'=') {
+            continue;
+        }
+        index = skip_spaces(bytes, index + 1);
+
+        let element_tag = lexical_element_tag(source, start);
+        match bytes.get(index) {
+            Some(&quote @ (b'"' | b'\'' | b'`')) => {
+                let (content, next) = quoted_content(source, index, quote);
+                push_lexical_context(&mut contexts, source, &element_tag, content);
+                cursor = next;
+            }
+            Some(b'{') => {
+                let mut depth = 0usize;
+                while index < bytes.len() {
+                    match bytes[index] {
+                        b'{' => depth += 1,
+                        b'}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                index += 1;
+                                break;
+                            }
+                        }
+                        quote @ (b'"' | b'\'' | b'`') => {
+                            let (content, next) = quoted_content(source, index, quote);
+                            push_lexical_context(&mut contexts, source, &element_tag, content);
+                            index = next;
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    index += 1;
+                }
+                cursor = index;
+            }
+            _ => {}
+        }
+    }
+
+    contexts
+}
+
+fn push_lexical_context(
+    contexts: &mut Vec<ClassNameContext>,
+    source: &str,
+    element_tag: &Option<String>,
+    content: (usize, usize),
+) {
+    let (start, end) = content;
+    if source.get(start..end).is_none() {
+        return;
+    }
+
+    contexts.push(ClassNameContext {
+        element_tag: element_tag.clone(),
+        value: source[start..end].to_owned(),
+        value_range: EditorRange {
+            start: byte_to_utf16_position(source, start),
+            end: byte_to_utf16_position(source, end),
+        },
+    });
+}
+
+/// Content byte range of the string opened at `open`, plus the index just past
+/// it. An unterminated string ends at the newline so mid-edit values still work.
+fn quoted_content(source: &str, open: usize, quote: u8) -> ((usize, usize), usize) {
+    let bytes = source.as_bytes();
+    let start = open + 1;
+    let mut index = start;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\\' => index += 1,
+            b'\n' => return ((start, index), index),
+            byte if byte == quote => return ((start, index), index + 1),
+            _ => {}
+        }
+        index += 1;
+    }
+
+    ((start, bytes.len()), bytes.len())
+}
+
+fn lexical_element_tag(source: &str, attr_start: usize) -> Option<String> {
+    let bytes = source.as_bytes();
+    let open = source[..attr_start].rfind('<')?;
+    let name_start = open + 1;
+    let name_end = bytes[name_start..]
+        .iter()
+        .position(|byte| !is_ident_byte(*byte))
+        .map_or(bytes.len(), |offset| name_start + offset);
+
+    // Anything else is a component, whose host element is only known at runtime.
+    source
+        .get(name_start..name_end)
+        .filter(|name| is_supported_host_tag(name))
+        .map(str::to_owned)
+}
+
+fn is_ident_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
+}
+
+fn skip_spaces(bytes: &[u8], mut index: usize) -> usize {
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+    index
+}
+
 pub(crate) fn span_range(span: swc_core::common::Span, source_base: u32) -> (usize, usize) {
     let start = span.lo.0.saturating_sub(source_base) as usize;
     let end = span.hi.0.saturating_sub(source_base) as usize;
     (start, end)
 }
 
-pub(crate) fn literal_content_range(source: &str, lo: usize, hi: usize) -> EditorRange {
+/// Byte range of a quoted literal's contents, excluding the quotes.
+pub(crate) fn literal_content_bytes(source: &str, lo: usize, hi: usize) -> (usize, usize) {
     let hi = hi.min(source.len());
     let lo = lo.min(hi);
     let snippet = &source[lo..hi];
@@ -157,26 +381,20 @@ pub(crate) fn literal_content_range(source: &str, lo: usize, hi: usize) -> Edito
         .char_indices()
         .find(|(_, ch)| matches!(ch, '"' | '\''));
 
-    if let Some((quote_index, quote_char)) = quote {
-        let content_start = lo + quote_index + quote_char.len_utf8();
-        let content_end = snippet
-            .char_indices()
-            .rev()
-            .find(|(_, ch)| *ch == quote_char)
-            .map(|(index, _)| lo + index)
-            .filter(|end| *end >= content_start)
-            .unwrap_or(hi);
+    let Some((quote_index, quote_char)) = quote else {
+        return (lo, hi);
+    };
 
-        return EditorRange {
-            start: byte_to_utf16_position(source, content_start),
-            end: byte_to_utf16_position(source, content_end),
-        };
-    }
+    let content_start = lo + quote_index + quote_char.len_utf8();
+    let content_end = snippet
+        .char_indices()
+        .rev()
+        .find(|(_, ch)| *ch == quote_char)
+        .map(|(index, _)| lo + index)
+        .filter(|end| *end >= content_start)
+        .unwrap_or(hi);
 
-    EditorRange {
-        start: byte_to_utf16_position(source, lo),
-        end: byte_to_utf16_position(source, hi),
-    }
+    (content_start, content_end)
 }
 
 pub(crate) fn byte_to_utf16_position(source: &str, byte_index: usize) -> u32 {

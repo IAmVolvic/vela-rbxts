@@ -36,26 +36,3 @@ pub(crate) fn compiler_to_editor_diagnostic(
         range,
     }
 }
-
-pub(crate) fn filter_compiler_diagnostics(
-    token_text: &str,
-    diagnostics: Vec<Diagnostic>,
-) -> Vec<Diagnostic> {
-    diagnostics
-        .into_iter()
-        .filter(|diag| {
-            if diag.code != "unknown-theme-key" {
-                return true;
-            }
-
-            if let Some(pos) = token_text.find('-') {
-                let rest = &token_text[pos + 1..];
-                if rest.len() <= 3 {
-                    return false;
-                }
-            }
-
-            true
-        })
-        .collect()
-}

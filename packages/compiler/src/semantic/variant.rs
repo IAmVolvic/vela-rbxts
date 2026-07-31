@@ -1,15 +1,24 @@
 use crate::ir::model::RuntimeCondition;
 
-pub(crate) const RUNTIME_VARIANTS: [&str; 8] = [
-    "sm",
-    "md",
-    "lg",
-    "portrait",
-    "landscape",
-    "touch",
-    "mouse",
-    "gamepad",
+/// Runtime variant names paired with the condition they check, phrased for
+/// editor documentation. Keep the widths in sync with `parse_variant_prefix`.
+pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 8] = [
+    ("sm", "the viewport is at least 640px wide"),
+    ("md", "the viewport is at least 768px wide"),
+    ("lg", "the viewport is at least 1024px wide"),
+    ("portrait", "the viewport is taller than it is wide"),
+    ("landscape", "the viewport is wider than it is tall"),
+    ("touch", "the last input was touch"),
+    ("mouse", "the last input was a mouse or keyboard"),
+    ("gamepad", "the last input was a gamepad"),
 ];
+
+pub(crate) fn variant_condition(prefix: &str) -> Option<&'static str> {
+    RUNTIME_VARIANTS
+        .iter()
+        .find(|(name, _)| *name == prefix)
+        .map(|(_, condition)| *condition)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum VariantKind {
@@ -29,12 +38,13 @@ pub(crate) enum VariantKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParsedVariant {
     pub(crate) raw: String,
-    pub(crate) kind: VariantKind,
+    /// `None` for a prefix that is not a vela-rbxts runtime variant.
+    pub(crate) kind: Option<VariantKind>,
 }
 
 impl ParsedVariant {
-    pub(crate) fn runtime_condition(&self) -> RuntimeCondition {
-        match &self.kind {
+    pub(crate) fn runtime_condition(&self) -> Option<RuntimeCondition> {
+        Some(match self.kind.as_ref()? {
             VariantKind::Width {
                 alias,
                 min_width,
@@ -50,7 +60,7 @@ impl ParsedVariant {
             VariantKind::Input { value } => RuntimeCondition::Input {
                 value: value.clone(),
             },
-        }
+        })
     }
 }
 
@@ -90,18 +100,37 @@ pub(crate) fn parse_variant_prefix(prefix: &str) -> Option<VariantKind> {
     }
 }
 
-pub(crate) fn split_variant_prefixes(token: &str) -> Option<(Vec<ParsedVariant>, &str)> {
+/// Splits every `prefix:` segment off the token. Unrecognised prefixes are kept
+/// as variants with no kind so the utility behind them still gets analyzed and
+/// the unknown prefix can be reported on its own.
+pub(crate) fn split_variant_prefixes(token: &str) -> (Vec<ParsedVariant>, &str) {
     let mut variants = Vec::new();
     let mut remainder = token;
 
-    while let Some((prefix, next)) = remainder.split_once(':') {
-        let kind = parse_variant_prefix(prefix)?;
+    while let Some(index) = top_level_colon(remainder) {
+        let prefix = &remainder[..index];
         variants.push(ParsedVariant {
             raw: prefix.to_owned(),
-            kind,
+            kind: parse_variant_prefix(prefix),
         });
-        remainder = next;
+        remainder = &remainder[index + 1..];
     }
 
-    Some((variants, remainder))
+    (variants, remainder)
+}
+
+/// Colons inside `[...]` belong to an arbitrary value, not a variant separator.
+fn top_level_colon(token: &str) -> Option<usize> {
+    let mut depth = 0usize;
+
+    for (index, ch) in token.char_indices() {
+        match ch {
+            '[' | '(' => depth += 1,
+            ']' | ')' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => return Some(index),
+            _ => {}
+        }
+    }
+
+    None
 }

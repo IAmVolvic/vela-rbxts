@@ -1,6 +1,7 @@
 use crate::api::{Diagnostic, EditorRange};
 use crate::class_value::collapse::collapse_class_value_expr;
 use crate::class_value::scope::ClassValueScopeStack;
+use crate::diagnostics::compiler::transition_without_runtime_diagnostic;
 use crate::editor::ClassToken;
 use crate::ir::model::{StyleEffectBundle, StyleIr};
 use crate::transform::runtime::resolve_class_tokens;
@@ -51,7 +52,16 @@ pub(crate) fn lower_class_name(
                 diagnostics,
             );
             attach_token_ranges(&mut diagnostics[diagnostics_before..], &spans);
-            let needs_runtime_host = !style.runtime_rules.is_empty() || style.runtime_class_value;
+            // A preset animation loops on its own, so it promotes an otherwise
+            // static element to the runtime host.
+            let needs_runtime_host = !style.runtime_rules.is_empty()
+                || style.runtime_class_value
+                || style.animation.is_some();
+            let mut style = style;
+            if style.transition.is_some() && !needs_runtime_host {
+                diagnostics.push(transition_without_runtime_diagnostic());
+                style.transition = None;
+            }
 
             Some(LoweredClassName {
                 style_ir: style,
@@ -67,6 +77,9 @@ pub(crate) fn lower_class_name(
                         base: StyleEffectBundle::default(),
                         runtime_rules: Vec::new(),
                         runtime_class_value: true,
+                        transition: None,
+                        animation: None,
+                        text: None,
                     },
                     preserved_attrs,
                     runtime_class_name: Some(class_name_attr.clone()),
@@ -77,7 +90,8 @@ pub(crate) fn lower_class_name(
             let collapse = collapse_class_value_expr(expr, scopes);
             let runtime_class_value = collapse.is_dynamic();
             let style = resolve_class_tokens(collapse.static_tokens.clone(), config, diagnostics);
-            let needs_runtime_host = !style.runtime_rules.is_empty() || runtime_class_value;
+            let needs_runtime_host =
+                !style.runtime_rules.is_empty() || runtime_class_value || style.animation.is_some();
             let runtime_class_name = collapse.dynamic_expr.map(|expr| {
                 let mut runtime_attr = class_name_attr.clone();
                 runtime_attr.value = Some(JSXAttrValue::JSXExprContainer(JSXExprContainer {
@@ -102,6 +116,9 @@ pub(crate) fn lower_class_name(
                 base: StyleEffectBundle::default(),
                 runtime_rules: Vec::new(),
                 runtime_class_value: true,
+                transition: None,
+                animation: None,
+                text: None,
             },
             preserved_attrs,
             runtime_class_name: Some(class_name_attr.clone()),

@@ -6,19 +6,27 @@ use crate::ir::model::SizeAxisValue;
 use crate::semantic::{
     analyze::analyze_class_token,
     utility::{
-        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, GRADIENT_COLOR_FAMILY,
-        IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, PaddingKind, SHADOW_COLOR_FAMILY,
-        TEXT_COLOR_FAMILY, UtilityKind, is_automatic_size_key, is_known_unsupported_border_payload,
-        is_utility_allowed_on_host, resolve_align_items_value, resolve_anchor_point_value,
-        resolve_aspect_ratio_value, resolve_border_thickness_value, resolve_color_value,
+        ANIMATION_VALUES, BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution,
+        DEFAULT_TRANSITION_TIME, GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, OUTLINE_COLOR_FAMILY,
+        PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY, SHADOW_COLOR_FAMILY,
+        StrokePayload, TEXT_COLOR_FAMILY, UtilityKind, classify_stroke_payload,
+        end_relative_position_axis, font_face_expression, is_automatic_size_key,
+        is_known_unsupported_border_payload, is_utility_allowed_on_host,
+        resolve_align_content_flex_value, resolve_align_items_value, resolve_align_self_value,
+        resolve_anchor_point_value, resolve_aspect_ratio_value, resolve_border_thickness_value,
+        resolve_color_value, resolve_duration_seconds, resolve_ease_value,
         resolve_flex_direction_value, resolve_flex_item_mode, resolve_flex_wrap_value,
-        resolve_font_weight_value, resolve_gradient_rotation, resolve_items_flex_value,
-        resolve_justify_flex_value, resolve_justify_value, resolve_line_join_value,
-        resolve_opacity_value, resolve_overflow_value, resolve_position_axis_value,
-        resolve_radius_value, resolve_rotation_value, resolve_scale_value, resolve_shadow_preset,
-        resolve_size_axis_value, resolve_size_spacing_offset, resolve_spacing_value,
-        resolve_text_size_value, resolve_text_wrap_value, resolve_text_x_alignment_value,
-        resolve_text_y_alignment_value, resolve_visibility_value, resolve_z_index_value,
+        resolve_font_style_value, resolve_font_weight_value, resolve_gradient_rotation,
+        resolve_grid_cell_count, resolve_items_flex_value, resolve_justify_flex_value,
+        resolve_justify_value, resolve_layout_order_value, resolve_line_height_value,
+        resolve_line_join_value, resolve_object_fit_value, resolve_opacity_value,
+        resolve_overflow_value, resolve_overscroll_value, resolve_pointer_events_value,
+        resolve_position_axis_value, resolve_radius_value, resolve_rotation_value,
+        resolve_scale_value, resolve_shadow_preset, resolve_size_axis_value,
+        resolve_size_spacing_offset, resolve_spacing_value, resolve_text_decoration_value,
+        resolve_text_size_value, resolve_text_transform_value, resolve_text_wrap_value,
+        resolve_text_x_alignment_value, resolve_text_y_alignment_value, resolve_transition_toggle,
+        resolve_visibility_value, resolve_whitespace_value, resolve_z_index_value,
     },
 };
 
@@ -298,12 +306,353 @@ fn describe_token(
                 documentation: format!("{variant_prefix}Sets `{target}` using {resolved}."),
             })
         }
+        UtilityKind::PositionRight | UtilityKind::PositionBottom => {
+            let position_key = analysis.payload()?;
+            let (negative, target, edge) = match &analysis.utility {
+                UtilityKind::PositionRight => (
+                    analysis.parsed.utility.raw.starts_with("-right-"),
+                    "Position.X",
+                    "right",
+                ),
+                UtilityKind::PositionBottom => (
+                    analysis.parsed.utility.raw.starts_with("-bottom-"),
+                    "Position.Y",
+                    "bottom",
+                ),
+                _ => unreachable!(),
+            };
+
+            let mut diagnostics = Vec::new();
+            let value = end_relative_position_axis(resolve_position_axis_value(
+                config,
+                &mut diagnostics,
+                position_key,
+                &analysis.parsed.utility.raw,
+                negative,
+            )?);
+            let resolved = describe_size_axis_value(&value);
+
+            Some(HoverContent {
+                display: format!("`{token}` -> Roblox {target}"),
+                documentation: format!(
+                    "{variant_prefix}Sets `{target}` from the {edge} edge using {resolved}."
+                ),
+            })
+        }
         UtilityKind::AnchorPoint => {
             let origin_key = analysis.payload()?;
             let value = resolve_anchor_point_value(origin_key)?;
             Some(HoverContent {
                 display: format!("`{token}` -> AnchorPoint"),
                 documentation: format!("{variant_prefix}Sets `AnchorPoint` to `{value}`."),
+            })
+        }
+        UtilityKind::AlignContent => {
+            let alignment_key = analysis.payload()?;
+            if let Some(flex) = resolve_align_content_flex_value(alignment_key) {
+                Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.VerticalFlex"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.VerticalFlex` to `Enum.UIFlexAlignment.{flex}`."
+                    ),
+                })
+            } else {
+                let value = resolve_align_items_value(alignment_key)?;
+                Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.VerticalAlignment"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.VerticalAlignment` to `{value}`."
+                    ),
+                })
+            }
+        }
+        UtilityKind::AlignSelf => {
+            let alignment = resolve_align_self_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIFlexItem.ItemLineAlignment"),
+                documentation: format!(
+                    "{variant_prefix}Adds a Roblox UIFlexItem with `ItemLineAlignment = Enum.ItemLineAlignment.{alignment}`."
+                ),
+            })
+        }
+        UtilityKind::LayoutOrder => {
+            let order_key = analysis.payload()?;
+            let negative = analysis.parsed.utility.raw.starts_with("-order-");
+            let value = resolve_layout_order_value(order_key, negative)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> LayoutOrder"),
+                documentation: format!("{variant_prefix}Sets `LayoutOrder` to `{value}`."),
+            })
+        }
+        UtilityKind::LineHeight => {
+            let value = resolve_line_height_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> LineHeight"),
+                documentation: format!("{variant_prefix}Sets `LineHeight` to `{value}`."),
+            })
+        }
+        UtilityKind::Transition => {
+            let enabled = resolve_transition_toggle(analysis.payload())?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TweenService"),
+                documentation: if enabled {
+                    format!(
+                        "{variant_prefix}Tweens runtime style changes with TweenService ({DEFAULT_TRANSITION_TIME}s by default). Combine with `duration-*`, `ease-*`, and `delay-*`."
+                    )
+                } else {
+                    format!(
+                        "{variant_prefix}Disables the transition; runtime style changes apply instantly."
+                    )
+                },
+            })
+        }
+        UtilityKind::TransitionDuration | UtilityKind::TransitionDelay => {
+            let seconds = resolve_duration_seconds(analysis.payload()?)?;
+            let field = match &analysis.utility {
+                UtilityKind::TransitionDuration => "duration",
+                _ => "delay",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> TweenInfo"),
+                documentation: format!(
+                    "{variant_prefix}Sets the transition {field} to `{seconds}s`."
+                ),
+            })
+        }
+        UtilityKind::TransitionEase => {
+            let (style, direction) = resolve_ease_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TweenInfo"),
+                documentation: format!(
+                    "{variant_prefix}Sets the transition easing to `Enum.EasingStyle.{style}` / `Enum.EasingDirection.{direction}`."
+                ),
+            })
+        }
+        UtilityKind::TextTransform => {
+            let value = resolve_text_transform_value(analysis.payload()?)?;
+            let documentation = match value {
+                "upper" => "Uppercases the element's `Text` (ASCII letters only).",
+                "lower" => "Lowercases the element's `Text` (ASCII letters only).",
+                "capitalize" => {
+                    "Uppercases the first ASCII letter of each word in the element's `Text`."
+                }
+                _ => "Removes the text transform.",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> Text"),
+                documentation: format!("{variant_prefix}{documentation}"),
+            })
+        }
+        UtilityKind::TextDecoration => {
+            let value = resolve_text_decoration_value(analysis.payload()?)?;
+            let documentation = match value {
+                "underline" => "Enables `RichText` and wraps the escaped `Text` in `<u>...</u>`.",
+                "strike" => "Enables `RichText` and wraps the escaped `Text` in `<s>...</s>`.",
+                _ => "Removes the text decoration.",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> Text"),
+                documentation: format!("{variant_prefix}{documentation}"),
+            })
+        }
+        UtilityKind::Animation => {
+            let animation_key = analysis.payload()?;
+            let (_, description) = ANIMATION_VALUES
+                .iter()
+                .find(|(name, _)| *name == animation_key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TweenService loop"),
+                documentation: format!("{variant_prefix}{description}"),
+            })
+        }
+        UtilityKind::ObjectFit => {
+            let scale_type = resolve_object_fit_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ScaleType"),
+                documentation: format!(
+                    "{variant_prefix}Sets `ScaleType` to `Enum.ScaleType.{scale_type}`."
+                ),
+            })
+        }
+        UtilityKind::PointerEvents => {
+            let value = resolve_pointer_events_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> Interactable"),
+                documentation: format!("{variant_prefix}Sets `Interactable` to `{value}`."),
+            })
+        }
+        UtilityKind::SpaceX | UtilityKind::SpaceY => {
+            let spacing_key = analysis.payload()?;
+            let value = resolve_spacing_value(config, spacing_key)?;
+            let direction = match &analysis.utility {
+                UtilityKind::SpaceX => "Horizontal",
+                _ => "Vertical",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.Padding"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.Padding` to `{value}` with `FillDirection = Enum.FillDirection.{direction}`."
+                ),
+            })
+        }
+        UtilityKind::Whitespace => {
+            let value = resolve_whitespace_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TextWrapped"),
+                documentation: format!("{variant_prefix}Sets `TextWrapped` to `{value}`."),
+            })
+        }
+        UtilityKind::Overscroll => {
+            let behavior = resolve_overscroll_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ElasticBehavior"),
+                documentation: format!(
+                    "{variant_prefix}Sets `ElasticBehavior` to `Enum.ElasticBehavior.{behavior}`."
+                ),
+            })
+        }
+        UtilityKind::Ring | UtilityKind::Outline => {
+            let family = match &analysis.utility {
+                UtilityKind::Ring => "ring",
+                _ => "outline",
+            };
+            let documentation = match analysis.payload() {
+                None => {
+                    let thickness = if family == "ring" { "3" } else { "2" };
+                    format!(
+                        "{variant_prefix}Sets `UIStroke.Thickness` to `{thickness}` with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`."
+                    )
+                }
+                Some(payload) => match classify_stroke_payload(&analysis.utility, payload) {
+                    StrokePayload::Thickness(thickness) => format!(
+                        "{variant_prefix}Sets `UIStroke.Thickness` to `{thickness}` with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`."
+                    ),
+                    StrokePayload::Unsupported => return None,
+                    StrokePayload::Color => {
+                        let mut diagnostics = Vec::new();
+                        let resolution = resolve_color_value(
+                            config,
+                            &mut diagnostics,
+                            if family == "ring" {
+                                RING_COLOR_FAMILY
+                            } else {
+                                OUTLINE_COLOR_FAMILY
+                            },
+                            payload,
+                            token,
+                        )?;
+                        match resolution {
+                            ColorResolution::Expression(value) => format!(
+                                "{variant_prefix}Sets `UIStroke.Color` to `{value}`. Shares the same UIStroke as `border-*`."
+                            ),
+                            ColorResolution::Transparent => {
+                                format!("{variant_prefix}Sets `UIStroke.Transparency` to `1`.")
+                            }
+                        }
+                    }
+                },
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIStroke"),
+                documentation,
+            })
+        }
+        UtilityKind::CenterX | UtilityKind::CenterY => {
+            let axis = match &analysis.utility {
+                UtilityKind::CenterX => "X",
+                _ => "Y",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> AnchorPoint + Position"),
+                documentation: format!(
+                    "{variant_prefix}Centers the element on the {axis} axis with `AnchorPoint.{axis} = 0.5` and `Position.{axis} = UDim(0.5, 0)`."
+                ),
+            })
+        }
+        UtilityKind::Grid => Some(HoverContent {
+            display: format!("`{token}` -> UIGridLayout"),
+            documentation: format!(
+                "{variant_prefix}Adds a Roblox UIGridLayout with `SortOrder = Enum.SortOrder.LayoutOrder`. Combine with `grid-cols-*`, `grid-rows-*`, and `gap-*`."
+            ),
+        }),
+        UtilityKind::GridColumns | UtilityKind::GridRows => {
+            let count = resolve_grid_cell_count(analysis.payload()?)?;
+            let direction = match &analysis.utility {
+                UtilityKind::GridColumns => "Horizontal",
+                _ => "Vertical",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGridLayout.FillDirectionMaxCells"),
+                documentation: format!(
+                    "{variant_prefix}Adds a Roblox UIGridLayout with `FillDirection = Enum.FillDirection.{direction}` and `FillDirectionMaxCells = {count}`."
+                ),
+            })
+        }
+        UtilityKind::Basis => {
+            let size_key = analysis.payload()?;
+            if is_automatic_size_key(size_key) {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> AutomaticSize"),
+                    documentation: format!(
+                        "{variant_prefix}Enables `AutomaticSize` on the X axis."
+                    ),
+                });
+            }
+
+            let mut diagnostics = Vec::new();
+            let value =
+                resolve_size_axis_value(config, &mut diagnostics, size_key, &analysis.parsed.raw)?;
+            let resolved = describe_size_axis_value(&value);
+            Some(HoverContent {
+                display: format!("`{token}` -> Roblox Size.X"),
+                documentation: format!(
+                    "{variant_prefix}Sets the main-axis (row) size `Size.X` using {resolved}."
+                ),
+            })
+        }
+        UtilityKind::TranslateX | UtilityKind::TranslateY => {
+            let translate_key = analysis.payload()?;
+            let (negative, axis) = match &analysis.utility {
+                UtilityKind::TranslateX => (
+                    analysis.parsed.utility.raw.starts_with("-translate-x-"),
+                    "X",
+                ),
+                _ => (
+                    analysis.parsed.utility.raw.starts_with("-translate-y-"),
+                    "Y",
+                ),
+            };
+
+            let mut diagnostics = Vec::new();
+            let value = resolve_position_axis_value(
+                config,
+                &mut diagnostics,
+                translate_key,
+                &analysis.parsed.utility.raw,
+                negative,
+            )?;
+            let documentation = if value.scale != "0" {
+                format!(
+                    "{variant_prefix}Shifts the element by `{}` of its own size on the {axis} axis via `AnchorPoint`.",
+                    value.scale
+                )
+            } else {
+                format!(
+                    "{variant_prefix}Shifts `Position.{axis}` by `{}` pixels.",
+                    value.offset
+                )
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> Roblox transform"),
+                documentation,
+            })
+        }
+        UtilityKind::FontStyle => {
+            let style = resolve_font_style_value(analysis.payload()?)?;
+            let value = font_face_expression(None, Some(style));
+            Some(HoverContent {
+                display: format!("`{token}` -> FontFace"),
+                documentation: format!("{variant_prefix}Sets `FontFace` to `{value}`."),
             })
         }
         UtilityKind::TextSize => {
@@ -616,6 +965,20 @@ fn variant_prefix(analysis: &crate::semantic::result::AnalyzedClassToken) -> Str
         return String::new();
     }
 
+    let unknown: Vec<&str> = analysis
+        .parsed
+        .variants
+        .iter()
+        .filter(|variant| variant.kind.is_none())
+        .map(|variant| variant.raw.as_str())
+        .collect();
+    if !unknown.is_empty() {
+        return format!(
+            "Unknown variant `{}`; this class never applies at runtime. ",
+            unknown.join("`, `")
+        );
+    }
+
     let variant_label = analysis
         .parsed
         .variants
@@ -623,5 +986,12 @@ fn variant_prefix(analysis: &crate::semantic::result::AnalyzedClassToken) -> Str
         .map(|variant| variant.raw.as_str())
         .collect::<Vec<_>>()
         .join(":");
-    format!("Runtime variant `{variant_label}`. ")
+    let conditions = analysis
+        .parsed
+        .variants
+        .iter()
+        .filter_map(|variant| crate::semantic::variant::variant_condition(&variant.raw))
+        .collect::<Vec<_>>()
+        .join(" and ");
+    format!("Runtime variant `{variant_label}`; applies when {conditions}. ")
 }

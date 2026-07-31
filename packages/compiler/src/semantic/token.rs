@@ -9,10 +9,7 @@ pub(crate) struct ParsedClassToken {
 }
 
 pub(crate) fn parse_class_token(token: &str) -> ParsedClassToken {
-    let (variants, base_token) = match split_variant_prefixes(token) {
-        Some((variants, remainder)) => (variants, remainder),
-        None => (Vec::new(), token),
-    };
+    let (variants, base_token) = split_variant_prefixes(token);
 
     ParsedClassToken {
         raw: token.to_owned(),
@@ -33,7 +30,10 @@ mod tests {
 
         assert_eq!(parsed.raw, "md:px-4");
         assert_eq!(parsed.variants.len(), 1);
-        assert!(matches!(parsed.variants[0].kind, VariantKind::Width { .. }));
+        assert!(matches!(
+            parsed.variants[0].kind,
+            Some(VariantKind::Width { .. })
+        ));
         assert!(matches!(
             parsed.utility.kind,
             UtilityKind::Padding(PaddingKind::X)

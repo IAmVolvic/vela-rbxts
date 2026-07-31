@@ -18,6 +18,28 @@ pub(crate) struct StyleIr {
     pub(crate) base: StyleEffectBundle,
     pub(crate) runtime_rules: Vec<RuntimeRule>,
     pub(crate) runtime_class_value: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) transition: Option<TransitionSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) animation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) text: Option<TextSpec>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub(crate) struct TextSpec {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) transform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) decoration: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub(crate) struct TransitionSpec {
+    pub(crate) time: f64,
+    pub(crate) style: String,
+    pub(crate) direction: String,
+    pub(crate) delay: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Default)]

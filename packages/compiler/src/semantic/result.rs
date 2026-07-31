@@ -5,6 +5,10 @@ use crate::ir::model::RuntimeCondition;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SemanticIssue {
     UnsupportedUtilityFamily { family: String },
+    NoRobloxEquivalent { family: String },
+    UnknownVariant { variant: String },
+    UnsupportedArbitraryValue { value: String },
+    UnsupportedOpacityModifier { modifier: String },
     UnsupportedBorderValue { value: String },
     UnsupportedZIndexValue { value: String },
     UnsupportedZIndexAuto,

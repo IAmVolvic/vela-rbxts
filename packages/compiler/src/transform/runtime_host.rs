@@ -4,7 +4,7 @@ use swc_core::ecma::ast::ModuleItem;
 
 const RUNTIME_HOST_TEMPLATE: &str = r###"
 import __VelaReact from "@rbxts/react";
-import { UserInputService as __VelaUserInputService, Workspace as __VelaWorkspace } from "@rbxts/services";
+import { TweenService as __VelaTweenService, UserInputService as __VelaUserInputService, Workspace as __VelaWorkspace } from "@rbxts/services";
 
 type ClassDictionary = Record<string, boolean | null | undefined>;
 type ClassValue =
@@ -143,14 +143,41 @@ type RuntimeHelper = {
 	props: RuntimeHelperProp[];
 };
 
+type RuntimeTransition = {
+	time: number;
+	style: string;
+	direction: string;
+	delay: number;
+};
+
+type RuntimeTransitionState = {
+	enabled?: boolean;
+	time?: number;
+	style?: string;
+	direction?: string;
+	delay?: number;
+};
+
+type RuntimeTextSpec = {
+	transform?: string;
+	decoration?: string;
+};
+
 type RuntimeResolution = {
 	props: RuntimePropMap;
 	helpers: RuntimeHelper[];
+	transition?: RuntimeTransitionState;
+	animation?: string;
+	textTransform?: string;
+	textDecoration?: string;
 };
 
 type VelaRuntimeHostProps = {
 	__velaTag: VelaRuntimeTag;
 	__velaRules?: readonly RuntimeRule[];
+	__velaTransition?: RuntimeTransition;
+	__velaAnimation?: string;
+	__velaText?: RuntimeTextSpec;
 	className?: ClassValue;
 	children?: defined | readonly defined[];
 } & Record<string, unknown>;
@@ -158,7 +185,10 @@ type VelaRuntimeHostProps = {
 function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 	const theme = normalizeTheme(config);
 
-	return (props: VelaRuntimeHostProps) => {
+	// forwardRef so slotting libraries (asChild-style cloneElement) and plain
+	// consumer refs reach the rendered instance instead of dying on a function
+	// component.
+	return __VelaReact.forwardRef((props: VelaRuntimeHostProps, forwardedRef: unknown) => {
 		const environment = useRuntimeEnvironment();
 		const __velaTag = props.__velaTag;
 		const __velaRules = props.__velaRules ?? [];
@@ -171,11 +201,29 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			__velaRules as RuntimeRule[],
 			className,
 		);
+		// A component tag decides its own rendering, so there is no instance to
+		// tween; motion utilities only engage on real host tags.
+		const instanceCapable = typeIs(__velaTag, "string");
+		const resolvedTransition = resolveTransitionConfig(
+			props.__velaTransition,
+			resolution.transition,
+		);
+		const transition = instanceCapable ? resolvedTransition : undefined;
+		const animation = resolution.animation ?? props.__velaAnimation;
+		const animationActive =
+			instanceCapable && animation !== undefined && animation !== "none";
+
+		const instanceRef = __VelaReact.useRef<Instance | undefined>(undefined);
+		const heldProps = __VelaReact.useRef<RuntimePropMap | undefined>(undefined);
+		const lastGoal = __VelaReact.useRef<RuntimePropMap | undefined>(undefined);
+
 		const hostProps: Record<string, unknown> = {};
 		for (const [name, value] of pairs(props as Record<string, unknown>)) {
 			if (
 				name !== "__velaTag" &&
 				name !== "__velaRules" &&
+				name !== "__velaTransition" &&
+				name !== "__velaAnimation" &&
 				name !== "className" &&
 				name !== "children"
 			) {
@@ -185,6 +233,81 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 		for (const [name, value] of pairs(resolution.props)) {
 			hostProps[name] = value;
 		}
+
+		applyTextConfig(hostProps, props.__velaText, resolution);
+
+		// With a transition, React keeps rendering the first-seen value for
+		// every tweenable prop so it never rewrites the instance; the effect
+		// below moves the real property with TweenService instead.
+		const tweenGoal: RuntimePropMap = {};
+		if (transition !== undefined) {
+			if (heldProps.current === undefined) {
+				heldProps.current = {};
+			}
+			const held = heldProps.current;
+			for (const [name, value] of pairs(resolution.props)) {
+				if (!isTweenableValue(value)) {
+					continue;
+				}
+				tweenGoal[name as string] = value;
+				if (held[name as string] === undefined) {
+					held[name as string] = value;
+				}
+				hostProps[name as string] = held[name as string];
+			}
+		}
+		if (transition !== undefined || animationActive) {
+			hostProps["ref"] = (instance: Instance | undefined) => {
+				instanceRef.current = instance;
+				assignForwardedRef(forwardedRef, instance);
+			};
+		} else if (forwardedRef !== undefined) {
+			hostProps["ref"] = forwardedRef;
+		}
+
+		__VelaReact.useEffect(() => {
+			const instance = instanceRef.current;
+			if (instance === undefined || !animationActive) {
+				return undefined;
+			}
+			return startPresetAnimation(instance, animation as string);
+		}, [animation]);
+
+		__VelaReact.useEffect(() => {
+			if (transition === undefined) {
+				lastGoal.current = undefined;
+				return;
+			}
+
+			const instance = instanceRef.current;
+			const previous = lastGoal.current;
+			lastGoal.current = tweenGoal;
+			if (instance === undefined || previous === undefined) {
+				return;
+			}
+
+			const changed: Record<string, RuntimePropValue> = {};
+			let hasChanged = false;
+			for (const [name, value] of pairs(tweenGoal)) {
+				if (previous[name as string] !== value) {
+					changed[name as string] = value;
+					hasChanged = true;
+				}
+			}
+			if (!hasChanged) {
+				return;
+			}
+
+			const info = new TweenInfo(
+				transition.time,
+				parseEasingStyle(transition.style),
+				parseEasingDirection(transition.direction),
+				0,
+				false,
+				transition.delay,
+			);
+			__VelaTweenService.Create(instance, info, changed as never).Play();
+		});
 		const runtimeChildren = resolution.helpers.map((helper) =>
 			__VelaReact.createElement(helper.tag, helperToProps(helper.props)),
 		);
@@ -206,7 +329,69 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			hostProps,
 			...allChildren,
 		);
-	};
+	});
+}
+
+function escapeRichText(value: string): string {
+	const [amp] = value.gsub("&", "&amp;");
+	const [lt] = amp.gsub("<", "&lt;");
+	const [gt] = lt.gsub(">", "&gt;");
+	return gt;
+}
+
+function capitalizeAsciiWords(value: string): string {
+	const [result] = value.gsub("%f[%a]%a", (letter) => letter.upper());
+	return result;
+}
+
+/// Transforms `Text` per the merged compile-time and dynamic config. A
+/// consumer-managed `RichText` prop opts the element out of decorations, which
+/// would otherwise double-escape its markup.
+function applyTextConfig(
+	hostProps: Record<string, unknown>,
+	base: RuntimeTextSpec | undefined,
+	resolution: RuntimeResolution,
+) {
+	const transformValue = resolution.textTransform ?? base?.transform;
+	const decorationValue = resolution.textDecoration ?? base?.decoration;
+	const transform = transformValue === "none" ? undefined : transformValue;
+	const decoration = decorationValue === "none" ? undefined : decorationValue;
+	if (transform === undefined && decoration === undefined) {
+		return;
+	}
+
+	const text = hostProps["Text"];
+	if (!typeIs(text, "string")) {
+		return;
+	}
+
+	let result = text;
+	if (transform === "upper") {
+		result = result.upper();
+	} else if (transform === "lower") {
+		result = result.lower();
+	} else if (transform === "capitalize") {
+		result = capitalizeAsciiWords(result);
+	}
+
+	if (decoration !== undefined && hostProps["RichText"] === undefined) {
+		hostProps["RichText"] = true;
+		if (decoration === "underline") {
+			result = `<u>${escapeRichText(result)}</u>`;
+		} else if (decoration === "strike") {
+			result = `<s>${escapeRichText(result)}</s>`;
+		}
+	}
+
+	hostProps["Text"] = result;
+}
+
+function assignForwardedRef(ref: unknown, value: Instance | undefined) {
+	if (typeIs(ref, "function")) {
+		(ref as (instance: Instance | undefined) => void)(value);
+	} else if (typeIs(ref, "table")) {
+		(ref as { current?: Instance }).current = value;
+	}
 }
 
 function useRuntimeEnvironment(): RuntimeEnvironment {
@@ -386,12 +571,232 @@ function applyToken(
 		return;
 	}
 
+	if (utility === "uppercase") {
+		resolution.textTransform = "upper";
+		return;
+	}
+	if (utility === "lowercase") {
+		resolution.textTransform = "lower";
+		return;
+	}
+	if (utility === "capitalize") {
+		resolution.textTransform = "capitalize";
+		return;
+	}
+	if (utility === "normal-case") {
+		resolution.textTransform = "none";
+		return;
+	}
+	if (utility === "underline") {
+		resolution.textDecoration = "underline";
+		return;
+	}
+	if (utility === "line-through") {
+		resolution.textDecoration = "strike";
+		return;
+	}
+	if (utility === "no-underline") {
+		resolution.textDecoration = "none";
+		return;
+	}
+
+	if (startsWith(utility, "animate-")) {
+		const key = substring(utility, stringLength("animate-"));
+		if (
+			key === "spin" ||
+			key === "pulse" ||
+			key === "bounce" ||
+			key === "none"
+		) {
+			resolution.animation = key;
+		}
+		return;
+	}
+
+	if (applyTransitionToken(utility, resolution)) {
+		return;
+	}
+
 	const effect = resolveUtilityToken(theme, utility);
 	if (!effect) {
 		return;
 	}
 
 	applyResolvedEffectBundle(resolution, effect);
+}
+
+function transitionState(resolution: RuntimeResolution): RuntimeTransitionState {
+	let state = resolution.transition;
+	if (state === undefined) {
+		state = {};
+		resolution.transition = state;
+	}
+	return state;
+}
+
+/// Consumes `transition`/`duration-*`/`ease-*`/`delay-*` tokens from dynamic
+/// class values so state-driven class changes tween instead of snapping.
+function applyTransitionToken(
+	token: string,
+	resolution: RuntimeResolution,
+): boolean {
+	if (token === "transition" || startsWith(token, "transition-")) {
+		const state = transitionState(resolution);
+		if (token === "transition-none") {
+			state.enabled = false;
+		} else {
+			state.enabled = true;
+		}
+		return true;
+	}
+
+	if (startsWith(token, "duration-")) {
+		const millis = tonumber(substring(token, stringLength("duration-")));
+		if (millis !== undefined) {
+			const state = transitionState(resolution);
+			state.time = millis / 1000;
+			if (state.enabled === undefined) {
+				state.enabled = true;
+			}
+		}
+		return true;
+	}
+
+	if (startsWith(token, "delay-")) {
+		const millis = tonumber(substring(token, stringLength("delay-")));
+		if (millis !== undefined) {
+			const state = transitionState(resolution);
+			state.delay = millis / 1000;
+			if (state.enabled === undefined) {
+				state.enabled = true;
+			}
+		}
+		return true;
+	}
+
+	if (startsWith(token, "ease-")) {
+		const key = substring(token, stringLength("ease-"));
+		const easing =
+			key === "linear"
+				? (["Linear", "InOut"] as const)
+				: key === "in"
+					? (["Quad", "In"] as const)
+					: key === "out"
+						? (["Quad", "Out"] as const)
+						: key === "in-out"
+							? (["Quad", "InOut"] as const)
+							: undefined;
+		if (easing !== undefined) {
+			const state = transitionState(resolution);
+			state.style = easing[0];
+			state.direction = easing[1];
+			if (state.enabled === undefined) {
+				state.enabled = true;
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
+function resolveTransitionConfig(
+	base: RuntimeTransition | undefined,
+	dynamic: RuntimeTransitionState | undefined,
+): RuntimeTransition | undefined {
+	const enabled =
+		dynamic?.enabled !== undefined ? dynamic.enabled : base !== undefined;
+	if (!enabled) {
+		return undefined;
+	}
+
+	return {
+		time: dynamic?.time ?? base?.time ?? 0.15,
+		style: dynamic?.style ?? base?.style ?? "Quad",
+		direction: dynamic?.direction ?? base?.direction ?? "Out",
+		delay: dynamic?.delay ?? base?.delay ?? 0,
+	};
+}
+
+function isTweenableValue(value: RuntimePropValue): boolean {
+	return (
+		typeIs(value, "number") ||
+		typeIs(value, "Color3") ||
+		typeIs(value, "UDim") ||
+		typeIs(value, "UDim2") ||
+		typeIs(value, "Vector2")
+	);
+}
+
+function parseEasingStyle(name: string): Enum.EasingStyle {
+	const registry = Enum.EasingStyle as unknown as Record<
+		string,
+		Enum.EasingStyle | undefined
+	>;
+	return registry[name] ?? Enum.EasingStyle.Quad;
+}
+
+function parseEasingDirection(name: string): Enum.EasingDirection {
+	const registry = Enum.EasingDirection as unknown as Record<
+		string,
+		Enum.EasingDirection | undefined
+	>;
+	return registry[name] ?? Enum.EasingDirection.Out;
+}
+
+/// Starts a preset loop animation and returns the cleanup that cancels it and
+/// restores the animated property.
+function startPresetAnimation(
+	instance: Instance,
+	animation: string,
+): (() => void) | undefined {
+	const gui = instance as GuiObject;
+
+	if (animation === "spin") {
+		const base = gui.Rotation;
+		const tween = __VelaTweenService.Create(
+			gui,
+			new TweenInfo(1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
+			{ Rotation: base + 360 } as never,
+		);
+		tween.Play();
+		return () => {
+			tween.Cancel();
+			gui.Rotation = base;
+		};
+	}
+
+	if (animation === "pulse") {
+		const base = gui.BackgroundTransparency;
+		const tween = __VelaTweenService.Create(
+			gui,
+			new TweenInfo(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, true),
+			{ BackgroundTransparency: 0.5 } as never,
+		);
+		tween.Play();
+		return () => {
+			tween.Cancel();
+			gui.BackgroundTransparency = base;
+		};
+	}
+
+	if (animation === "bounce") {
+		const base = gui.Position;
+		const height = gui.AbsoluteSize.Y;
+		const bounceOffset = height > 0 ? math.floor(height / 4) : 8;
+		const tween = __VelaTweenService.Create(
+			gui,
+			new TweenInfo(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, true),
+			{ Position: base.sub(UDim2.fromOffset(0, bounceOffset)) } as never,
+		);
+		tween.Play();
+		return () => {
+			tween.Cancel();
+			gui.Position = base;
+		};
+	}
+
+	return undefined;
 }
 
 function matchesVariant(
@@ -1079,7 +1484,9 @@ function parseUDim2(value: string): UDim2 | undefined {
 		);
 	}
 
-	const constructed = parseCallArguments(value, "UDim2.new(", ")");
+	const constructed =
+		parseCallArguments(value, "new UDim2(", ")") ??
+		parseCallArguments(value, "UDim2.new(", ")");
 	if (constructed === undefined || arraySize(constructed) !== 4) {
 		return undefined;
 	}

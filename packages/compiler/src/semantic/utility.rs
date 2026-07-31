@@ -42,8 +42,38 @@ pub(crate) enum UtilityKind {
     AlignItems,
     PositionX,
     PositionY,
+    PositionRight,
+    PositionBottom,
     Inset,
     AnchorPoint,
+    AlignContent,
+    AlignSelf,
+    LayoutOrder,
+    LineHeight,
+    FontStyle,
+    Grid,
+    GridColumns,
+    GridRows,
+    Basis,
+    TranslateX,
+    TranslateY,
+    ObjectFit,
+    PointerEvents,
+    Transition,
+    TransitionDuration,
+    TransitionEase,
+    TransitionDelay,
+    Animation,
+    TextTransform,
+    TextDecoration,
+    SpaceX,
+    SpaceY,
+    Whitespace,
+    Overscroll,
+    Ring,
+    Outline,
+    CenterX,
+    CenterY,
     TextSize,
     FontWeight,
     TextXAlignment,
@@ -178,6 +208,82 @@ pub(crate) const TEXT_X_ALIGN_VALUES: [&str; 3] = ["left", "center", "right"];
 pub(crate) const TEXT_Y_ALIGN_VALUES: [&str; 3] = ["top", "middle", "bottom"];
 pub(crate) const TEXT_WRAP_VALUES: [&str; 2] = ["wrap", "nowrap"];
 pub(crate) const DEFAULT_FONT_FAMILY: &str = "rbxasset://fonts/families/SourceSansPro.json";
+pub(crate) const ALIGN_CONTENT_VALUES: [&str; 7] = [
+    "start", "center", "end", "between", "around", "evenly", "stretch",
+];
+pub(crate) const ALIGN_SELF_VALUES: [(&str, &str); 5] = [
+    ("auto", "Automatic"),
+    ("start", "Start"),
+    ("center", "Center"),
+    ("end", "End"),
+    ("stretch", "Stretch"),
+];
+pub(crate) const LINE_HEIGHT_VALUES: [(&str, &str); 6] = [
+    ("none", "1"),
+    ("tight", "1.25"),
+    ("snug", "1.375"),
+    ("normal", "1.5"),
+    ("relaxed", "1.625"),
+    ("loose", "2"),
+];
+pub(crate) const LAYOUT_ORDER_KEYWORDS: [(&str, &str); 3] =
+    [("first", "-9999"), ("last", "9999"), ("none", "0")];
+pub(crate) const FONT_STYLE_VALUES: [(&str, &str); 2] =
+    [("italic", "Italic"), ("not-italic", "Normal")];
+pub(crate) const GRID_CELL_COUNT_MAX: u32 = 12;
+pub(crate) const OBJECT_FIT_VALUES: [(&str, &str); 4] = [
+    ("cover", "Crop"),
+    ("contain", "Fit"),
+    ("fill", "Stretch"),
+    // Roblox-only extension; Tailwind has no tiling object fit.
+    ("tile", "Tile"),
+];
+pub(crate) const POINTER_EVENTS_VALUES: [(&str, &str); 2] = [("none", "false"), ("auto", "true")];
+pub(crate) const WHITESPACE_VALUES: [(&str, &str); 2] = [("normal", "true"), ("nowrap", "false")];
+pub(crate) const OVERSCROLL_VALUES: [(&str, &str); 3] = [
+    ("auto", "Always"),
+    ("contain", "WhenScrollable"),
+    ("none", "Never"),
+];
+pub(crate) const RING_THICKNESS_VALUES: [&str; 5] = ["0", "1", "2", "4", "8"];
+pub(crate) const TRANSITION_PROPERTY_VALUES: [&str; 5] =
+    ["all", "colors", "opacity", "shadow", "transform"];
+pub(crate) const DURATION_PRESET_VALUES: [&str; 8] =
+    ["75", "100", "150", "200", "300", "500", "700", "1000"];
+pub(crate) const EASE_VALUES: [(&str, &str, &str); 4] = [
+    ("linear", "Linear", "InOut"),
+    ("in", "Quad", "In"),
+    ("out", "Quad", "Out"),
+    ("in-out", "Quad", "InOut"),
+];
+pub(crate) const DEFAULT_TRANSITION_TIME: f64 = 0.15;
+pub(crate) const TEXT_TRANSFORM_VALUES: [(&str, &str); 4] = [
+    ("uppercase", "upper"),
+    ("lowercase", "lower"),
+    ("capitalize", "capitalize"),
+    ("normal-case", "none"),
+];
+pub(crate) const TEXT_DECORATION_VALUES: [(&str, &str); 3] = [
+    ("underline", "underline"),
+    ("line-through", "strike"),
+    ("no-underline", "none"),
+];
+pub(crate) const ANIMATION_VALUES: [(&str, &str); 4] = [
+    ("spin", "Loop Rotation a full turn every second."),
+    ("pulse", "Fade BackgroundTransparency toward 0.5 and back."),
+    ("bounce", "Bob the element up by a quarter of its height."),
+    ("none", "Stop the preset animation."),
+];
+pub(crate) const RING_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
+    theme_family: "ring color",
+    color_prop: "Color",
+    transparency_prop: Some("Transparency"),
+};
+pub(crate) const OUTLINE_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
+    theme_family: "outline color",
+    color_prop: "Color",
+    transparency_prop: Some("Transparency"),
+};
 pub(crate) const ANCHOR_ORIGIN_VALUES: [&str; 9] = [
     "top-left",
     "top",
@@ -279,7 +385,16 @@ impl UtilityKind {
                 | UtilityKind::Size
                 | UtilityKind::PositionX
                 | UtilityKind::PositionY
+                | UtilityKind::PositionRight
+                | UtilityKind::PositionBottom
                 | UtilityKind::Inset
+                | UtilityKind::Basis
+                | UtilityKind::TranslateX
+                | UtilityKind::TranslateY
+                | UtilityKind::SpaceX
+                | UtilityKind::SpaceY
+                | UtilityKind::Ring
+                | UtilityKind::Outline
                 | UtilityKind::MinWidth
                 | UtilityKind::MaxWidth
                 | UtilityKind::MinHeight
@@ -307,14 +422,22 @@ pub(crate) fn is_utility_allowed_on_host(element_tag: Option<&str>, kind: &Utili
         UtilityKind::TextColor
         | UtilityKind::TextSize
         | UtilityKind::FontWeight
+        | UtilityKind::FontStyle
         | UtilityKind::TextXAlignment
         | UtilityKind::TextYAlignment
         | UtilityKind::TextWrap
-        | UtilityKind::TextTruncate => {
+        | UtilityKind::TextTruncate
+        | UtilityKind::LineHeight
+        | UtilityKind::Whitespace
+        | UtilityKind::TextTransform
+        | UtilityKind::TextDecoration => {
             matches!(element_tag, "textlabel" | "textbutton" | "textbox")
         }
-        UtilityKind::ImageColor => matches!(element_tag, "imagelabel" | "imagebutton"),
+        UtilityKind::ImageColor | UtilityKind::ObjectFit => {
+            matches!(element_tag, "imagelabel" | "imagebutton")
+        }
         UtilityKind::PlaceholderColor => element_tag == "textbox",
+        UtilityKind::Overscroll => element_tag == "scrollingframe",
         _ => true,
     }
 }
@@ -341,7 +464,12 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
     for (prefix, family, kind) in [
         ("-top-", "top", UtilityKind::PositionY),
         ("-left-", "left", UtilityKind::PositionX),
+        ("-right-", "right", UtilityKind::PositionRight),
+        ("-bottom-", "bottom", UtilityKind::PositionBottom),
         ("-inset-", "inset", UtilityKind::Inset),
+        ("-order-", "order", UtilityKind::LayoutOrder),
+        ("-translate-x-", "translate", UtilityKind::TranslateX),
+        ("-translate-y-", "translate", UtilityKind::TranslateY),
     ] {
         if let Some(value) = token.strip_prefix(prefix) {
             return ParsedUtility {
@@ -362,12 +490,80 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         };
     }
 
+    if token == "grid" {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "grid".to_owned(),
+            payload: None,
+            kind: UtilityKind::Grid,
+        };
+    }
+
+    for (exact, kind) in [
+        ("ring", UtilityKind::Ring),
+        ("outline", UtilityKind::Outline),
+        ("mx-auto", UtilityKind::CenterX),
+        ("my-auto", UtilityKind::CenterY),
+        ("transition", UtilityKind::Transition),
+    ] {
+        if token == exact {
+            return ParsedUtility {
+                raw: token.to_owned(),
+                family: exact
+                    .split_once('-')
+                    .map_or(exact, |(family, _)| family)
+                    .to_owned(),
+                payload: None,
+                kind,
+            };
+        }
+    }
+
+    if token == "rounded" {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "rounded".to_owned(),
+            payload: Some(PALETTE_DEFAULT_KEY.to_owned()),
+            kind: UtilityKind::Radius,
+        };
+    }
+
     if token == "truncate" {
         return ParsedUtility {
             raw: token.to_owned(),
             family: "truncate".to_owned(),
             payload: None,
             kind: UtilityKind::TextTruncate,
+        };
+    }
+
+    if FONT_STYLE_VALUES.iter().any(|(name, _)| *name == token) {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: token.to_owned(),
+            payload: Some(token.to_owned()),
+            kind: UtilityKind::FontStyle,
+        };
+    }
+
+    if TEXT_TRANSFORM_VALUES.iter().any(|(name, _)| *name == token) {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: token.to_owned(),
+            payload: Some(token.to_owned()),
+            kind: UtilityKind::TextTransform,
+        };
+    }
+
+    if TEXT_DECORATION_VALUES
+        .iter()
+        .any(|(name, _)| *name == token)
+    {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: token.to_owned(),
+            payload: Some(token.to_owned()),
+            kind: UtilityKind::TextDecoration,
         };
     }
 
@@ -482,11 +678,36 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("items-", UtilityKind::AlignItems),
         ("from-", UtilityKind::GradientFrom),
         ("via-", UtilityKind::GradientVia),
-        ("to-", UtilityKind::GradientTo),
+        // `top-` must come before `to-`, which would otherwise swallow it.
         ("top-", UtilityKind::PositionY),
+        ("to-", UtilityKind::GradientTo),
         ("left-", UtilityKind::PositionX),
+        ("right-", UtilityKind::PositionRight),
+        ("bottom-", UtilityKind::PositionBottom),
         ("inset-", UtilityKind::Inset),
         ("origin-", UtilityKind::AnchorPoint),
+        ("content-", UtilityKind::AlignContent),
+        ("self-", UtilityKind::AlignSelf),
+        ("order-", UtilityKind::LayoutOrder),
+        ("leading-", UtilityKind::LineHeight),
+        ("grid-cols-", UtilityKind::GridColumns),
+        ("grid-rows-", UtilityKind::GridRows),
+        ("basis-", UtilityKind::Basis),
+        ("translate-x-", UtilityKind::TranslateX),
+        ("translate-y-", UtilityKind::TranslateY),
+        ("object-", UtilityKind::ObjectFit),
+        ("pointer-events-", UtilityKind::PointerEvents),
+        ("space-x-", UtilityKind::SpaceX),
+        ("space-y-", UtilityKind::SpaceY),
+        ("whitespace-", UtilityKind::Whitespace),
+        ("overscroll-", UtilityKind::Overscroll),
+        ("ring-", UtilityKind::Ring),
+        ("outline-", UtilityKind::Outline),
+        ("transition-", UtilityKind::Transition),
+        ("duration-", UtilityKind::TransitionDuration),
+        ("ease-", UtilityKind::TransitionEase),
+        ("delay-", UtilityKind::TransitionDelay),
+        ("animate-", UtilityKind::Animation),
     ] {
         if let Some(payload) = token.strip_prefix(prefix) {
             return ParsedUtility {
@@ -578,11 +799,25 @@ pub(crate) fn resolve_text_size_value(key: &str) -> Option<&'static str> {
         .map(|(_, value)| *value)
 }
 
-pub(crate) fn resolve_font_weight_value(key: &str) -> Option<String> {
+pub(crate) fn resolve_font_weight_enum(key: &str) -> Option<&'static str> {
     FONT_WEIGHT_VALUES
         .iter()
         .find(|(name, _)| *name == key)
-        .map(|(_, weight)| format!("new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight})"))
+        .map(|(_, weight)| *weight)
+}
+
+pub(crate) fn resolve_font_weight_value(key: &str) -> Option<String> {
+    resolve_font_weight_enum(key).map(|weight| font_face_expression(Some(weight), None))
+}
+
+pub(crate) fn font_face_expression(weight: Option<&str>, style: Option<&str>) -> String {
+    let weight = weight.unwrap_or("Regular");
+    match style.filter(|style| *style != "Normal") {
+        Some(style) => format!(
+            "new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight}, Enum.FontStyle.{style})"
+        ),
+        None => format!("new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight})"),
+    }
 }
 
 pub(crate) fn resolve_text_x_alignment_value(key: &str) -> Option<String> {
@@ -1047,6 +1282,166 @@ pub(crate) fn resolve_align_items_value(key: &str) -> Option<String> {
     Some(alignment.to_owned())
 }
 
+pub(crate) fn resolve_align_content_flex_value(key: &str) -> Option<&'static str> {
+    match key {
+        "between" => Some("SpaceBetween"),
+        "around" => Some("SpaceAround"),
+        "evenly" => Some("SpaceEvenly"),
+        "stretch" => Some("Fill"),
+        _ => None,
+    }
+}
+
+pub(crate) fn resolve_align_self_value(key: &str) -> Option<&'static str> {
+    ALIGN_SELF_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, alignment)| *alignment)
+}
+
+pub(crate) fn resolve_line_height_value(key: &str) -> Option<&'static str> {
+    LINE_HEIGHT_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, value)| *value)
+}
+
+pub(crate) fn resolve_font_style_value(key: &str) -> Option<&'static str> {
+    FONT_STYLE_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, style)| *style)
+}
+
+pub(crate) fn resolve_layout_order_value(key: &str, negative: bool) -> Option<String> {
+    if let Some((_, value)) = LAYOUT_ORDER_KEYWORDS.iter().find(|(name, _)| *name == key) {
+        return (!negative).then(|| (*value).to_owned());
+    }
+
+    let order = key.parse::<i32>().ok()?;
+    Some(if negative && order != 0 {
+        format!("-{order}")
+    } else {
+        order.to_string()
+    })
+}
+
+/// `Some(true)` enables, `Some(false)` disables, `None` is an unknown payload.
+pub(crate) fn resolve_transition_toggle(payload: Option<&str>) -> Option<bool> {
+    match payload {
+        None => Some(true),
+        Some("none") => Some(false),
+        Some(value) if TRANSITION_PROPERTY_VALUES.contains(&value) => Some(true),
+        Some(_) => None,
+    }
+}
+
+pub(crate) fn resolve_duration_seconds(key: &str) -> Option<f64> {
+    let millis = key.parse::<u32>().ok()?;
+    Some(f64::from(millis) / 1000.0)
+}
+
+pub(crate) fn resolve_ease_value(key: &str) -> Option<(&'static str, &'static str)> {
+    EASE_VALUES
+        .iter()
+        .find(|(name, _, _)| *name == key)
+        .map(|(_, style, direction)| (*style, *direction))
+}
+
+pub(crate) fn resolve_text_transform_value(key: &str) -> Option<&'static str> {
+    TEXT_TRANSFORM_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, value)| *value)
+}
+
+pub(crate) fn resolve_text_decoration_value(key: &str) -> Option<&'static str> {
+    TEXT_DECORATION_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, value)| *value)
+}
+
+pub(crate) fn resolve_animation_value(key: &str) -> Option<&'static str> {
+    ANIMATION_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(name, _)| *name)
+}
+
+pub(crate) fn resolve_object_fit_value(key: &str) -> Option<&'static str> {
+    OBJECT_FIT_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, scale_type)| *scale_type)
+}
+
+pub(crate) fn resolve_pointer_events_value(key: &str) -> Option<&'static str> {
+    POINTER_EVENTS_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, value)| *value)
+}
+
+pub(crate) fn resolve_whitespace_value(key: &str) -> Option<&'static str> {
+    WHITESPACE_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, value)| *value)
+}
+
+pub(crate) fn resolve_overscroll_value(key: &str) -> Option<&'static str> {
+    OVERSCROLL_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, behavior)| *behavior)
+}
+
+/// `ring`/`outline` payloads with a stroke meaning; anything else falls
+/// through to color resolution.
+pub(crate) enum StrokePayload {
+    Thickness(&'static str),
+    Unsupported,
+    Color,
+}
+
+pub(crate) fn classify_stroke_payload(kind: &UtilityKind, payload: &str) -> StrokePayload {
+    if let Some(thickness) = RING_THICKNESS_VALUES
+        .iter()
+        .find(|value| **value == payload)
+    {
+        return StrokePayload::Thickness(thickness);
+    }
+
+    if matches!(kind, UtilityKind::Outline) && matches!(payload, "none" | "hidden") {
+        return StrokePayload::Thickness("0");
+    }
+
+    if matches!(payload, "inset" | "solid" | "dashed" | "dotted" | "double")
+        || payload.starts_with("offset-")
+        || payload.parse::<f64>().is_ok()
+    {
+        return StrokePayload::Unsupported;
+    }
+
+    StrokePayload::Color
+}
+
+pub(crate) fn resolve_grid_cell_count(key: &str) -> Option<String> {
+    let count = key.parse::<u32>().ok()?;
+    ((1..=GRID_CELL_COUNT_MAX).contains(&count)).then(|| count.to_string())
+}
+
+/// Re-anchors a `left`/`top`-style axis value to the far edge, mirroring CSS
+/// `right`/`bottom`: the resolved distance is measured back from scale 1.
+pub(crate) fn end_relative_position_axis(value: SizeAxisValue) -> SizeAxisValue {
+    let scale = value.scale.parse::<f64>().unwrap_or(0.0);
+    SizeAxisValue {
+        scale: format_ratio(1.0 - scale),
+        offset: negate_number(value.offset),
+    }
+}
+
 fn parse_arbitrary_aspect_ratio(key: &str) -> Option<f64> {
     let inner = key.strip_prefix('[')?.strip_suffix(']')?;
 
@@ -1149,7 +1544,7 @@ fn resolve_numeric_spacing_value(key: &str) -> Option<String> {
     Some(format!("new UDim(0, {})", format_spacing_offset(offset_px)))
 }
 
-fn spacing_value_to_offset(value: &str) -> Option<String> {
+pub(crate) fn spacing_value_to_offset(value: &str) -> Option<String> {
     let args = value.trim().strip_prefix("new UDim(")?.strip_suffix(')')?;
 
     let mut parts = args.split(',');

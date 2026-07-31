@@ -7,13 +7,20 @@ use super::utility::{
 pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
     let parsed = parse_class_token(token);
     let utility = parsed.utility.kind.clone();
-    let runtime_condition = if parsed.variants.is_empty() {
+    let unknown_variant = parsed
+        .variants
+        .iter()
+        .find(|variant| variant.kind.is_none())
+        .map(|variant| variant.raw.clone());
+
+    let runtime_condition = if parsed.variants.is_empty() || unknown_variant.is_some() {
         None
     } else {
-        let mut conditions = Vec::with_capacity(parsed.variants.len());
-        for variant in &parsed.variants {
-            conditions.push(variant.runtime_condition());
-        }
+        let conditions: Vec<_> = parsed
+            .variants
+            .iter()
+            .filter_map(|variant| variant.runtime_condition())
+            .collect();
 
         Some(if conditions.len() == 1 {
             conditions.into_iter().next().unwrap()
@@ -23,10 +30,21 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
     };
 
     let mut issues = Vec::new();
+    if let Some(variant) = unknown_variant.clone() {
+        issues.push(SemanticIssue::UnknownVariant { variant });
+    }
+
+    if let Some(issue) = payload_shape_issue(&utility, parsed.utility.payload.as_deref()) {
+        issues.push(issue);
+    }
+
     let supported = match &utility {
         UtilityKind::Unknown => {
-            issues.push(SemanticIssue::UnsupportedUtilityFamily {
-                family: parsed.utility.family.clone(),
+            let family = parsed.utility.family.clone();
+            issues.push(if is_known_tailwind_family(&family) {
+                SemanticIssue::NoRobloxEquivalent { family }
+            } else {
+                SemanticIssue::UnsupportedUtilityFamily { family }
             });
             false
         }
@@ -75,7 +93,14 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
             }
         }
         _ => utility.is_supported(),
-    };
+    } && unknown_variant.is_none()
+        && !issues.iter().any(|issue| {
+            matches!(
+                issue,
+                SemanticIssue::UnsupportedArbitraryValue { .. }
+                    | SemanticIssue::UnsupportedOpacityModifier { .. }
+            )
+        });
 
     let needs_config_lookup = utility.needs_config_lookup();
     let runtime_aware = runtime_condition.is_some();
@@ -92,6 +117,132 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
         runtime_condition,
         issues,
     }
+}
+
+/// Tailwind payload shapes vela-rbxts does not implement. Reporting them by
+/// shape keeps the message about the actual feature instead of blaming the
+/// theme for a key it was never asked to hold.
+fn payload_shape_issue(utility: &UtilityKind, payload: Option<&str>) -> Option<SemanticIssue> {
+    let payload = payload?;
+
+    // Only theme-backed utilities, where an arbitrary value would otherwise be
+    // reported as a missing theme key. `border-[…]`, `z-[…]` and the aspect
+    // ratios keep their own handling.
+    if payload.starts_with('[')
+        && payload.ends_with(']')
+        && utility.needs_config_lookup()
+        && !matches!(utility, UtilityKind::Border)
+    {
+        return Some(SemanticIssue::UnsupportedArbitraryValue {
+            value: payload.to_owned(),
+        });
+    }
+
+    // Fractions such as `w-1/2` are real values, so only colors read `/` as an
+    // opacity modifier.
+    if is_color_utility(utility)
+        && let Some((_, modifier)) = payload.rsplit_once('/')
+    {
+        return Some(SemanticIssue::UnsupportedOpacityModifier {
+            modifier: modifier.to_owned(),
+        });
+    }
+
+    None
+}
+
+fn is_color_utility(utility: &UtilityKind) -> bool {
+    matches!(
+        utility,
+        UtilityKind::BackgroundColor
+            | UtilityKind::TextColor
+            | UtilityKind::ImageColor
+            | UtilityKind::PlaceholderColor
+            | UtilityKind::ShadowColor
+            | UtilityKind::GradientFrom
+            | UtilityKind::GradientVia
+            | UtilityKind::GradientTo
+            | UtilityKind::Ring
+            | UtilityKind::Outline
+    )
+}
+
+/// Tailwind families that describe browser-only concepts. They are valid
+/// Tailwind, so they are reported as "no Roblox equivalent" rather than as a
+/// typo the user should fix.
+fn is_known_tailwind_family(family: &str) -> bool {
+    // `grid`/`translate`/`basis` cover the subtokens their prefixes do not
+    // parse, such as `grid-flow-*` or a bare `basis`.
+    matches!(
+        family,
+        "grid"
+            | "translate"
+            | "basis"
+            | "m"
+            | "mt"
+            | "mr"
+            | "mb"
+            | "ml"
+            | "mx"
+            | "my"
+            | "ms"
+            | "me"
+            | "space"
+            | "static"
+            | "fixed"
+            | "absolute"
+            | "relative"
+            | "sticky"
+            | "block"
+            | "inline"
+            | "table"
+            | "contents"
+            | "float"
+            | "clear"
+            | "columns"
+            | "col"
+            | "row"
+            | "tracking"
+            | "indent"
+            | "whitespace"
+            | "break"
+            | "hyphens"
+            | "decoration"
+            | "overline"
+            | "antialiased"
+            | "list"
+            | "ring"
+            | "divide"
+            | "outline"
+            | "blur"
+            | "brightness"
+            | "contrast"
+            | "grayscale"
+            | "invert"
+            | "saturate"
+            | "sepia"
+            | "backdrop"
+            | "cursor"
+            | "pointer"
+            | "resize"
+            | "scroll"
+            | "snap"
+            | "select"
+            | "accent"
+            | "caret"
+            | "appearance"
+            | "skew"
+            | "transform"
+            | "perspective"
+            | "fill"
+            | "stroke"
+            | "object"
+            | "overscroll"
+            | "isolate"
+            | "box"
+            | "container"
+            | "sr"
+    )
 }
 
 #[cfg(test)]

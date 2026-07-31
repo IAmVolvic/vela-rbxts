@@ -15,6 +15,218 @@ pub(crate) fn unsupported_utility_family_diagnostic(token: &str) -> Diagnostic {
     }
 }
 
+pub(crate) fn no_roblox_equivalent_diagnostic(family: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "no-roblox-equivalent".to_owned(),
+        message: format!(
+            "Tailwind \"{family}\" utilities have no Roblox equivalent, so \"{token}\" is ignored."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unknown_variant_diagnostic(variant: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unknown-variant".to_owned(),
+        message: format!(
+            "Unknown variant \"{variant}\" in \"{token}\"; supported variants are sm, md, lg, portrait, landscape, touch, mouse, and gamepad."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_arbitrary_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-arbitrary-value".to_owned(),
+        message: format!(
+            "Arbitrary value \"{value}\" is not supported yet; use a theme key from `vela.config.ts` instead."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_opacity_modifier_diagnostic(modifier: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-opacity-modifier".to_owned(),
+        message: format!(
+            "Color opacity modifier \"/{modifier}\" is not supported; use an `opacity-*` utility instead."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_object_fit_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-object-fit-value".to_owned(),
+        message: format!(
+            "Object fit \"{value}\" is not supported; use cover, contain, fill, or tile."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_pointer_events_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-pointer-events-value".to_owned(),
+        message: format!("Pointer events value \"{value}\" is not supported; use none or auto."),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_whitespace_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-whitespace-value".to_owned(),
+        message: format!("Whitespace value \"{value}\" is not supported; use normal or nowrap."),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_overscroll_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-overscroll-value".to_owned(),
+        message: format!(
+            "Overscroll value \"{value}\" is not supported; use auto, contain, or none."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_space_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-space-value".to_owned(),
+        message: format!(
+            "Space value \"{value}\" is not supported; use a spacing key from `vela.config.ts`."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_stroke_value_diagnostic(
+    family: &str,
+    value: &str,
+    token: &str,
+) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-stroke-value".to_owned(),
+        message: format!(
+            "The {family} value \"{value}\" is not supported; use a thickness (0, 1, 2, 4, 8) or a theme color."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_transition_value_diagnostic(
+    family: &str,
+    value: &str,
+    token: &str,
+) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-transition-value".to_owned(),
+        message: format!("The {family} value \"{value}\" is not supported."),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_animation_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-animation-value".to_owned(),
+        message: format!(
+            "Animation \"{value}\" is not supported; use spin, pulse, bounce, or none."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn decoration_on_richtext_diagnostic() -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "decoration-on-richtext".to_owned(),
+        message: "This element already sets `RichText`, so underline/line-through would double-escape its markup; the decoration is ignored.".to_owned(),
+        token: None,
+        range: None,
+    }
+}
+
+pub(crate) fn motion_on_component_diagnostic() -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "motion-on-component".to_owned(),
+        message: "Transitions and preset animations need direct access to a Roblox instance, which a component element cannot provide; apply them to a host element (for example the `asChild` child) instead.".to_owned(),
+        token: None,
+        range: None,
+    }
+}
+
+pub(crate) fn transition_without_runtime_diagnostic() -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "transition-without-runtime".to_owned(),
+        message: "Transition utilities have no effect without runtime variants or a dynamic className, so they are ignored.".to_owned(),
+        token: None,
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_grid_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-grid-value".to_owned(),
+        message: format!(
+            "Grid cell count \"{value}\" is not supported; use an integer between 1 and 12."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_layout_order_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-layout-order-value".to_owned(),
+        message: format!(
+            "LayoutOrder value \"{value}\" is not supported; use an integer, first, last, or none."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_line_height_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-line-height-value".to_owned(),
+        message: format!(
+            "Line height \"{value}\" is not supported; use none, tight, snug, normal, relaxed, or loose."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
 pub(crate) fn unsupported_z_index_auto_diagnostic(token: &str) -> Diagnostic {
     Diagnostic {
         level: "warning".to_owned(),

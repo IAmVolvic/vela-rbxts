@@ -1,36 +1,51 @@
 use crate::api::Diagnostic;
 use crate::config::model::TailwindConfig;
 use crate::diagnostics::compiler::{
-    negative_z_index_diagnostic, unknown_theme_key_diagnostic,
-    unsupported_alignment_value_diagnostic, unsupported_anchor_value_diagnostic,
-    unsupported_arbitrary_z_index_diagnostic, unsupported_aspect_value_diagnostic,
-    unsupported_border_value_diagnostic, unsupported_color_keyword_diagnostic,
-    unsupported_flex_direction_diagnostic, unsupported_font_weight_diagnostic,
-    unsupported_gradient_direction_diagnostic, unsupported_opacity_value_diagnostic,
-    unsupported_overflow_diagnostic, unsupported_rotation_value_diagnostic,
+    negative_z_index_diagnostic, no_roblox_equivalent_diagnostic, unknown_theme_key_diagnostic,
+    unknown_variant_diagnostic, unsupported_alignment_value_diagnostic,
+    unsupported_anchor_value_diagnostic, unsupported_animation_value_diagnostic,
+    unsupported_arbitrary_value_diagnostic, unsupported_arbitrary_z_index_diagnostic,
+    unsupported_aspect_value_diagnostic, unsupported_border_value_diagnostic,
+    unsupported_color_keyword_diagnostic, unsupported_flex_direction_diagnostic,
+    unsupported_font_weight_diagnostic, unsupported_gradient_direction_diagnostic,
+    unsupported_grid_value_diagnostic, unsupported_layout_order_value_diagnostic,
+    unsupported_line_height_value_diagnostic, unsupported_object_fit_value_diagnostic,
+    unsupported_opacity_modifier_diagnostic, unsupported_opacity_value_diagnostic,
+    unsupported_overflow_diagnostic, unsupported_overscroll_value_diagnostic,
+    unsupported_pointer_events_value_diagnostic, unsupported_rotation_value_diagnostic,
     unsupported_scale_diagnostic, unsupported_shadow_inset_diagnostic,
+    unsupported_space_value_diagnostic, unsupported_stroke_value_diagnostic,
     unsupported_text_alignment_diagnostic, unsupported_text_size_diagnostic,
-    unsupported_utility_family_diagnostic, unsupported_z_index_auto_diagnostic,
+    unsupported_transition_value_diagnostic, unsupported_utility_family_diagnostic,
+    unsupported_whitespace_value_diagnostic, unsupported_z_index_auto_diagnostic,
     unsupported_z_index_value_diagnostic,
 };
-use crate::ir::model::{RuntimeRule, SizeAxisValue, StyleIr};
+use crate::ir::model::{RuntimeRule, SizeAxisValue, StyleIr, TextSpec, TransitionSpec};
 use crate::semantic::{
     analyze::analyze_class_token,
     result::{AnalyzedClassToken, SemanticIssue},
     utility::{
-        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, GRADIENT_COLOR_FAMILY,
-        IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, PaddingKind, SHADOW_COLOR_FAMILY,
-        ShadowPreset, TEXT_COLOR_FAMILY, UtilityKind, is_automatic_size_key,
-        is_known_unsupported_border_payload, resolve_align_items_value, resolve_anchor_point_value,
-        resolve_aspect_ratio_value, resolve_border_thickness_value, resolve_color_value,
-        resolve_flex_direction_value, resolve_flex_item_mode, resolve_flex_wrap_value,
-        resolve_font_weight_value, resolve_gradient_rotation, resolve_items_flex_value,
-        resolve_justify_flex_value, resolve_justify_value, resolve_line_join_value,
-        resolve_opacity_value, resolve_overflow_value, resolve_position_axis_value,
-        resolve_radius_value, resolve_rotation_value, resolve_scale_value, resolve_shadow_preset,
+        BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, DEFAULT_TRANSITION_TIME,
+        GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, OUTLINE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY,
+        PaddingKind, RING_COLOR_FAMILY, SHADOW_COLOR_FAMILY, ShadowPreset, StrokePayload,
+        TEXT_COLOR_FAMILY, UtilityKind, classify_stroke_payload, end_relative_position_axis,
+        font_face_expression, is_automatic_size_key, is_known_unsupported_border_payload,
+        resolve_align_content_flex_value, resolve_align_items_value, resolve_align_self_value,
+        resolve_anchor_point_value, resolve_animation_value, resolve_aspect_ratio_value,
+        resolve_border_thickness_value, resolve_color_value, resolve_duration_seconds,
+        resolve_ease_value, resolve_flex_direction_value, resolve_flex_item_mode,
+        resolve_flex_wrap_value, resolve_font_style_value, resolve_font_weight_enum,
+        resolve_gradient_rotation, resolve_grid_cell_count, resolve_items_flex_value,
+        resolve_justify_flex_value, resolve_justify_value, resolve_layout_order_value,
+        resolve_line_height_value, resolve_line_join_value, resolve_object_fit_value,
+        resolve_opacity_value, resolve_overflow_value, resolve_overscroll_value,
+        resolve_pointer_events_value, resolve_position_axis_value, resolve_radius_value,
+        resolve_rotation_value, resolve_scale_value, resolve_shadow_preset,
         resolve_size_axis_value, resolve_size_spacing_offset, resolve_spacing_value,
-        resolve_text_size_value, resolve_text_wrap_value, resolve_text_x_alignment_value,
-        resolve_text_y_alignment_value, resolve_visibility_value, resolve_z_index_value,
+        resolve_text_decoration_value, resolve_text_size_value, resolve_text_transform_value,
+        resolve_text_wrap_value, resolve_text_x_alignment_value, resolve_text_y_alignment_value,
+        resolve_transition_toggle, resolve_visibility_value, resolve_whitespace_value,
+        resolve_z_index_value, spacing_value_to_offset,
     },
 };
 
@@ -88,6 +103,20 @@ struct PendingAxes {
     gradient_from: Option<String>,
     gradient_via: Option<String>,
     gradient_to: Option<String>,
+    font_weight: Option<&'static str>,
+    font_style: Option<&'static str>,
+    translate_x: Option<SizeAxisValue>,
+    translate_y: Option<SizeAxisValue>,
+    gap_offset: Option<String>,
+    center_x: bool,
+    center_y: bool,
+    transition_enabled: Option<bool>,
+    transition_time: Option<f64>,
+    transition_ease: Option<(&'static str, &'static str)>,
+    transition_delay: Option<f64>,
+    animation: Option<&'static str>,
+    text_transform: Option<&'static str>,
+    text_decoration: Option<&'static str>,
 }
 
 impl PendingAxes {
@@ -96,11 +125,27 @@ impl PendingAxes {
             style.set_prop("Size", format_udim2_prop(self.size_width, self.size_height));
         }
 
-        if self.position_x.is_some() || self.position_y.is_some() {
+        // A fractional translate is a shift by the element's own size, which is
+        // exactly what AnchorPoint expresses; pixel translates shift Position.
+        let (anchor_x, shift_x) = split_translate_axis(self.translate_x);
+        let (anchor_y, shift_y) = split_translate_axis(self.translate_y);
+        let anchor_x = anchor_x.or_else(|| self.center_x.then(|| "0.5".to_owned()));
+        let anchor_y = anchor_y.or_else(|| self.center_y.then(|| "0.5".to_owned()));
+        if anchor_x.is_some() || anchor_y.is_some() {
             style.set_prop(
-                "Position",
-                format_udim2_prop(self.position_x, self.position_y),
+                "AnchorPoint",
+                format!(
+                    "new Vector2({}, {})",
+                    anchor_x.as_deref().unwrap_or("0"),
+                    anchor_y.as_deref().unwrap_or("0")
+                ),
             );
+        }
+
+        let position_x = shift_position_axis(self.position_x, shift_x);
+        let position_y = shift_position_axis(self.position_y, shift_y);
+        if position_x.is_some() || position_y.is_some() {
+            style.set_prop("Position", format_udim2_prop(position_x, position_y));
         }
 
         if let Some(axis) = automatic_size_axis(self.auto_x, self.auto_y) {
@@ -125,6 +170,58 @@ impl PendingAxes {
                 "MaxSize",
                 format!("new Vector2({x}, {y})"),
             );
+        }
+
+        if self.font_weight.is_some() || self.font_style.is_some() {
+            style.set_prop(
+                "FontFace",
+                font_face_expression(self.font_weight, self.font_style),
+            );
+        }
+
+        if let Some(gap) = self.gap_offset
+            && style
+                .base
+                .helpers
+                .iter()
+                .any(|helper| helper.tag == "uigridlayout")
+        {
+            style.set_helper_prop(
+                "uigridlayout",
+                "CellPadding",
+                format!("UDim2.fromOffset({gap}, {gap})"),
+            );
+        }
+
+        // `duration`/`ease`/`delay` enable the transition on their own so a
+        // missing bare `transition` is not a silent trap; `transition-none`
+        // always wins.
+        let transition_enabled = self.transition_enabled.unwrap_or(
+            self.transition_time.is_some()
+                || self.transition_ease.is_some()
+                || self.transition_delay.is_some(),
+        );
+        if transition_enabled {
+            let (easing_style, easing_direction) = self.transition_ease.unwrap_or(("Quad", "Out"));
+            style.transition = Some(TransitionSpec {
+                time: self.transition_time.unwrap_or(DEFAULT_TRANSITION_TIME),
+                style: easing_style.to_owned(),
+                direction: easing_direction.to_owned(),
+                delay: self.transition_delay.unwrap_or(0.0),
+            });
+        }
+
+        if let Some(animation) = self.animation.filter(|animation| *animation != "none") {
+            style.animation = Some(animation.to_owned());
+        }
+
+        let text_transform = self.text_transform.filter(|value| *value != "none");
+        let text_decoration = self.text_decoration.filter(|value| *value != "none");
+        if text_transform.is_some() || text_decoration.is_some() {
+            style.text = Some(TextSpec {
+                transform: text_transform.map(str::to_owned),
+                decoration: text_decoration.map(str::to_owned),
+            });
         }
 
         let stops: Vec<String> = [self.gradient_from, self.gradient_via, self.gradient_to]
@@ -227,6 +324,18 @@ fn apply_analyzed_token(
             SemanticIssue::UnsupportedBorderValue { value } => {
                 unsupported_border_value_diagnostic(value, &analysis.parsed.raw)
             }
+            SemanticIssue::NoRobloxEquivalent { family } => {
+                no_roblox_equivalent_diagnostic(family, &analysis.parsed.raw)
+            }
+            SemanticIssue::UnknownVariant { variant } => {
+                unknown_variant_diagnostic(variant, &analysis.parsed.raw)
+            }
+            SemanticIssue::UnsupportedArbitraryValue { value } => {
+                unsupported_arbitrary_value_diagnostic(value, &analysis.parsed.raw)
+            }
+            SemanticIssue::UnsupportedOpacityModifier { modifier } => {
+                unsupported_opacity_modifier_diagnostic(modifier, &analysis.parsed.raw)
+            }
         });
         return;
     }
@@ -328,6 +437,9 @@ fn apply_analyzed_token(
                     spacing_key,
                     &analysis.parsed.raw,
                 );
+                pending.gap_offset = resolve_spacing_value(config, spacing_key)
+                    .as_deref()
+                    .and_then(spacing_value_to_offset);
             }
         }
         UtilityKind::Width => {
@@ -397,6 +509,32 @@ fn apply_analyzed_token(
                     &analysis.parsed.raw,
                     negative,
                 );
+            }
+        }
+        UtilityKind::PositionRight => {
+            if let Some(position_key) = analysis.payload() {
+                let negative = analysis.parsed.utility.raw.starts_with("-right-");
+                pending.position_x = resolve_position_axis_value(
+                    config,
+                    diagnostics,
+                    position_key,
+                    &analysis.parsed.raw,
+                    negative,
+                )
+                .map(end_relative_position_axis);
+            }
+        }
+        UtilityKind::PositionBottom => {
+            if let Some(position_key) = analysis.payload() {
+                let negative = analysis.parsed.utility.raw.starts_with("-bottom-");
+                pending.position_y = resolve_position_axis_value(
+                    config,
+                    diagnostics,
+                    position_key,
+                    &analysis.parsed.raw,
+                    negative,
+                )
+                .map(end_relative_position_axis);
             }
         }
         UtilityKind::Inset => {
@@ -527,6 +665,302 @@ fn apply_analyzed_token(
                 style.set_helper_prop("uiflexitem", "FlexMode", format!("Enum.UIFlexMode.{mode}"));
             }
         }
+        UtilityKind::AlignContent => {
+            if let Some(alignment_key) = analysis.payload() {
+                if let Some(flex) = resolve_align_content_flex_value(alignment_key) {
+                    style.set_helper_prop(
+                        "uilistlayout",
+                        "VerticalFlex",
+                        format!("Enum.UIFlexAlignment.{flex}"),
+                    );
+                } else if let Some(value) = resolve_align_items_value(alignment_key) {
+                    style.set_helper_prop("uilistlayout", "VerticalAlignment", value);
+                } else {
+                    diagnostics.push(unsupported_alignment_value_diagnostic(
+                        "content",
+                        alignment_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::AlignSelf => {
+            if let Some(alignment_key) = analysis.payload() {
+                if let Some(alignment) = resolve_align_self_value(alignment_key) {
+                    style.set_helper_prop(
+                        "uiflexitem",
+                        "ItemLineAlignment",
+                        format!("Enum.ItemLineAlignment.{alignment}"),
+                    );
+                } else {
+                    diagnostics.push(unsupported_alignment_value_diagnostic(
+                        "self",
+                        alignment_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::LayoutOrder => {
+            if let Some(order_key) = analysis.payload() {
+                let negative = analysis.parsed.utility.raw.starts_with("-order-");
+                if let Some(value) = resolve_layout_order_value(order_key, negative) {
+                    style.set_prop("LayoutOrder", value);
+                } else {
+                    diagnostics.push(unsupported_layout_order_value_diagnostic(
+                        order_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::LineHeight => {
+            if let Some(leading_key) = analysis.payload() {
+                if let Some(value) = resolve_line_height_value(leading_key) {
+                    style.set_prop("LineHeight", value.to_owned());
+                } else {
+                    diagnostics.push(unsupported_line_height_value_diagnostic(
+                        leading_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::FontStyle => {
+            if let Some(style_key) = analysis.payload()
+                && let Some(font_style) = resolve_font_style_value(style_key)
+            {
+                pending.font_style = Some(font_style);
+            }
+        }
+        UtilityKind::Grid => {
+            style.set_helper_prop(
+                "uigridlayout",
+                "SortOrder",
+                "Enum.SortOrder.LayoutOrder".to_owned(),
+            );
+        }
+        UtilityKind::GridColumns | UtilityKind::GridRows => {
+            if let Some(count_key) = analysis.payload() {
+                if let Some(count) = resolve_grid_cell_count(count_key) {
+                    let direction = match &analysis.utility {
+                        UtilityKind::GridColumns => "Horizontal",
+                        _ => "Vertical",
+                    };
+                    style.set_helper_prop(
+                        "uigridlayout",
+                        "SortOrder",
+                        "Enum.SortOrder.LayoutOrder".to_owned(),
+                    );
+                    style.set_helper_prop(
+                        "uigridlayout",
+                        "FillDirection",
+                        format!("Enum.FillDirection.{direction}"),
+                    );
+                    style.set_helper_prop("uigridlayout", "FillDirectionMaxCells", count);
+                } else {
+                    diagnostics.push(unsupported_grid_value_diagnostic(
+                        count_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::Basis => {
+            // Main-axis size; the flex default is a row, so basis maps to the
+            // width axis exactly like `w-*`.
+            if let Some(size_key) = analysis.payload() {
+                if is_automatic_size_key(size_key) {
+                    pending.auto_x = true;
+                } else {
+                    pending.size_width = resolve_size_axis_value(
+                        config,
+                        diagnostics,
+                        size_key,
+                        &analysis.parsed.raw,
+                    );
+                }
+            }
+        }
+        UtilityKind::TranslateX => {
+            if let Some(translate_key) = analysis.payload() {
+                let negative = analysis.parsed.utility.raw.starts_with("-translate-x-");
+                pending.translate_x = resolve_position_axis_value(
+                    config,
+                    diagnostics,
+                    translate_key,
+                    &analysis.parsed.raw,
+                    negative,
+                );
+            }
+        }
+        UtilityKind::TranslateY => {
+            if let Some(translate_key) = analysis.payload() {
+                let negative = analysis.parsed.utility.raw.starts_with("-translate-y-");
+                pending.translate_y = resolve_position_axis_value(
+                    config,
+                    diagnostics,
+                    translate_key,
+                    &analysis.parsed.raw,
+                    negative,
+                );
+            }
+        }
+        UtilityKind::ObjectFit => {
+            if let Some(fit_key) = analysis.payload() {
+                if let Some(scale_type) = resolve_object_fit_value(fit_key) {
+                    style.set_prop("ScaleType", format!("Enum.ScaleType.{scale_type}"));
+                } else {
+                    diagnostics.push(unsupported_object_fit_value_diagnostic(
+                        fit_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::PointerEvents => {
+            if let Some(events_key) = analysis.payload() {
+                if let Some(value) = resolve_pointer_events_value(events_key) {
+                    style.set_prop("Interactable", value.to_owned());
+                } else {
+                    diagnostics.push(unsupported_pointer_events_value_diagnostic(
+                        events_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::SpaceX | UtilityKind::SpaceY => {
+            if let Some(spacing_key) = analysis.payload() {
+                if let Some(value) = resolve_spacing_value(config, spacing_key) {
+                    let direction = match &analysis.utility {
+                        UtilityKind::SpaceX => "Horizontal",
+                        _ => "Vertical",
+                    };
+                    style.set_helper_prop("uilistlayout", "Padding", value);
+                    style.set_helper_prop(
+                        "uilistlayout",
+                        "FillDirection",
+                        format!("Enum.FillDirection.{direction}"),
+                    );
+                } else {
+                    diagnostics.push(unsupported_space_value_diagnostic(
+                        spacing_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::Whitespace => {
+            if let Some(whitespace_key) = analysis.payload() {
+                if let Some(value) = resolve_whitespace_value(whitespace_key) {
+                    style.set_prop("TextWrapped", value.to_owned());
+                } else {
+                    diagnostics.push(unsupported_whitespace_value_diagnostic(
+                        whitespace_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::Overscroll => {
+            if let Some(overscroll_key) = analysis.payload() {
+                if let Some(behavior) = resolve_overscroll_value(overscroll_key) {
+                    style.set_prop(
+                        "ElasticBehavior",
+                        format!("Enum.ElasticBehavior.{behavior}"),
+                    );
+                } else {
+                    diagnostics.push(unsupported_overscroll_value_diagnostic(
+                        overscroll_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::Ring | UtilityKind::Outline => {
+            apply_stroke_utility(style, config, diagnostics, analysis);
+        }
+        UtilityKind::CenterX => {
+            pending.center_x = true;
+            pending.position_x = Some(SizeAxisValue::scale("0.5"));
+        }
+        UtilityKind::CenterY => {
+            pending.center_y = true;
+            pending.position_y = Some(SizeAxisValue::scale("0.5"));
+        }
+        UtilityKind::Transition => {
+            if let Some(enabled) = resolve_transition_toggle(analysis.payload()) {
+                pending.transition_enabled = Some(enabled);
+            } else {
+                diagnostics.push(unsupported_transition_value_diagnostic(
+                    "transition",
+                    analysis.payload().unwrap_or_default(),
+                    &analysis.parsed.raw,
+                ));
+            }
+        }
+        UtilityKind::TransitionDuration => {
+            if let Some(duration_key) = analysis.payload() {
+                if let Some(time) = resolve_duration_seconds(duration_key) {
+                    pending.transition_time = Some(time);
+                } else {
+                    diagnostics.push(unsupported_transition_value_diagnostic(
+                        "duration",
+                        duration_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::TransitionEase => {
+            if let Some(ease_key) = analysis.payload() {
+                if let Some(ease) = resolve_ease_value(ease_key) {
+                    pending.transition_ease = Some(ease);
+                } else {
+                    diagnostics.push(unsupported_transition_value_diagnostic(
+                        "ease",
+                        ease_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::TextTransform => {
+            if let Some(transform) = analysis.payload().and_then(resolve_text_transform_value) {
+                pending.text_transform = Some(transform);
+            }
+        }
+        UtilityKind::TextDecoration => {
+            if let Some(decoration) = analysis.payload().and_then(resolve_text_decoration_value) {
+                pending.text_decoration = Some(decoration);
+            }
+        }
+        UtilityKind::Animation => {
+            if let Some(animation_key) = analysis.payload() {
+                if let Some(animation) = resolve_animation_value(animation_key) {
+                    pending.animation = Some(animation);
+                } else {
+                    diagnostics.push(unsupported_animation_value_diagnostic(
+                        animation_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::TransitionDelay => {
+            if let Some(delay_key) = analysis.payload() {
+                if let Some(delay) = resolve_duration_seconds(delay_key) {
+                    pending.transition_delay = Some(delay);
+                } else {
+                    diagnostics.push(unsupported_transition_value_diagnostic(
+                        "delay",
+                        delay_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
         UtilityKind::TextSize => {
             if let Some(size_key) = analysis.payload() {
                 if let Some(value) = resolve_text_size_value(size_key) {
@@ -541,8 +975,8 @@ fn apply_analyzed_token(
         }
         UtilityKind::FontWeight => {
             if let Some(weight_key) = analysis.payload() {
-                if let Some(value) = resolve_font_weight_value(weight_key) {
-                    style.set_prop("FontFace", value);
+                if let Some(weight) = resolve_font_weight_enum(weight_key) {
+                    pending.font_weight = Some(weight);
                 } else {
                     diagnostics.push(unsupported_font_weight_diagnostic(
                         weight_key,
@@ -785,6 +1219,67 @@ fn apply_border_utility(
     }
 }
 
+fn apply_stroke_utility(
+    style: &mut StyleIr,
+    config: &TailwindConfig,
+    diagnostics: &mut Vec<Diagnostic>,
+    analysis: &AnalyzedClassToken,
+) {
+    let (family, default_thickness, color_family) = match &analysis.utility {
+        UtilityKind::Ring => ("ring", "3", RING_COLOR_FAMILY),
+        _ => ("outline", "2", OUTLINE_COLOR_FAMILY),
+    };
+
+    let Some(payload) = analysis.payload() else {
+        style.set_helper_prop("uistroke", "Thickness", default_thickness.to_owned());
+        style.set_helper_prop(
+            "uistroke",
+            "ApplyStrokeMode",
+            "Enum.ApplyStrokeMode.Border".to_owned(),
+        );
+        return;
+    };
+
+    match classify_stroke_payload(&analysis.utility, payload) {
+        StrokePayload::Thickness(thickness) => {
+            style.set_helper_prop("uistroke", "Thickness", thickness.to_owned());
+            style.set_helper_prop(
+                "uistroke",
+                "ApplyStrokeMode",
+                "Enum.ApplyStrokeMode.Border".to_owned(),
+            );
+        }
+        StrokePayload::Unsupported => {
+            diagnostics.push(unsupported_stroke_value_diagnostic(
+                family,
+                payload,
+                &analysis.parsed.raw,
+            ));
+        }
+        StrokePayload::Color => {
+            let Some(resolution) = resolve_color_value(
+                config,
+                diagnostics,
+                color_family,
+                payload,
+                &analysis.parsed.raw,
+            ) else {
+                return;
+            };
+
+            match resolution {
+                ColorResolution::Expression(value) => {
+                    style.set_helper_prop("uistroke", "Color", value);
+                    style.set_helper_prop("uistroke", "Transparency", "0".to_owned());
+                }
+                ColorResolution::Transparent => {
+                    style.set_helper_prop("uistroke", "Transparency", "1".to_owned());
+                }
+            }
+        }
+    }
+}
+
 fn apply_spacing_utility(
     style: &mut StyleIr,
     config: &TailwindConfig,
@@ -905,6 +1400,45 @@ fn apply_gap_utility(
     diagnostics.push(unknown_theme_key_diagnostic("spacing", spacing_key, token));
 }
 
+/// Splits a resolved translate distance into its AnchorPoint component (the
+/// scale, negated because AnchorPoint moves opposite the shift) and its
+/// Position offset shift in pixels.
+fn split_translate_axis(value: Option<SizeAxisValue>) -> (Option<String>, f64) {
+    let Some(value) = value else {
+        return (None, 0.0);
+    };
+
+    let scale = value.scale.parse::<f64>().unwrap_or(0.0);
+    let anchor = (scale.abs() >= 1e-9).then(|| format_translate_number(-scale));
+    let shift = value.offset.parse::<f64>().unwrap_or(0.0);
+    (anchor, shift)
+}
+
+fn shift_position_axis(axis: Option<SizeAxisValue>, shift: f64) -> Option<SizeAxisValue> {
+    if shift.abs() < 1e-9 {
+        return axis;
+    }
+
+    let base = axis.unwrap_or_else(SizeAxisValue::zero);
+    let offset = base.offset.parse::<f64>().unwrap_or(0.0) + shift;
+    Some(SizeAxisValue {
+        scale: base.scale,
+        offset: format_translate_number(offset),
+    })
+}
+
+fn format_translate_number(value: f64) -> String {
+    let rounded = value.round();
+    if (value - rounded).abs() < 1e-9 {
+        return format!("{rounded:.0}");
+    }
+
+    format!("{value:.10}")
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_owned()
+}
+
 fn format_udim2_prop(width: Option<SizeAxisValue>, height: Option<SizeAxisValue>) -> String {
     let width = width.unwrap_or_else(SizeAxisValue::zero);
     let height = height.unwrap_or_else(SizeAxisValue::zero);
@@ -918,7 +1452,7 @@ fn format_udim2_prop(width: Option<SizeAxisValue>, height: Option<SizeAxisValue>
     }
 
     format!(
-        "UDim2.new({}, {}, {}, {})",
+        "new UDim2({}, {}, {}, {})",
         width.scale, width.offset, height.scale, height.offset
     )
 }

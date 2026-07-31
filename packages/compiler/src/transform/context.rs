@@ -1,6 +1,9 @@
 use crate::api::Diagnostic;
 use crate::class_value::scope::ClassValueScopeStack;
-use crate::ir::model::{PropEntry, StyleIr};
+use crate::diagnostics::compiler::{
+    decoration_on_richtext_diagnostic, motion_on_component_diagnostic,
+};
+use crate::ir::model::{PropEntry, StyleIr, TextSpec};
 use crate::swc::builders::{
     create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
 };
@@ -14,8 +17,8 @@ use crate::transform::module::{
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        BlockStmt, Ident, JSXAttrOrSpread, JSXClosingElement, JSXElement, JSXElementName, Module,
-        Pat, VarDecl, VarDeclKind,
+        BlockStmt, Ident, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue, JSXClosingElement,
+        JSXElement, JSXElementName, Module, Pat, Str, VarDecl, VarDeclKind,
     },
     ecma::visit::{VisitMut, VisitMutWith},
 };
@@ -90,7 +93,7 @@ impl VisitMut for VelaTransformer {
             return;
         }
 
-        let Some(lowered) = lower_class_name(
+        let Some(mut lowered) = lower_class_name(
             &element.opening.attrs,
             &self.config,
             &self.class_value_scopes,
@@ -98,6 +101,48 @@ impl VisitMut for VelaTransformer {
         ) else {
             return;
         };
+
+        if is_component
+            && (lowered.style_ir.transition.is_some() || lowered.style_ir.animation.is_some())
+        {
+            self.diagnostics.push(motion_on_component_diagnostic());
+            lowered.style_ir.transition = None;
+            lowered.style_ir.animation = None;
+        }
+
+        // A consumer-managed RichText would be double-escaped by the decoration
+        // wrapper, so the decoration backs off with a warning.
+        if lowered
+            .style_ir
+            .text
+            .as_ref()
+            .is_some_and(|text| text.decoration.is_some())
+            && has_attr(&lowered.preserved_attrs, "RichText")
+        {
+            self.diagnostics.push(decoration_on_richtext_diagnostic());
+            if let Some(text) = lowered.style_ir.text.as_mut() {
+                text.decoration = None;
+                if text.transform.is_none() {
+                    lowered.style_ir.text = None;
+                }
+            }
+        }
+
+        // A literal `Text` on a static element is transformed at compile time;
+        // anything else defers to the runtime host's Text pipeline.
+        if !is_component
+            && !lowered.needs_runtime_host
+            && let Some(spec) = lowered.style_ir.text.clone()
+            && apply_static_text_spec(&mut lowered.preserved_attrs, &spec)
+        {
+            if spec.decoration.is_some() {
+                lowered.style_ir.set_prop("RichText", "true".to_owned());
+            }
+            lowered.style_ir.text = None;
+        }
+
+        let needs_runtime_host = lowered.needs_runtime_host || lowered.style_ir.text.is_some();
+        lowered.needs_runtime_host = needs_runtime_host;
 
         // The runtime host renders this tag itself, so a component has to be
         // forwarded as a reference rather than as a host element name.
@@ -147,6 +192,25 @@ impl VisitMut for VelaTransformer {
                         .expect("runtime rules must serialize to JSON"),
                 }));
             }
+            if let Some(transition) = &lowered.style_ir.transition {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaTransition",
+                    value: serde_json::to_string(transition)
+                        .expect("transition must serialize to JSON"),
+                }));
+            }
+            if let Some(animation) = &lowered.style_ir.animation {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaAnimation",
+                    value: format!("\"{animation}\""),
+                }));
+            }
+            if let Some(text) = &lowered.style_ir.text {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaText",
+                    value: serde_json::to_string(text).expect("text spec must serialize to JSON"),
+                }));
+            }
             attrs.push(create_prop_attr(PropEntry {
                 name: "__velaTag",
                 value: runtime_tag,
@@ -193,4 +257,84 @@ impl VisitMut for VelaTransformer {
             .chain(existing_children)
             .collect();
     }
+}
+
+fn has_attr(attrs: &[JSXAttrOrSpread], name: &str) -> bool {
+    attrs.iter().any(|attr| {
+        matches!(
+            attr,
+            JSXAttrOrSpread::JSXAttr(JSXAttr {
+                name: JSXAttrName::Ident(ident),
+                ..
+            }) if ident.sym == name
+        )
+    })
+}
+
+/// Rewrites a literal `Text` attribute in place; false when the text is not a
+/// static string and has to go through the runtime pipeline instead.
+fn apply_static_text_spec(attrs: &mut [JSXAttrOrSpread], spec: &TextSpec) -> bool {
+    for attr in attrs {
+        let JSXAttrOrSpread::JSXAttr(attr) = attr else {
+            continue;
+        };
+        let JSXAttrName::Ident(ident) = &attr.name else {
+            continue;
+        };
+        if ident.sym != "Text" {
+            continue;
+        }
+
+        let Some(JSXAttrValue::Str(value)) = &attr.value else {
+            return false;
+        };
+
+        let mut text = value.value.to_string_lossy().into_owned();
+        match spec.transform.as_deref() {
+            Some("upper") => text = text.to_ascii_uppercase(),
+            Some("lower") => text = text.to_ascii_lowercase(),
+            Some("capitalize") => text = capitalize_ascii_words(&text),
+            _ => {}
+        }
+        match spec.decoration.as_deref() {
+            Some("underline") => text = format!("<u>{}</u>", escape_rich_text(&text)),
+            Some("strike") => text = format!("<s>{}</s>", escape_rich_text(&text)),
+            _ => {}
+        }
+
+        attr.value = Some(JSXAttrValue::Str(Str {
+            span: value.span,
+            value: text.into(),
+            raw: None,
+        }));
+        return true;
+    }
+
+    false
+}
+
+fn capitalize_ascii_words(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut at_word_start = true;
+    for ch in value.chars() {
+        if ch.is_ascii_alphabetic() {
+            result.push(if at_word_start {
+                ch.to_ascii_uppercase()
+            } else {
+                ch
+            });
+            at_word_start = false;
+        } else {
+            result.push(ch);
+            at_word_start = !ch.is_ascii_alphanumeric();
+        }
+    }
+    result
+}
+
+fn escape_rich_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
