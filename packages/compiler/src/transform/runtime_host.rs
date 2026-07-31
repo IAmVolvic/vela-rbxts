@@ -133,6 +133,7 @@ type RuntimePropValue =
 	| Color3
 	| UDim
 	| UDim2
+	| Vector2
 	| EnumItem;
 
 type RuntimePropMap = Record<string, RuntimePropValue>;
@@ -290,13 +291,19 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 		// With a transition, React keeps rendering the first-seen value for
 		// every tweenable prop so it never rewrites the instance; the effect
 		// below moves the real property with TweenService instead.
+		//
+		// This walks the merged props rather than `resolution.props`, because a
+		// base utility like `bg-slate-700` lowers statically and only ever
+		// arrives as a plain prop. Seeding from the resolution alone first sees
+		// the prop on the render a variant introduces it, holds that new value,
+		// and leaves the tween nothing to travel from.
 		const tweenGoal: RuntimePropMap = {};
 		if (transition !== undefined) {
 			if (heldProps.current === undefined) {
 				heldProps.current = {};
 			}
 			const held = heldProps.current;
-			for (const [name, value] of pairs(resolution.props)) {
+			for (const [name, value] of pairs(hostProps)) {
 				if (!isTweenableValue(value)) {
 					continue;
 				}
@@ -1093,7 +1100,7 @@ function resolveTransitionConfig(
 	};
 }
 
-function isTweenableValue(value: RuntimePropValue): boolean {
+function isTweenableValue(value: unknown): value is RuntimePropValue {
 	return (
 		typeIs(value, "number") ||
 		typeIs(value, "Color3") ||

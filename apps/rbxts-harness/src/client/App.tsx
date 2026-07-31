@@ -78,6 +78,7 @@ export const App = () => {
 				<frame className="bg-blue-600 animate-spin" />
 				<frame className="bg-[#ff0000] size-6" />
 				<frame className="bg-blue-600/50 hover:bg-blue-600 transition size-6" />
+				<frame className="bg-slate-700 hover:bg-rose-500 transition duration-1000 ease-linear size-6" />
 				<frame className="m-4 w-20 h-6 bg-slate-500 rounded-md" />
 				<frame className="flex-col divide-y-2 divide-slate-500 w-20 h-12">
 					<frame BackgroundTransparency={1} />

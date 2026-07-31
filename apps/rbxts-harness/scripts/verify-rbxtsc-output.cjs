@@ -52,6 +52,10 @@ const requiredFragments = [
 	'kind = "hover"',
 	"attachHoverTracking",
 	"MouseEnter",
+	// Held tween values seed from the merged props. Narrowing this back to
+	// resolution.props loses every statically lowered base value, and a
+	// variant then has nothing to tween from.
+	"for name, value in pairs(hostProps) do",
 	"Position = UDim2.new(1, -16, 1, -8)",
 	"SortOrder = Enum.SortOrder.LayoutOrder",
 	"FillDirectionMaxCells = 3",
