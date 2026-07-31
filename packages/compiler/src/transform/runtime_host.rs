@@ -123,7 +123,7 @@ type RuntimeCamera = {
 		X: number;
 		Y: number;
 	};
-	GetPropertyChangedSignal(property: "ViewportSize"): unknown;
+	GetPropertyChangedSignal(property: "ViewportSize"): RBXScriptSignal;
 };
 
 type RuntimePropValue =
@@ -742,7 +742,14 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 
 	__VelaReact.useEffect(() => {
 		const updateEnvironment = () =>
-			setEnvironment(readRuntimeEnvironment(camera));
+			setEnvironment((previous) => {
+				const latest = readRuntimeEnvironment(camera);
+				return previous.width === latest.width &&
+					previous.orientation === latest.orientation &&
+					previous.input === latest.input
+					? previous
+					: latest;
+			});
 
 		updateEnvironment();
 
@@ -757,6 +764,16 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 				updateEnvironment,
 			),
 		];
+
+		// ViewportSize stays 1x1 until the first frame renders, so breakpoints have
+		// to follow the signal instead of the mount-time read.
+		if (camera !== undefined) {
+			connections.push(
+				camera
+					.GetPropertyChangedSignal("ViewportSize")
+					.Connect(updateEnvironment),
+			);
+		}
 
 		return () => {
 			for (const connection of connections) {

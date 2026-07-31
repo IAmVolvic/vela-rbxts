@@ -1822,6 +1822,21 @@ test("routes runtime variants on components through the runtime host", () => {
 	expect(result.diagnostics).toEqual([]);
 });
 
+test("the runtime host re-reads the viewport so breakpoints stay live", () => {
+	const result = transform(
+		`export const A = () => <frame className="md:px-4" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	// ViewportSize is 1x1 until the first frame renders, so a mount-time read
+	// alone pins every breakpoint to a width no rule can match.
+	expect(result.code).toContain(
+		'camera.GetPropertyChangedSignal("ViewportSize").Connect(updateEnvironment)',
+	);
+});
+
 test("routes dynamic className on components through the runtime host", () => {
 	const result = transform(
 		`export const A = ({ on }: { on: boolean }) => <Box className={on ? "bg-slate-700" : "bg-slate-900"} />;`,
