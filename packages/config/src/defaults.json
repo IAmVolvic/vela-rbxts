@@ -369,6 +369,7 @@
       }
     },
     "radius": {
+      "DEFAULT": "new UDim(0, 4)",
       "none": "new UDim(0, 0)",
       "xs": "new UDim(0, 2)",
       "sm": "new UDim(0, 4)",
