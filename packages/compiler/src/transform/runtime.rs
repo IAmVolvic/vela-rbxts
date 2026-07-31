@@ -49,7 +49,7 @@ use crate::semantic::{
         resolve_text_decoration_value, resolve_text_size_value, resolve_text_transform_value,
         resolve_text_wrap_value, resolve_text_x_alignment_value, resolve_text_y_alignment_value,
         resolve_transition_toggle, resolve_visibility_value, resolve_whitespace_value,
-        resolve_z_index_value, spacing_value_to_offset,
+        resolve_z_index_value, spacing_value_to_offset, split_color_opacity,
     },
 };
 
@@ -1276,6 +1276,7 @@ fn apply_color_utility(
     color_key: &str,
     token: &str,
 ) {
+    let (color_key, opacity) = split_color_opacity(color_key);
     let Some(resolution) = resolve_color_value(config, diagnostics, spec, color_key, token) else {
         return;
     };
@@ -1284,6 +1285,9 @@ fn apply_color_utility(
         ColorResolution::Expression(value) => {
             if let Some(transparency_prop) = spec.transparency_prop {
                 style.remove_prop(transparency_prop);
+                if let Some(percent) = opacity {
+                    style.set_prop(transparency_prop, opacity_to_transparency(percent));
+                }
             }
 
             style.set_prop(spec.color_prop, value);
@@ -1352,6 +1356,11 @@ fn apply_border_utility(
     }
 }
 
+/// `/N` opacity → the matching Roblox transparency (1 - N/100).
+fn opacity_to_transparency(percent: u32) -> String {
+    resolve_opacity_value(&percent.to_string()).unwrap_or_else(|| "0".to_owned())
+}
+
 fn apply_stroke_utility(
     style: &mut StyleIr,
     config: &TailwindConfig,
@@ -1390,6 +1399,7 @@ fn apply_stroke_utility(
             ));
         }
         StrokePayload::Color => {
+            let (payload, opacity) = split_color_opacity(payload);
             let Some(resolution) = resolve_color_value(
                 config,
                 diagnostics,
@@ -1403,7 +1413,11 @@ fn apply_stroke_utility(
             match resolution {
                 ColorResolution::Expression(value) => {
                     style.set_helper_prop("uistroke", "Color", value);
-                    style.set_helper_prop("uistroke", "Transparency", "0".to_owned());
+                    style.set_helper_prop(
+                        "uistroke",
+                        "Transparency",
+                        opacity.map_or_else(|| "0".to_owned(), opacity_to_transparency),
+                    );
                 }
                 ColorResolution::Transparent => {
                     style.set_helper_prop("uistroke", "Transparency", "1".to_owned());
@@ -1481,6 +1495,7 @@ fn apply_shadow_color(
     color_key: &str,
     token: &str,
 ) {
+    let (color_key, opacity) = split_color_opacity(color_key);
     let Some(resolution) =
         resolve_color_value(config, diagnostics, SHADOW_COLOR_FAMILY, color_key, token)
     else {
@@ -1490,6 +1505,9 @@ fn apply_shadow_color(
     match resolution {
         ColorResolution::Expression(value) => {
             style.set_helper_prop("uishadow", "Color", value);
+            if let Some(percent) = opacity {
+                style.set_helper_prop("uishadow", "Transparency", opacity_to_transparency(percent));
+            }
         }
         ColorResolution::Transparent => {
             style.set_helper_prop("uishadow", "Transparency", "1".to_owned());

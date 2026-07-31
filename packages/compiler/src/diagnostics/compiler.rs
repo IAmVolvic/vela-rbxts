@@ -32,7 +32,7 @@ pub(crate) fn unknown_variant_diagnostic(variant: &str, token: &str) -> Diagnost
         level: "warning".to_owned(),
         code: "unknown-variant".to_owned(),
         message: format!(
-            "Unknown variant \"{variant}\" in \"{token}\"; supported variants are sm, md, lg, portrait, landscape, touch, mouse, and gamepad."
+            "Unknown variant \"{variant}\" in \"{token}\"; supported variants are sm, md, lg, portrait, landscape, touch, mouse, gamepad, and hover."
         ),
         token: Some(token.to_owned()),
         range: None,

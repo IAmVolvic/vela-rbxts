@@ -126,12 +126,14 @@ fn payload_shape_issue(utility: &UtilityKind, payload: Option<&str>) -> Option<S
     let payload = payload?;
 
     // Only theme-backed utilities, where an arbitrary value would otherwise be
-    // reported as a missing theme key. `border-[…]`, `z-[…]` and the aspect
-    // ratios keep their own handling.
+    // reported as a missing theme key. Color utilities parse `[#hex]` payloads
+    // themselves, and `border-[…]`, `z-[…]` and the aspect ratios keep their
+    // own handling.
     if payload.starts_with('[')
         && payload.ends_with(']')
         && utility.needs_config_lookup()
         && !matches!(utility, UtilityKind::Border)
+        && !is_color_utility(utility)
     {
         return Some(SemanticIssue::UnsupportedArbitraryValue {
             value: payload.to_owned(),
@@ -139,8 +141,10 @@ fn payload_shape_issue(utility: &UtilityKind, payload: Option<&str>) -> Option<S
     }
 
     // Fractions such as `w-1/2` are real values, so only colors read `/` as an
-    // opacity modifier.
+    // opacity modifier. Families that can express transparency consume the
+    // modifier during lowering; the rest reject it here.
     if is_color_utility(utility)
+        && !supports_opacity_modifier(utility)
         && let Some((_, modifier)) = payload.rsplit_once('/')
     {
         return Some(SemanticIssue::UnsupportedOpacityModifier {
@@ -149,6 +153,18 @@ fn payload_shape_issue(utility: &UtilityKind, payload: Option<&str>) -> Option<S
     }
 
     None
+}
+
+fn supports_opacity_modifier(utility: &UtilityKind) -> bool {
+    matches!(
+        utility,
+        UtilityKind::BackgroundColor
+            | UtilityKind::TextColor
+            | UtilityKind::ImageColor
+            | UtilityKind::ShadowColor
+            | UtilityKind::Ring
+            | UtilityKind::Outline
+    )
 }
 
 fn is_color_utility(utility: &UtilityKind) -> bool {

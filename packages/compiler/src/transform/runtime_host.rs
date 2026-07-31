@@ -86,6 +86,9 @@ type RuntimeCondition =
 	| {
 			kind: "input";
 			value: "touch" | "mouse" | "gamepad";
+	  }
+	| {
+			kind: "hover";
 	  };
 
 type RuntimeRule = {
@@ -112,6 +115,7 @@ type RuntimeEnvironment = {
 	width: number;
 	orientation: "portrait" | "landscape";
 	input: "touch" | "mouse" | "gamepad";
+	hovered: boolean;
 };
 
 type RuntimeCamera = {
@@ -198,6 +202,7 @@ type RuntimeResolution = {
 	textDecoration?: string;
 	margin?: RuntimeMarginState;
 	divide?: RuntimeDivideState;
+	usesHover?: boolean;
 };
 
 type VelaRuntimeHostProps = {
@@ -219,7 +224,14 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 	// consumer refs reach the rendered instance instead of dying on a function
 	// component.
 	return __VelaReact.forwardRef((props: VelaRuntimeHostProps, forwardedRef: unknown) => {
-		const environment = useRuntimeEnvironment();
+		const globalEnvironment = useRuntimeEnvironment();
+		const [hovered, setHovered] = __VelaReact.useState(false);
+		const environment: RuntimeEnvironment = {
+			width: globalEnvironment.width,
+			orientation: globalEnvironment.orientation,
+			input: globalEnvironment.input,
+			hovered,
+		};
 		const __velaTag = props.__velaTag;
 		const __velaRules = props.__velaRules ?? [];
 		const className = props.className;
@@ -267,6 +279,10 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 		}
 		for (const [name, value] of pairs(resolution.props)) {
 			hostProps[name] = value;
+		}
+
+		if (resolution.usesHover === true) {
+			attachHoverTracking(hostProps, setHovered);
 		}
 
 		applyTextConfig(hostProps, props.__velaText, resolution);
@@ -763,6 +779,7 @@ function readRuntimeEnvironment(
 		width,
 		orientation: width >= height ? "landscape" : "portrait",
 		input: detectInputMode(),
+		hovered: false,
 	};
 }
 
@@ -849,6 +866,9 @@ function resolveRuntimeResolution(
 	};
 
 	for (const rule of runtimeRules) {
+		if (conditionUsesHover(rule.condition)) {
+			resolution.usesHover = true;
+		}
 		if (matchesRuntimeCondition(rule.condition, environment)) {
 			applyEffectBundle(resolution, rule.effects);
 		}
@@ -875,6 +895,10 @@ function applyToken(
 	const utility = segments.pop();
 	if (!utility) {
 		return;
+	}
+
+	if (segments.includes("hover")) {
+		resolution.usesHover = true;
 	}
 
 	if (!segments.every((segment) => matchesVariant(segment, environment))) {
@@ -1138,9 +1162,53 @@ function matchesVariant(
 			return environment.input === "mouse";
 		case "gamepad":
 			return environment.input === "gamepad";
+		case "hover":
+			return environment.hovered;
 		default:
 			return false;
 	}
+}
+
+function conditionUsesHover(condition: RuntimeCondition): boolean {
+	if (condition.kind === "hover") {
+		return true;
+	}
+	if (condition.kind === "all") {
+		return condition.conditions.some((entry) => conditionUsesHover(entry));
+	}
+	return false;
+}
+
+/// Attaches MouseEnter/MouseLeave to drive the hover state, composing with any
+/// handlers the consumer already declared in their Event table.
+function attachHoverTracking(
+	hostProps: Record<string, unknown>,
+	setHovered: (hovered: boolean) => void,
+) {
+	const existing = hostProps["Event"];
+	const events: Record<string, unknown> = {};
+	if (typeIs(existing, "table")) {
+		for (const [name, handler] of pairs(existing as Record<string, unknown>)) {
+			events[name as string] = handler;
+		}
+	}
+
+	const previousEnter = events["MouseEnter"];
+	events["MouseEnter"] = (...args: unknown[]) => {
+		setHovered(true);
+		if (typeIs(previousEnter, "function")) {
+			(previousEnter as (...args: unknown[]) => void)(...args);
+		}
+	};
+	const previousLeave = events["MouseLeave"];
+	events["MouseLeave"] = (...args: unknown[]) => {
+		setHovered(false);
+		if (typeIs(previousLeave, "function")) {
+			(previousLeave as (...args: unknown[]) => void)(...args);
+		}
+	};
+
+	hostProps["Event"] = events;
 }
 
 function matchesRuntimeCondition(
@@ -1162,6 +1230,8 @@ function matchesRuntimeCondition(
 			return environment.orientation === condition.value;
 		case "input":
 			return environment.input === condition.value;
+		case "hover":
+			return environment.hovered;
 		default:
 			return false;
 	}

@@ -3,9 +3,9 @@ use crate::config::model::{ColorValue, TailwindConfig};
 use crate::diagnostics::compiler::{
     color_does_not_accept_shade_diagnostic, color_missing_shade_diagnostic,
     color_requires_shade_diagnostic, unknown_theme_key_diagnostic,
-    unsupported_arbitrary_z_index_diagnostic, unsupported_color_keyword_diagnostic,
-    unsupported_size_spacing_value_diagnostic, unsupported_z_index_auto_diagnostic,
-    unsupported_z_index_value_diagnostic,
+    unsupported_arbitrary_value_diagnostic, unsupported_arbitrary_z_index_diagnostic,
+    unsupported_color_keyword_diagnostic, unsupported_size_spacing_value_diagnostic,
+    unsupported_z_index_auto_diagnostic, unsupported_z_index_value_diagnostic,
 };
 use crate::ir::model::SizeAxisValue;
 
@@ -944,10 +944,6 @@ pub(crate) fn is_known_unsupported_border_payload(payload: &str) -> bool {
         return true;
     }
 
-    if payload.starts_with('[') && payload.ends_with(']') {
-        return true;
-    }
-
     if payload.contains('/') {
         return true;
     }
@@ -959,6 +955,40 @@ pub(crate) fn is_known_unsupported_border_payload(payload: &str) -> bool {
     false
 }
 
+/// Splits a trailing `/N` opacity modifier off a color payload. Only a 0-100
+/// integer counts; anything else stays part of the key.
+pub(crate) fn split_color_opacity(payload: &str) -> (&str, Option<u32>) {
+    if let Some((base, modifier)) = payload.rsplit_once('/')
+        && let Ok(percent) = modifier.parse::<u32>()
+        && percent <= 100
+    {
+        return (base, Some(percent));
+    }
+
+    (payload, None)
+}
+
+/// `[#rgb]` / `[#rrggbb]` arbitrary color payloads.
+pub(crate) fn parse_arbitrary_color(payload: &str) -> Option<String> {
+    let inner = payload.strip_prefix('[')?.strip_suffix(']')?;
+    let hex = inner.strip_prefix('#')?;
+
+    let (red, green, blue) = match hex.len() {
+        3 => {
+            let mut channels = hex.chars().map(|ch| ch.to_digit(16).map(|d| d * 17));
+            (channels.next()??, channels.next()??, channels.next()??)
+        }
+        6 => (
+            u32::from_str_radix(&hex[0..2], 16).ok()?,
+            u32::from_str_radix(&hex[2..4], 16).ok()?,
+            u32::from_str_radix(&hex[4..6], 16).ok()?,
+        ),
+        _ => return None,
+    };
+
+    Some(format!("Color3.fromRGB({red}, {green}, {blue})"))
+}
+
 pub(crate) fn resolve_color_value(
     config: &TailwindConfig,
     diagnostics: &mut Vec<Diagnostic>,
@@ -966,6 +996,16 @@ pub(crate) fn resolve_color_value(
     color_key: &str,
     token: &str,
 ) -> Option<ColorResolution> {
+    if color_key.starts_with('[') && color_key.ends_with(']') {
+        return match parse_arbitrary_color(color_key) {
+            Some(value) => Some(ColorResolution::Expression(value)),
+            None => {
+                diagnostics.push(unsupported_arbitrary_value_diagnostic(color_key, token));
+                None
+            }
+        };
+    }
+
     if matches!(color_key, "current" | "inherit") {
         diagnostics.push(unsupported_color_keyword_diagnostic(
             spec.theme_family,
