@@ -9,6 +9,16 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Added
+
+- Malformed `configJson` passed to the compiler API reports an `invalid-config-json` error diagnostic instead of silently compiling against the default theme.
+
+### Changed
+
+- TSX parse failures report a human-readable message with line and column and anchor a source range, instead of dumping the parser's internal debug format.
+- An invalid `vela.config.ts`/`vela.config.json` export names the failing theme key (for example `theme.extend.colors.surface.55`) instead of only saying a TailwindConfig-compatible object was expected.
+- The `@vela-rbxts/compiler` root package no longer bundles the publish machine's native binary; platform binaries come only from the per-platform optional dependencies, shrinking the install for everyone else.
+
 ### Fixed
 
 - Responsive and orientation variants (`sm:`, `md:`, `lg:`, `portrait:`, `landscape:`) never matched at runtime. The runtime host read `Camera.ViewportSize` only when it mounted, and Roblox reports `1x1` until the first frame renders, so every width rule was evaluated against a width of `1` and orientation was always `landscape`. The host now follows the camera's `ViewportSize` signal, so breakpoints resolve correctly and also react to window resizes.

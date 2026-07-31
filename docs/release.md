@@ -68,6 +68,24 @@ If LSP artifacts fail:
 `pnpm release:vsix` requires already built LSP artifacts in `artifacts/lsp`.
 The VSIX packaging phase stages those binaries through `@vela-rbxts/lsp` and fails if the current platform binary is missing.
 
+## Local VSIX Build
+
+```sh
+pnpm --filter ./packages/vscode-extension package:vsix
+```
+
+This generates `packages/vscode-extension/dist/vela-rbxts-lsp-<version>-<host-target>.vsix`.
+A specific VS Code target can be packaged explicitly:
+
+```sh
+pnpm --filter ./packages/vscode-extension package:vsix -- --target win32-x64 --out ./dist/vela-rbxts-lsp-<version>-win32-x64.vsix
+```
+
+Install the result with `code --install-extension <path-to-vsix>`. The packaged
+extension id is `astra-void.vela-rbxts-lsp`. Packaging stages a temporary
+snapshot and rewrites workspace dependencies in that staging directory only —
+source files are not mutated.
+
 ## VSIX Versioning
 
 The packaged extension uses a date version, `YYYY.M.DDNNN`, rather than the release tag:

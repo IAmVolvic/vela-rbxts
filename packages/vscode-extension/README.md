@@ -1,42 +1,56 @@
-# `astra-void.vela-rbxts-lsp`
+# Vela LSP
 
-This VS Code extension launches the standalone Rust LSP through the published
-`@vela-rbxts/lsp` wrapper package when the matching platform binary package is
-installed.
+Editor support for [vela-rbxts](https://github.com/astra-void/vela-rbxts), the
+Tailwind-style `className` layer for roblox-ts. The extension launches the
+standalone Rust language server and wires it to TypeScript and TSX files.
 
-New editor features should go through the standalone Rust LSP rather than a
-TypeScript language service plugin.
+## Features
 
-## Build A Local VSIX
+Inside a `className` (and nowhere else) you get:
 
-```sh
-pnpm --filter ./packages/vscode-extension package:vsix
-```
+- Completions with theme color swatches, fuzzy-ranked and variant-aware
+- Hover documentation for every supported utility and variant
+- Diagnostics for unsupported families, unknown theme keys, and invalid values,
+  anchored to the offending token
+- Document colors and color presentations for `bg-*`, `text-*`, and the other
+  color families
+- Quickfix code actions and document highlight
 
-This generates:
+The server reuses the vela-rbxts native compiler as its semantic engine, so
+what the editor tells you about a class is exactly what the build would do
+with it.
 
-```txt
-packages/vscode-extension/dist/vela-rbxts-lsp-<version>-<host-target>.vsix
-```
+## Requirements
 
-You can package a specific VS Code target explicitly:
+A project that uses vela-rbxts — see the
+[setup guide](https://github.com/astra-void/vela-rbxts#using-vela-rbxts-in-a-roblox-ts-project).
+The language server ships inside the extension through the `@vela-rbxts/lsp`
+wrapper; prebuilt binaries cover macOS (arm64/x64), Linux x64 (gnu/musl),
+Linux arm64 (gnu), and Windows x64. On an unsupported platform, point
+`velaRbxts.lsp.serverPath` at a `vela-rbxts-lsp` binary you built from source.
 
-```sh
-pnpm --filter ./packages/vscode-extension package:vsix -- --target win32-x64 --out ./dist/vela-rbxts-lsp-<version>-win32-x64.vsix
-```
+## Configuration
 
-Install it manually with:
+Your project's `vela.config.ts` or `vela.config.json` is picked up
+automatically — the extension watches `**/vela.config.{ts,json}` and pushes
+changes to the server, so custom theme keys complete and validate live.
 
-```sh
-code --install-extension packages/vscode-extension/dist/vela-rbxts-lsp-0.1.0.vsix
-```
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `velaRbxts.lsp.enabled` | `true` | Enable the LSP integration for TypeScript and TSX files. |
+| `velaRbxts.lsp.serverPath` | `""` | Optional path to a standalone `vela-rbxts-lsp` executable. When empty, the bundled `@vela-rbxts/lsp` wrapper resolves the platform binary. |
+| `velaRbxts.lsp.trace.server` | `off` | LSP trace level (`off`, `messages`, `verbose`) for debugging. |
 
-The packaged extension id is:
+Output lands in the **vela-rbxts-lsp** output channel.
 
-```txt
-astra-void.vela-rbxts-lsp
-```
+## Not Provided
 
-The VSIX packaging flow stages a temporary package snapshot and rewrites
-workspace dependencies in that staging directory only. Source files are not
-mutated.
+Go-to-definition, references, rename, formatting, semantic tokens, inlay
+hints, and signature help are out of scope — the server only understands
+`className` values.
+
+## Development
+
+Maintainer docs — building the extension from source and packaging a local
+VSIX — live in the repository's
+[docs/release.md](https://github.com/astra-void/vela-rbxts/blob/main/docs/release.md).

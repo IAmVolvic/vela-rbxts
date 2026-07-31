@@ -215,7 +215,7 @@ export default defineConfig({
 
 A palette with no `DEFAULT` still reports `color-missing-shade` when you reference it bare. Note that `DEFAULT` is reachable only through the bare name: `bg-brand-DEFAULT` is not a class. A singleton semantic color such as `bg-surface` resolves only after you define `surface`.
 
-`radius` ships `none`, `xs`, `sm`, `md`, `lg`, `xl`, `2xl`, `3xl`, `4xl`, and `full`.
+`radius` ships `none`, `xs`, `sm`, `md`, `lg`, `xl`, `2xl`, `3xl`, `4xl`, and `full`, plus a `DEFAULT` of 4px — so a bare `rounded` works with no key, like Tailwind.
 
 `spacing` ships exactly one key, `4`. Every other spacing token resolves through a numeric fallback: a non-negative multiple of `0.5` becomes an offset of `key * 4` pixels, so `p-1.5` is 6px and `p-40` is 160px. Define `theme.extend.spacing` when you want named keys instead.
 
@@ -264,8 +264,9 @@ Supported variants:
 - `sm:`, `md:`, and `lg:` as min-width buckets at 640, 768, and 1024 pixels
 - `portrait:` and `landscape:`
 - `touch:`, `mouse:`, and `gamepad:`
+- `hover:`, tracked per element through `MouseEnter`/`MouseLeave`
 
-Prefixes chain, and every condition has to match. Orientation is derived from the viewport as `width >= height ? landscape : portrait`. Input mode resolves gamepad first, then touch, then mouse.
+Prefixes chain, and every condition has to match. Orientation is derived from the viewport as `width >= height ? landscape : portrait`. Input mode resolves gamepad first, then touch, then mouse. When the element also carries `transition`, a `hover:` change tweens instead of snapping.
 
 A variant on a utility that actually resolves forces the runtime path for that element, including inside a plain string literal — `className="sm:w-full"` inlines the whole runtime helper into the module. (A variant on an unsupported utility resolves to nothing and stays static, which is not a feature to rely on.) Use variants where they earn it rather than by reflex.
 
@@ -280,32 +281,47 @@ The exhaustive table of accepted values lives in the [utility reference](https:/
 | Color | `bg-*`, `text-*`, `image-*`, `placeholder-*` | `BackgroundColor3`, `TextColor3`, `ImageColor3`, `PlaceholderColor3`. `transparent` sets the matching transparency prop and drops the color, where the target has one — `placeholder-transparent` has none and warns. |
 | Gradient | `bg-gradient-to-*` (alias `bg-linear-to-*`), `from-*`, `via-*`, `to-*` | `UIGradient`. Any stop also forces `BackgroundColor3` to white, overriding an accompanying `bg-*` regardless of token order. |
 | Border | `border`, `border-{0,1,2,4}`, `border-{color}`, `border-{round,bevel,miter}` | `UIStroke` thickness, color, and `LineJoinMode` |
-| Radius | `rounded-*` | `UICorner.CornerRadius`, resolved from the theme |
+| Ring / outline | `ring`, `ring-{0,1,2,4,8}`, `ring-{color}`, `outline`, `outline-{0,1,2,4,8}`, `outline-{color}`, `outline-none` | The same `UIStroke` as `border-*`, with `ApplyStrokeMode = Border` |
+| Radius | `rounded`, `rounded-*` | `UICorner.CornerRadius`, resolved from the theme |
 | Shadow | `shadow`, `shadow-{sm,md,lg,xl,2xl}`, `shadow-none`, `shadow-{color}` | `UIShadow` |
 | Stacking | `z-{0,10,20,30,40,50}` | `ZIndex` |
 | Padding | `p-*`, `px-*`, `py-*`, `pt-*`, `pr-*`, `pb-*`, `pl-*` | `UIPadding` |
-| Gap | `gap-*` | `UIListLayout.Padding` |
+| Margin | `m-*`, `mx-*`, `my-*`, `mt-*`, `mr-*`, `mb-*`, `ml-*`, `mx-auto`, `my-auto`, `-mt-*`, `-ml-*` | A CSS-style margin box: a transparent wrapper frame padded by the margins, with layout props routed onto it. `mx-auto`/`my-auto` center an axis through `AnchorPoint`; negative `-mt-*`/`-ml-*` pull through `Position`. |
+| Gap | `gap-*` | `UIListLayout.Padding` (and `UIGridLayout.CellPadding` under `grid`) |
+| List spacing | `space-x-*`, `space-y-*` | `UIListLayout.Padding` plus the matching `FillDirection` |
+| Divide | `divide-x`, `divide-y`, `divide-{x,y}-{0,1,2,4,8}`, `divide-{color}` | Separator frames inserted between content children at runtime |
 | Size | `w-*`, `h-*`, `size-*` | `Size`. `px` is a one-pixel offset, `full` is scale `1`, `fit` and `auto` set `AutomaticSize`, and a fixed set of fractions maps to scale. |
 | Constraints | `min-w-*`, `max-w-*`, `min-h-*`, `max-h-*` | `UISizeConstraint` |
-| Position | `left-*`, `top-*`, `inset-*` and their negated forms | `Position` |
+| Position | `left-*`, `top-*`, `right-*`, `bottom-*`, `inset-*` and their negated forms | `Position`. `right-*`/`bottom-*` position from the far edge. |
+| Translate | `translate-x-*`, `translate-y-*` and negated forms | Fractions lower to `AnchorPoint`, pixels to `Position` offsets — the `left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2` centering idiom works verbatim. |
 | Anchor | `origin-*` | `AnchorPoint`, nine origins |
-| Flex layout | `flex`, `flex-row`, `flex-col`, `flex-wrap`, `flex-nowrap`, `justify-*`, `items-*` | `UIListLayout`. `justify-{start,center,end}` sets `HorizontalAlignment` while `justify-{between,around,evenly}` sets `HorizontalFlex`; `items-stretch` sets `VerticalFlex`. |
-| Flex items | `flex-1`, `flex-auto`, `flex-initial`, `flex-none`, `grow`, `grow-0`, `shrink`, `shrink-0` | `UIFlexItem.FlexMode` |
+| Flex layout | `flex`, `flex-row`, `flex-col`, `flex-wrap`, `flex-nowrap`, `justify-*`, `items-*`, `content-*` | `UIListLayout`. `justify-{start,center,end}` sets `HorizontalAlignment` while `justify-{between,around,evenly}` sets `HorizontalFlex`; `items-stretch` sets `VerticalFlex`; `content-*` packs the cross axis. |
+| Flex items | `flex-1`, `flex-auto`, `flex-initial`, `flex-none`, `grow`, `grow-0`, `shrink`, `shrink-0`, `self-*`, `basis-*` | `UIFlexItem` (`FlexMode`, `ItemLineAlignment`); `basis-*` sizes the main axis |
+| Grid | `grid`, `grid-cols-{1..12}`, `grid-rows-{1..12}` | `UIGridLayout`; `gap-*` feeds `CellPadding` |
+| Order | `order-*`, `order-{first,last,none}`, `-order-*` | `LayoutOrder` |
 | Aspect ratio | `aspect-square`, `aspect-video`, `aspect-[W/H]`, `aspect-[N]` | `UIAspectRatioConstraint` |
 | Transform | `rotate-*`, `-rotate-*`, `scale-*` | `Rotation`, `UIScale` |
 | Effects | `opacity-*` | `BackgroundTransparency`, integers 0 to 100 |
-| Typography | `text-{xs..9xl}`, `font-*`, `text-{left,center,right}`, `align-*`, `text-wrap`, `text-nowrap`, `truncate` | `TextSize`, `FontFace`, `TextXAlignment`, `TextYAlignment`, `TextWrapped`, `TextTruncate`. The font family is fixed to Source Sans Pro; only the weight is selectable. |
-| Visibility | `hidden`, `visible`, `overflow-{hidden,clip,visible}` | `Visible`, `ClipsDescendants` |
+| Typography | `text-{xs..9xl}`, `font-*`, `italic`, `not-italic`, `text-{left,center,right}`, `align-*`, `leading-*`, `text-wrap`, `text-nowrap`, `whitespace-{normal,nowrap}`, `truncate`, `uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` | `TextSize`, `FontFace` (weight and style), `TextXAlignment`, `TextYAlignment`, `LineHeight`, `TextWrapped`, `TextTruncate`; case transforms rewrite `Text` (at compile time for literals, at runtime otherwise) and decorations render through `RichText`. The font family is fixed to Source Sans Pro; only the weight is selectable. |
+| Motion | `transition`, `transition-{all,colors,opacity,shadow,transform,none}`, `duration-*`, `ease-{linear,in,out,in-out}`, `delay-*`, `animate-{spin,pulse,bounce,none}` | Runtime style changes tween through `TweenService` instead of snapping; `animate-*` runs looping presets. Warns `motion-on-component` on component elements. |
+| Interaction | `pointer-events-{none,auto}` | `Interactable` |
+| Image fit | `object-{cover,contain,fill,tile}` | `ScaleType` on image hosts (`object-tile` is a Roblox-only extension) |
+| Visibility | `hidden`, `visible`, `overflow-{hidden,clip,visible}`, `overscroll-{auto,contain,none}` | `Visible`, `ClipsDescendants`, `ElasticBehavior` on scrolling frames |
+
+Two value forms work across every color family (`bg-`, `text-`, `image-`, `placeholder-`, `border-`, `divide-`, `shadow-`, `ring-`, `outline-`, and the gradient stops):
+
+- Arbitrary hex colors: `bg-[#ff0000]` and the short `bg-[#f00]` resolve to `Color3.fromRGB`. Non-hex bracket payloads keep the `unsupported-arbitrary-value` diagnostic.
+- Opacity modifiers: a trailing `/N` (0–100) lowers to the family's transparency prop — `bg-blue-600/50` sets `BackgroundTransparency = 0.5`. Families without a transparency prop (`placeholder-`, gradient stops, `divide-`) report `unsupported-opacity-modifier` instead.
 
 ### Not Implemented
 
-These Tailwind families are not implemented and emit `unsupported-utility-family` instead of being lowered:
+Tailwind families with no Roblox counterpart emit `no-roblox-equivalent` and are dropped: CSS positioning and display keywords (`static`, `fixed`, `absolute`, `relative`, `sticky`, `block`, `inline`, `table`, `contents`, `float`, `clear`, `columns-*`), text control Roblox's engine lacks (`tracking-*`, `indent-*`, `break-*`, `hyphens-*`, `list-*`, `decoration-*`, `overline`), element-level filters (`blur-*`, `backdrop-*`, `grayscale`, `invert`, `sepia`, `contrast-*`, `saturate-*`, `brightness-*`), 3D transforms (`skew-*`, `perspective-*`, `transform`), and browser interaction utilities (`cursor-*`, `select-*`, `resize-*`, `scroll-*`, `snap-*`, `caret-*`, `accent-*`, `appearance-*`). Roblox has no positioning model to map them onto — everything is already absolutely placed relative to its parent.
 
-`m-*` and every margin variant, `absolute`, `relative`, `right-*`, `bottom-*`, `grid-*`, `content-*`, `self-*`, `place-*`, `ring-*`, `blur-*`, `leading-*`, `tracking-*`, `uppercase`, `lowercase`, `capitalize`, `transition-*`, `duration-*`, `ease-*`, `animate-*`, `transform`, `translate-*`, `skew-*`.
+`place-*` has no counterpart either; use `content-*` and `self-*`. `col-span-*`/`row-span-*` are unsupported because `UIGridLayout` cannot span cells.
 
-There is no `right-*` or `bottom-*` counterpart to `left-*` and `top-*`.
+Anything the parser does not recognize at all — typos included — emits `unsupported-utility-family`.
 
-`gap-x-*` and `gap-y-*` do not exist either, but they fail differently: they match the `gap-` prefix and then fail to resolve `x-4` as a spacing key, so they report `unknown-theme-key` rather than an unknown family.
+`gap-x-*` and `gap-y-*` do not exist, but they fail differently: they match the `gap-` prefix and then fail to resolve `x-4` as a spacing key, so they report `unknown-theme-key` rather than an unknown family. Use `space-x-*`/`space-y-*` for per-axis list spacing.
 
 ### Static And Runtime Lowering
 
@@ -313,7 +329,7 @@ The two paths produce very different results, and the difference is worth knowin
 
 A `className` that collapses to static tokens is lowered at compile time, and the full utility set above applies. A `className` the compiler cannot collapse takes the runtime path, where the element is swapped for the inlined runtime helper and the class list is resolved in-game.
 
-**The runtime resolver handles only these prefixes:** `border`, `border-*`, `bg-*`, `rounded-*`, `p-*`, `px-*`, `py-*`, `pt-*`, `pr-*`, `pb-*`, `pl-*`, `gap-*`, `w-*`, `h-*`, `size-*`. Anything else in a dynamic `className` is dropped with no diagnostic. The runtime path also accepts arbitrary bracket values the static path rejects (`p-[10]`, `w-[240]`), drops `fit` and `auto`, and lets a later `w-`/`h-` overwrite an earlier one instead of merging both into one `Size`.
+**The runtime resolver handles only these prefixes:** `bg-*`, `border` and `border-*`, `rounded-*` (bare `rounded` is static-only), `p-*` through `pl-*`, `gap-*`, `w-*`, `h-*`, `size-*`, the positive margin forms `m-*` through `ml-*`, `divide-*`, the text transforms (`uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` and their resets), and motion (`transition*`, `duration-*`, `delay-*`, `ease-*`, `animate-*`). Anything else in a dynamic `className` is dropped with no diagnostic. The runtime path also accepts numeric bracket values the static path rejects (`p-[10]`, `w-[240]`) — while arbitrary hex colors, supported statically, do not resolve dynamically. It drops `fit` and `auto`, and lets a later `w-`/`h-` overwrite an earlier one instead of merging both into one `Size`.
 
 Where it matters, branch between two fully static string literals so both branches stay on the static path.
 
