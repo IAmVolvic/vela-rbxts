@@ -9,6 +9,28 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-31
+
+### Added
+
+- Layout utilities: `right-*`/`bottom-*` position from the far edges (`-right-*`/`-bottom-*` included), `content-*` and `self-*` map to UIListLayout cross-axis packing and UIFlexItem line alignment, `order-*` sets `LayoutOrder` (`first`/`last`/`none` and negatives included), `grid`/`grid-cols-N`/`grid-rows-N` create a UIGridLayout whose `CellPadding` picks up `gap-*`, `basis-*` sizes the main (row) axis, and `mx-auto`/`my-auto` center an axis through `AnchorPoint` without any wrapper.
+- Transform utilities: `translate-x/y-*` lower fractions to `AnchorPoint` — so the `left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2` centering idiom works verbatim — and pixel values to `Position` offsets.
+- `space-x/y-*` set `UIListLayout.Padding` together with the matching `FillDirection`, `pointer-events-none/auto` map to `Interactable`, `object-cover/contain/fill` map to `ScaleType` on image hosts (plus a Roblox-only `object-tile`), `overscroll-*` maps to `ElasticBehavior` on scrolling frames, and `ring`/`outline` merge into the same UIStroke `border-*` uses with `ApplyStrokeMode = Border`.
+- Typography utilities: `leading-*` sets `LineHeight`, `italic`/`not-italic` merge with `font-*` weights into a single `FontFace`, `whitespace-normal/nowrap` alias `TextWrapped`, `uppercase`/`lowercase`/`capitalize` transform `Text` (at compile time for literals, through the runtime host otherwise), and `underline`/`line-through` enable `RichText` around escaped text — backing off with a diagnostic when the element manages `RichText` itself.
+- Motion: `transition`/`duration-*`/`ease-*`/`delay-*` tween runtime style changes with TweenService instead of snapping, and `animate-spin/pulse/bounce` run preset loops. Both work from dynamic `className` values too, and warn (`motion-on-component`) on component elements, which cannot expose an instance to tween.
+- Structural utilities: `m/mx/my/mt/mr/mb/ml-*` render a CSS-style margin box — a transparent wrapper padded by the margins, with layout props routed onto it — so margins participate in lists and absolute positioning; negative `-mt-*`/`-ml-*` pull through `Position`. `divide-x/y[-N]` and `divide-{color}` insert separator frames between an element's children.
+- The runtime host renders through `forwardRef`, composing consumer refs with its own, so `asChild`-style slotting libraries (verified against lattice-ui) and plain refs reach the rendered instance.
+- The default radius scale ships a `DEFAULT` key, so a bare `rounded` resolves to 4px like Tailwind.
+- Editor: `className` values are collected from expression containers (arrays, objects, template literals, `cn()`-style calls) with a lexical fallback for files that fail to parse, completions are fuzzy-ranked server-side with theme color swatches and variant-aware replacement ranges, and the LSP returns incomplete lists so that ranking stays in charge on every keystroke.
+- Diagnostics distinguish unknown variant prefixes, valid Tailwind families with no Roblox equivalent, and per-value errors for every new family instead of collapsing into one generic family error.
+- `apps/lsp-harness`: a maintainer harness that drives the release LSP binary over stdio and asserts diagnostics anchoring, completions, hover, and document colors.
+
+### Fixed
+
+- `top-*` utilities were parsed as `to-*` gradient stops because of prefix ordering, so they never set `Position.Y`.
+- Mixed scale/offset `Size`/`Position` values emitted `UDim2.new(...)`, which does not exist in roblox-ts, failing the consumer's typecheck; they now emit `new UDim2(...)` and the runtime host parses both spellings.
+- Consumer refs on runtime-host elements were silently dropped, since the host was a plain function component.
+
 ## [0.2.1] - 2026-07-20
 
 ### Added
@@ -89,7 +111,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/astra-void/vela-rbxts/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/astra-void/vela-rbxts/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/astra-void/vela-rbxts/releases/tag/v0.2.0
 [0.1.0]: https://www.npmjs.com/package/vela-rbxts/v/0.1.0
