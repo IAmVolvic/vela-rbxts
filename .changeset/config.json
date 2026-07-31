@@ -2,11 +2,24 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
   "changelog": false,
   "commit": false,
-  "fixed": [["vela-rbxts", "vela-rbxts-lsp", "@vela-rbxts/*"]],
+  "fixed": [
+    [
+      "vela-rbxts",
+      "vela-rbxts-lsp",
+      "@vela-rbxts/*"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "privatePackages": { "version": true, "tag": false },
-  "ignore": ["compiler-harness", "rbxts-harness"]
+  "privatePackages": {
+    "version": true,
+    "tag": false
+  },
+  "ignore": [
+    "compiler-harness",
+    "rbxts-harness",
+    "lsp-harness"
+  ]
 }

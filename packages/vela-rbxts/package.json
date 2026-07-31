@@ -1,6 +1,6 @@
 {
   "name": "vela-rbxts",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "description": "Tailwind-style className support for roblox-ts React UI.",
   "license": "MIT",
