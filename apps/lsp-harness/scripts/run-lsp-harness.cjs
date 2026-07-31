@@ -202,10 +202,9 @@ async function main() {
 
 	const expectedCodes = [
 		["tracking-wide", "no-roblox-equivalent"],
-		["hover:px-4", "unknown-variant"],
 		["md:rounded-mdd", "unknown-theme-key"],
-		["bg-[#ff0000]", "unsupported-arbitrary-value"],
-		["bg-blue-600/50", "unsupported-opacity-modifier"],
+		["bg-[oops]", "unsupported-arbitrary-value"],
+		["from-blue-600/50", "unsupported-opacity-modifier"],
 		["blorb-2", "unsupported-utility-family"],
 		["focus:px-2", "unknown-variant"],
 		["duration-fast", "unsupported-transition-value"],
@@ -255,6 +254,9 @@ async function main() {
 		"-ml-2",
 		"divide-y-2",
 		"divide-slate-500",
+		"hover:bg-blue-600",
+		"bg-[#ff0000]",
+		"bg-blue-600/50",
 		"transition",
 		"duration-300",
 		"ease-out",
@@ -322,13 +324,13 @@ async function main() {
 		"hover over an object-key class returned no content",
 	);
 
-	const variantHoverIndex = diagnosticsFixture.text.indexOf("hover:px-4") + 2;
+	const variantHoverIndex = diagnosticsFixture.text.indexOf("focus:px-2") + 2;
 	const variantHover = await request("textDocument/hover", {
 		textDocument: { uri: diagnosticsFixture.uri },
 		position: positionAt(diagnosticsFixture.text, variantHoverIndex),
 	});
 	check(
-		(variantHover?.contents?.value ?? "").includes("Unknown variant `hover`"),
+		(variantHover?.contents?.value ?? "").includes("Unknown variant `focus`"),
 		"hover over an unknown variant should call the variant out instead of claiming it runs",
 	);
 
@@ -414,7 +416,7 @@ async function main() {
 
 	const brokenFixture = openFixture("Broken.tsx");
 	const brokenDiagnostics = await waitForDiagnostics(brokenFixture.uri);
-	const brokenUnknownVariant = diagnosticFor(brokenDiagnostics, "hover:px-4");
+	const brokenUnknownVariant = diagnosticFor(brokenDiagnostics, "focus:px-4");
 	check(
 		brokenUnknownVariant?.code === "unknown-variant",
 		"a file that fails to parse should still surface diagnostics via the lexical fallback",

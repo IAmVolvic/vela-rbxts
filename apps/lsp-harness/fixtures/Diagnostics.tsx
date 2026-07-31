@@ -8,10 +8,11 @@ export const Diagnostics = () => (
 			"bg-slate-700 rounded right-4 order-2 self-center",
 			"grid-cols-3 -translate-x-1/2 basis-1/2 divide-y-2 divide-slate-500",
 			"mx-auto pointer-events-none space-y-2 ring-2 m-4 -ml-2",
+			"hover:bg-blue-600 bg-[#ff0000] bg-blue-600/50",
 			"transition duration-300 ease-out duration-fast",
 			"animate-spin animate-ping",
-			"tracking-wide hover:px-4 md:rounded-mdd",
-			`bg-[#ff0000] bg-blue-600/50`,
+			"tracking-wide md:rounded-mdd",
+			`bg-[oops] from-blue-600/50`,
 			roomy && "blorb-2",
 		]}
 	>
