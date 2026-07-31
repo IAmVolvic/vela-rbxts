@@ -2675,6 +2675,28 @@ test("promotes divided containers to the runtime host with a divide spec", () =>
 	expect(result.code).toContain("interleaveDivideSeparators");
 });
 
+test("divide separators step over helper elements lowered as children", () => {
+	const result = transform(
+		`export const A = () => (
+			<frame className="flex-col divide-y-2 divide-slate-500">
+				<frame />
+				<frame />
+			</frame>
+		);`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// flex-col lowers a uilistlayout into the same children list, so counting
+	// raw positions puts a separator above the first real child.
+	expect(result.code).toContain("<uilistlayout");
+	expect(result.code).toMatch(/if \(isModifierChild\(child\)\) \{/);
+	expect(result.code).toMatch(/if \(seenContentChild\) \{/);
+	expect(result.code).toMatch(
+		/function isModifierChild[\s\S]*?startsWith\(elementType\.lower\(\), "ui"\)/,
+	);
+});
+
 test("bare divide-x defaults to a one pixel separator", () => {
 	const result = transform(
 		`export const A = () => <frame className="divide-x" />;`,

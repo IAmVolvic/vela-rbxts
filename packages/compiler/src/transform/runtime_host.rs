@@ -498,8 +498,13 @@ function interleaveDivideSeparators(
 			: new UDim2(1, 0, 0, divide.thickness);
 
 	const result: defined[] = [];
+	let seenContentChild = false;
 	for (const child of children) {
-		if (arraySize(result) > 0) {
+		if (isModifierChild(child)) {
+			result.push(child);
+			continue;
+		}
+		if (seenContentChild) {
 			result.push(
 				__VelaReact.createElement("frame", {
 					BackgroundColor3: color,
@@ -508,9 +513,20 @@ function interleaveDivideSeparators(
 				} as never),
 			);
 		}
+		seenContentChild = true;
 		result.push(child);
 	}
 	return result;
+}
+
+/// UICorner, UIListLayout and the rest of the UI* family modify their parent
+/// instead of taking a slot in it, so dividers have to step over them.
+function isModifierChild(child: defined): boolean {
+	const elementType = (child as { type?: unknown }).type;
+	if (!typeIs(elementType, "string")) {
+		return false;
+	}
+	return startsWith(elementType.lower(), "ui");
 }
 
 function marginState(resolution: RuntimeResolution): RuntimeMarginState {
