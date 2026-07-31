@@ -1,0 +1,13 @@
+{
+	"name": "lsp-harness",
+	"version": "0.2.0",
+	"private": true,
+	"scripts": {
+		"build": "pnpm --filter @vela-rbxts/lsp build",
+		"test": "pnpm run build && node scripts/run-lsp-harness.cjs",
+		"clean": "node -e \"\""
+	},
+	"devDependencies": {
+		"@vela-rbxts/lsp": "workspace:*"
+	}
+}

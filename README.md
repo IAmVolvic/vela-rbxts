@@ -1,7 +1,7 @@
 # vela-rbxts
 
 `vela-rbxts` is a Tailwind-style `className` integration layer for [roblox-ts](https://roblox-ts.com/).
-This monorepo contains the native compiler, the `rbxtsc` host adapter, shared config and type packages, the inline runtime helper used by the transformer, a standalone Rust LSP adapter, and two harness apps.
+This monorepo contains the native compiler, the `rbxtsc` host adapter, shared config and type packages, the inline runtime helper used by the transformer, a standalone Rust LSP adapter, and three harness apps.
 
 Release workflow documentation is available in `docs/release.md`.
 
@@ -32,6 +32,7 @@ Full documentation lives at [docs.astra-void.xyz/vela-rbxts](https://docs.astra-
 | `packages/types` | Shared public utility types such as `ClassValue` and `StylableProps`. |
 | `apps/rbxts-harness` | Local reference app used by maintainers to validate the transformer in a real roblox-ts project. |
 | `apps/compiler-harness` | Browser-based preview for the compiler API and diagnostics. |
+| `apps/lsp-harness` | Drives the real `vela-rbxts-lsp` binary over stdio and asserts on diagnostics, completions, hover, and document colors. |
 
 ## Using vela-rbxts in a roblox-ts project
 
