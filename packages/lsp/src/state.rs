@@ -1,4 +1,5 @@
 use std::{
+    cmp::Reverse,
     collections::HashMap,
     path::{Path, PathBuf},
 };
@@ -30,7 +31,7 @@ impl ServerState {
     }
 
     pub fn set_configs(&mut self, mut configs: Vec<ConfigEntry>) {
-        configs.sort_by(|a, b| b.dir.components().count().cmp(&a.dir.components().count()));
+        configs.sort_by_key(|entry| Reverse(entry.dir.components().count()));
         self.configs = configs;
     }
 
