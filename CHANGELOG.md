@@ -9,6 +9,11 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Fixed
+
+- Responsive and orientation variants (`sm:`, `md:`, `lg:`, `portrait:`, `landscape:`) never matched at runtime. The runtime host read `Camera.ViewportSize` only when it mounted, and Roblox reports `1x1` until the first frame renders, so every width rule was evaluated against a width of `1` and orientation was always `landscape`. The host now follows the camera's `ViewportSize` signal, so breakpoints resolve correctly and also react to window resizes.
+- `divide-x-*`/`divide-y-*` drew an extra separator above the first child whenever the same element carried a utility that lowers a helper — `flex-col`, `gap-*`, `rounded-*`, `border`, `p-*` and friends. Those `UI*` elements arrive in the same children list and were counted as content; separators now sit between content children only.
+
 ## [0.4.0] - 2026-07-31
 
 ### Added
