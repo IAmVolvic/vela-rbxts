@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { collectReleaseUnits } from "./release-config";
 
@@ -43,8 +43,13 @@ async function main() {
 		writeFileSync(manifestPath, manifest);
 	}
 
+	// Lock files are untracked, so they only exist on local checkouts; cargo
+	// reconciles a stale self-version on the next build anyway.
 	for (const lockPath of CARGO_LOCKS) {
 		const absolutePath = join(process.cwd(), lockPath);
+		if (!existsSync(absolutePath)) {
+			continue;
+		}
 		let contents = readFileSync(absolutePath, "utf8");
 
 		for (const crate of CARGO_CRATES) {
