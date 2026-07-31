@@ -62,6 +62,18 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
+      # The compiler and lsp builds shell out to cargo, so the toolchain has to
+      # be installed rather than inherited from whatever the runner image ships.
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/compiler
+            packages/lsp
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -85,6 +97,16 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/compiler
+            packages/lsp
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -110,8 +132,56 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/compiler
+            packages/lsp
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Run tests
         run: pnpm run test
+
+  rust:
+    name: rust
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/compiler
+            packages/lsp
+
+      # The two crates are separate cargo roots, so every step runs twice
+      # instead of once over a shared workspace.
+      - name: Check formatting
+        run: |
+          cargo fmt --manifest-path packages/compiler/Cargo.toml --check
+          cargo fmt --manifest-path packages/lsp/Cargo.toml --check
+
+      - name: Run clippy
+        run: |
+          cargo clippy --manifest-path packages/compiler/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path packages/lsp/Cargo.toml --all-targets -- -D warnings
+
+      - name: Run tests
+        run: |
+          cargo test --manifest-path packages/compiler/Cargo.toml
+          cargo test --manifest-path packages/lsp/Cargo.toml
