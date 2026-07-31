@@ -1,6 +1,12 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# roblox-ts and Rojo resolve `@rbxts*` packages by walking real directories, so
+# the symlinked default layout hides them. A nested .npmrc cannot set this —
+# pnpm only reads node-linker from the workspace root.
+nodeLinker: hoisted
+
 allowBuilds:
   '@vscode/vsce-sign': true
   esbuild: true
