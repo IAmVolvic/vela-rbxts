@@ -13,14 +13,18 @@ pub struct Diagnostic {
     pub range: Option<EditorRange>,
 }
 
+// napi camel-cases object fields itself; the serde rename keeps the wasm
+// binding on the same names.
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransformOptions {
     pub config_json: Option<String>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransformResult {
     pub code: String,
     pub diagnostics: Vec<Diagnostic>,

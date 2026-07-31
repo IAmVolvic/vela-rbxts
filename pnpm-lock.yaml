@@ -113,6 +113,8 @@ importers:
         specifier: workspace:*
         version: link:../config
 
+  packages/compiler-wasm: {}
+
   packages/config:
     dependencies:
       '@vela-rbxts/types':
