@@ -30,7 +30,7 @@ const appLuauPath = path.join(projectRoot, "out", "client", "App.luau");
 const source = fs.readFileSync(appLuauPath, "utf8");
 
 const requiredDiagnostics = [
-	'Tailwind "m" utilities have no Roblox equivalent, so "m-4" is ignored.',
+	'Tailwind "tracking" utilities have no Roblox equivalent, so "tracking-wide" is ignored.',
 	'Unknown variant "hover" in "hover:px-4"',
 	'Arbitrary value "[#ff0000]" is not supported yet',
 	'Color opacity modifier "/50" is not supported',
@@ -88,6 +88,12 @@ const requiredFragments = [
 	'transform = "capitalize"',
 	'decoration = "strike"',
 	"applyTextConfig",
+	"__velaMargin",
+	"prepareMarginWrapper",
+	"renderMarginWrapper",
+	"__velaDivide",
+	'axis = "y"',
+	"interleaveDivideSeparators",
 ];
 
 // Intentional regression checks for the deleted runtime package and artifact paths.
