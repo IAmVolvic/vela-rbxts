@@ -201,7 +201,7 @@ async function main() {
 	const diagnostics = await waitForDiagnostics(diagnosticsFixture.uri);
 
 	const expectedCodes = [
-		["m-4", "no-roblox-equivalent"],
+		["tracking-wide", "no-roblox-equivalent"],
 		["hover:px-4", "unknown-variant"],
 		["md:rounded-mdd", "unknown-theme-key"],
 		["bg-[#ff0000]", "unsupported-arbitrary-value"],
@@ -251,6 +251,10 @@ async function main() {
 		"pointer-events-none",
 		"space-y-2",
 		"ring-2",
+		"m-4",
+		"-ml-2",
+		"divide-y-2",
+		"divide-slate-500",
 		"transition",
 		"duration-300",
 		"ease-out",
