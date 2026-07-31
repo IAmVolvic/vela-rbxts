@@ -15,7 +15,12 @@
 		"skipLibCheck": true,
 		"strict": true,
 		"target": "ESNext",
-		"typeRoots": ["node_modules/@rbxts", "node_modules/@vela-rbxts"],
+		"typeRoots": [
+			"node_modules/@rbxts",
+			"node_modules/@vela-rbxts",
+			"../../node_modules/@rbxts",
+			"../../node_modules/@vela-rbxts"
+		],
 		"types": ["types", "compiler-types"],
 		"plugins": [
 			{

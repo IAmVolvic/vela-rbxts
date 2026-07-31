@@ -13,11 +13,16 @@ const projectRoot = path.join(__dirname, "..");
 // A clean build so the transformer runs on every file and its diagnostics all
 // land in this invocation's output.
 fs.rmSync(path.join(projectRoot, "out"), { recursive: true, force: true });
-const build = spawnSync(
-	path.join(projectRoot, "node_modules", ".bin", "rbxtsc"),
-	["-p", "tsconfig.json"],
-	{ cwd: projectRoot, encoding: "utf8" },
+const rbxtscCli = path.join(
+	path.dirname(require.resolve("roblox-ts/package.json")),
+	"out",
+	"CLI",
+	"cli.js",
 );
+const build = spawnSync(process.execPath, [rbxtscCli, "-p", "tsconfig.json"], {
+	cwd: projectRoot,
+	encoding: "utf8",
+});
 const buildOutput = `${build.stdout ?? ""}${build.stderr ?? ""}`;
 
 if (build.status !== 0) {
