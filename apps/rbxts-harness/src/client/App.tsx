@@ -49,7 +49,7 @@ export const App = () => {
 				<frame BackgroundTransparency={1} className="rounded" />
 				<frame
 					BackgroundTransparency={1}
-					className="tracking-wide hover:px-4 bg-[#ff0000] bg-blue-600/50 blorb-2"
+					className="tracking-wide focus:px-4 bg-[oops] from-blue-600/50 blorb-2"
 				/>
 				<frame
 					BackgroundTransparency={1}
@@ -67,6 +67,8 @@ export const App = () => {
 				<imagelabel BackgroundTransparency={1} className="object-cover" />
 				<frame className="bg-slate-700 md:bg-blue-600 transition duration-300 ease-out" />
 				<frame className="bg-blue-600 animate-spin" />
+				<frame className="bg-[#ff0000] size-6" />
+				<frame className="bg-blue-600/50 hover:bg-blue-600 transition size-6" />
 				<frame className="m-4 w-20 h-6 bg-slate-500 rounded-md" />
 				<frame className="flex-col divide-y-2 divide-slate-500 w-20 h-12">
 					<frame BackgroundTransparency={1} />

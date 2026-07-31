@@ -31,8 +31,8 @@ const source = fs.readFileSync(appLuauPath, "utf8");
 
 const requiredDiagnostics = [
 	'Tailwind "tracking" utilities have no Roblox equivalent, so "tracking-wide" is ignored.',
-	'Unknown variant "hover" in "hover:px-4"',
-	'Arbitrary value "[#ff0000]" is not supported yet',
+	'Unknown variant "focus" in "focus:px-4"',
+	'Arbitrary value "[oops]" is not supported yet',
 	'Color opacity modifier "/50" is not supported',
 	'Unsupported utility family "blorb" in className literal.',
 ];
@@ -42,6 +42,11 @@ const forbiddenDiagnostics = ['"DEFAULT"', "unknown-theme-key"];
 
 const requiredFragments = [
 	"CornerRadius = UDim.new(0, 4)",
+	"Color3.fromRGB(255, 0, 0)",
+	"BackgroundTransparency = 0.5",
+	'kind = "hover"',
+	"attachHoverTracking",
+	"MouseEnter",
 	"Position = UDim2.new(1, -16, 1, -8)",
 	"SortOrder = Enum.SortOrder.LayoutOrder",
 	"FillDirectionMaxCells = 3",
@@ -98,7 +103,6 @@ const requiredFragments = [
 
 // Intentional regression checks for the deleted runtime package and artifact paths.
 const forbiddenFragments = [
-	"Color3.fromRGB(255, 0, 0)",
 	'React.createElement("RbxtsTailwindRuntimeHost"',
 	"__rbxtsTailwindRuntimeHost",
 	"RbxtsTailwindRuntimeHost",
