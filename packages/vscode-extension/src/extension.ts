@@ -15,8 +15,8 @@ const CONFIG_WATCH_GLOB = "**/vela.config.{ts,json}";
 
 let client: LanguageClient | undefined;
 let lifecycleTask: Promise<void> = Promise.resolve();
-let outputChannel: vscode.OutputChannel | undefined;
-let traceOutputChannel: vscode.OutputChannel | undefined;
+let outputChannel: vscode.LogOutputChannel | undefined;
+let traceOutputChannel: vscode.LogOutputChannel | undefined;
 
 type TraceSetting = "off" | "messages" | "verbose";
 
@@ -29,9 +29,12 @@ interface ResolvedServerCommand {
 export async function activate(
 	context: vscode.ExtensionContext,
 ): Promise<void> {
-	outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
+	outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME, {
+		log: true,
+	});
 	traceOutputChannel = vscode.window.createOutputChannel(
 		`${OUTPUT_CHANNEL_NAME} Trace`,
+		{ log: true },
 	);
 	context.subscriptions.push(outputChannel, traceOutputChannel);
 	log(`Extension path: ${context.extensionPath}`);
@@ -108,10 +111,13 @@ async function startClient(
 	const configs = await collectProjectConfigs();
 	log(`Loaded ${configs.length} vela config(s) for the language server.`);
 	const clientOutputChannel =
-		outputChannel ?? vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
+		outputChannel ??
+		vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME, { log: true });
 	const clientTraceOutputChannel =
 		traceOutputChannel ??
-		vscode.window.createOutputChannel(`${OUTPUT_CHANNEL_NAME} Trace`);
+		vscode.window.createOutputChannel(`${OUTPUT_CHANNEL_NAME} Trace`, {
+			log: true,
+		});
 	outputChannel = clientOutputChannel;
 	traceOutputChannel = clientTraceOutputChannel;
 	const serverOptions: ServerOptions = {

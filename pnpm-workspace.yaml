@@ -16,14 +16,14 @@ allowBuilds:
 # declare: an override that crosses a major swaps in an incompatible API and
 # breaks the tool at runtime rather than at install time.
 overrides:
-  brace-expansion: ">=5.0.6"
-  minimatch@1>brace-expansion: "^1.1.12"
-  minimatch@3>brace-expansion: "^1.1.12"
-  minimatch@5>brace-expansion: "^2.1.2"
-  minimatch@6>brace-expansion: "^2.1.2"
-  minimatch@7>brace-expansion: "^2.1.2"
-  minimatch@8>brace-expansion: "^2.1.2"
-  minimatch@9>brace-expansion: "^2.1.2"
+  brace-expansion: ">=5.0.8"
+  minimatch@1>brace-expansion: "^1.1.18"
+  minimatch@3>brace-expansion: "^1.1.18"
+  minimatch@5>brace-expansion: "^2.1.4"
+  minimatch@6>brace-expansion: "^2.1.4"
+  minimatch@7>brace-expansion: "^2.1.4"
+  minimatch@8>brace-expansion: "^2.1.4"
+  minimatch@9>brace-expansion: "^2.1.4"
   esbuild: ">=0.28.1"
   fast-uri: ">=4.0.0"
   ajv>fast-uri: "^3.1.0"
