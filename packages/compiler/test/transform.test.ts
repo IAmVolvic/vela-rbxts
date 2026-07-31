@@ -267,7 +267,7 @@ test("reports unsupported border forms with a targeted diagnostic", () => {
 			}),
 			expect.objectContaining({
 				level: "warning",
-				code: "unsupported-border-value",
+				code: "unsupported-arbitrary-value",
 				token: "border-[3px]",
 			}),
 			expect.objectContaining({
@@ -311,9 +311,10 @@ test("border static and runtime classifiers stay in parity", () => {
 	for (const form of UNSUPPORTED_FORMS) {
 		const result = transform(`<frame className="border-${form}" />`);
 		expect(
-			result.diagnostics.some(
-				(diagnostic: { code: string }) =>
-					diagnostic.code === "unsupported-border-value",
+			result.diagnostics.some((diagnostic: { code: string }) =>
+				["unsupported-border-value", "unsupported-arbitrary-value"].includes(
+					diagnostic.code,
+				),
 			),
 		).toBe(true);
 		expect(result.code).not.toMatch(/<uistroke\b/i);
@@ -2693,5 +2694,66 @@ test("rejects unsupported divide thickness values", () => {
 			code: "unsupported-divide-value",
 			token: "divide-x-3",
 		}),
+	]);
+});
+
+test("lowers hover variants into runtime rules", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-slate-700 hover:bg-blue-600 transition" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toMatch(/"kind": "hover"/);
+	expect(result.code).toContain("attachHoverTracking");
+	expect(result.code).toContain("MouseEnter");
+});
+
+test("resolves arbitrary hex colors", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-[#ff0000] border-[#0f0]" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/BackgroundColor3=\{Color3\.fromRGB\(255, 0, 0\)\}/,
+	);
+	expect(result.code).toMatch(/Color=\{Color3\.fromRGB\(0, 255, 0\)\}/);
+
+	const invalid = transform(
+		`export const B = () => <frame className="bg-[oops]" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-arbitrary-value" }),
+	]);
+});
+
+test("applies color opacity modifiers as transparency", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-blue-600/50 ring-rose-500/25" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/BackgroundTransparency=\{0\.5\}/);
+	expect(result.code).toMatch(/Transparency=\{0\.75\}/);
+
+	const unsupported = transform(
+		`export const B = () => <frame className="from-blue-600/50" />;`,
+		null,
+	);
+	expect(unsupported.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-opacity-modifier" }),
+	]);
+
+	const notAModifier = transform(
+		`export const C = () => <frame className="bg-blue-600/300" />;`,
+		null,
+	);
+	expect(notAModifier.diagnostics).toEqual([
+		expect.objectContaining({ code: "unknown-theme-key" }),
 	]);
 });
