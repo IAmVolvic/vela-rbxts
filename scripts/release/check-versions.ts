@@ -1,4 +1,22 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { collectReleaseUnits } from "./release-config";
+
+const CARGO_MANIFESTS = [
+	"packages/compiler/Cargo.toml",
+	"packages/lsp/Cargo.toml",
+] as const;
+
+function readCargoVersion(manifestPath: string): string {
+	const contents = readFileSync(join(process.cwd(), manifestPath), "utf8");
+	const match = contents.match(/^version\s*=\s*"([^"]+)"/m);
+
+	if (!match) {
+		throw new Error(`Missing version field in ${manifestPath}.`);
+	}
+
+	return match[1];
+}
 
 async function main() {
 	const releaseUnits = await collectReleaseUnits();
@@ -23,6 +41,15 @@ async function main() {
 	const [version] = Array.from(versions.keys());
 	if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
 		throw new Error(`Release version "${version}" is not a valid semver version.`);
+	}
+
+	for (const manifestPath of CARGO_MANIFESTS) {
+		const cargoVersion = readCargoVersion(manifestPath);
+		if (cargoVersion !== version) {
+			throw new Error(
+				`${manifestPath} is on ${cargoVersion}, but the release version is ${version}. Crate versions move in lockstep with the packages.`,
+			);
+		}
 	}
 
 	if (process.argv.includes("--print")) {
