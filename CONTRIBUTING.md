@@ -11,12 +11,19 @@ releases are cut.
 | Node.js | 24 |
 | pnpm | 10.33.2 (see `packageManager`) |
 | Rust | stable (see `rust-toolchain.toml`) |
+| wasm-pack | latest |
 
 The compiler is a Rust crate exposed to Node through N-API, and the language
 server is a second Rust crate. A working `cargo` is required even for
 `pnpm build` and `pnpm test`.
 
+The same crate is also built to WebAssembly, so `wasm-pack` and the
+`wasm32-unknown-unknown` target are part of a full build too. Install the
+toolchain through rustup — `rust-toolchain.toml` then pulls the target in, and
+a distro or Homebrew `rustc` will not have it in its sysroot.
+
 ```bash
+cargo install wasm-pack
 pnpm install
 pnpm build
 ```
