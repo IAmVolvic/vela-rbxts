@@ -211,6 +211,20 @@ impl VisitMut for VelaTransformer {
                     value: serde_json::to_string(text).expect("text spec must serialize to JSON"),
                 }));
             }
+            if let Some(divide) = &lowered.style_ir.divide {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaDivide",
+                    value: serde_json::to_string(divide)
+                        .expect("divide spec must serialize to JSON"),
+                }));
+            }
+            if let Some(margin) = &lowered.style_ir.margin {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaMargin",
+                    value: serde_json::to_string(margin)
+                        .expect("margin spec must serialize to JSON"),
+                }));
+            }
             attrs.push(create_prop_attr(PropEntry {
                 name: "__velaTag",
                 value: runtime_tag,

@@ -6,30 +6,34 @@ use crate::diagnostics::compiler::{
     unsupported_anchor_value_diagnostic, unsupported_animation_value_diagnostic,
     unsupported_arbitrary_value_diagnostic, unsupported_arbitrary_z_index_diagnostic,
     unsupported_aspect_value_diagnostic, unsupported_border_value_diagnostic,
-    unsupported_color_keyword_diagnostic, unsupported_flex_direction_diagnostic,
-    unsupported_font_weight_diagnostic, unsupported_gradient_direction_diagnostic,
-    unsupported_grid_value_diagnostic, unsupported_layout_order_value_diagnostic,
-    unsupported_line_height_value_diagnostic, unsupported_object_fit_value_diagnostic,
-    unsupported_opacity_modifier_diagnostic, unsupported_opacity_value_diagnostic,
-    unsupported_overflow_diagnostic, unsupported_overscroll_value_diagnostic,
-    unsupported_pointer_events_value_diagnostic, unsupported_rotation_value_diagnostic,
-    unsupported_scale_diagnostic, unsupported_shadow_inset_diagnostic,
-    unsupported_space_value_diagnostic, unsupported_stroke_value_diagnostic,
-    unsupported_text_alignment_diagnostic, unsupported_text_size_diagnostic,
-    unsupported_transition_value_diagnostic, unsupported_utility_family_diagnostic,
-    unsupported_whitespace_value_diagnostic, unsupported_z_index_auto_diagnostic,
-    unsupported_z_index_value_diagnostic,
+    unsupported_color_keyword_diagnostic, unsupported_divide_value_diagnostic,
+    unsupported_flex_direction_diagnostic, unsupported_font_weight_diagnostic,
+    unsupported_gradient_direction_diagnostic, unsupported_grid_value_diagnostic,
+    unsupported_layout_order_value_diagnostic, unsupported_line_height_value_diagnostic,
+    unsupported_margin_value_diagnostic, unsupported_negative_margin_diagnostic,
+    unsupported_object_fit_value_diagnostic, unsupported_opacity_modifier_diagnostic,
+    unsupported_opacity_value_diagnostic, unsupported_overflow_diagnostic,
+    unsupported_overscroll_value_diagnostic, unsupported_pointer_events_value_diagnostic,
+    unsupported_rotation_value_diagnostic, unsupported_scale_diagnostic,
+    unsupported_shadow_inset_diagnostic, unsupported_space_value_diagnostic,
+    unsupported_stroke_value_diagnostic, unsupported_text_alignment_diagnostic,
+    unsupported_text_size_diagnostic, unsupported_transition_value_diagnostic,
+    unsupported_utility_family_diagnostic, unsupported_whitespace_value_diagnostic,
+    unsupported_z_index_auto_diagnostic, unsupported_z_index_value_diagnostic,
 };
-use crate::ir::model::{RuntimeRule, SizeAxisValue, StyleIr, TextSpec, TransitionSpec};
+use crate::ir::model::{
+    DivideSpec, MarginSpec, RuntimeRule, SizeAxisValue, StyleIr, TextSpec, TransitionSpec,
+};
 use crate::semantic::{
     analyze::analyze_class_token,
     result::{AnalyzedClassToken, SemanticIssue},
     utility::{
         BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution, DEFAULT_TRANSITION_TIME,
-        GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, OUTLINE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY,
-        PaddingKind, RING_COLOR_FAMILY, SHADOW_COLOR_FAMILY, ShadowPreset, StrokePayload,
-        TEXT_COLOR_FAMILY, UtilityKind, classify_stroke_payload, end_relative_position_axis,
-        font_face_expression, is_automatic_size_key, is_known_unsupported_border_payload,
+        DIVIDE_COLOR_FAMILY, GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, OUTLINE_COLOR_FAMILY,
+        PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY, RING_THICKNESS_VALUES,
+        SHADOW_COLOR_FAMILY, ShadowPreset, StrokePayload, TEXT_COLOR_FAMILY, UtilityKind,
+        classify_stroke_payload, end_relative_position_axis, font_face_expression,
+        is_automatic_size_key, is_known_unsupported_border_payload,
         resolve_align_content_flex_value, resolve_align_items_value, resolve_align_self_value,
         resolve_anchor_point_value, resolve_animation_value, resolve_aspect_ratio_value,
         resolve_border_thickness_value, resolve_color_value, resolve_duration_seconds,
@@ -117,6 +121,15 @@ struct PendingAxes {
     animation: Option<&'static str>,
     text_transform: Option<&'static str>,
     text_decoration: Option<&'static str>,
+    margin_top: Option<f64>,
+    margin_right: Option<f64>,
+    margin_bottom: Option<f64>,
+    margin_left: Option<f64>,
+    margin_shift_x: f64,
+    margin_shift_y: f64,
+    divide_axis: Option<&'static str>,
+    divide_thickness: Option<f64>,
+    divide_color: Option<String>,
 }
 
 impl PendingAxes {
@@ -142,8 +155,8 @@ impl PendingAxes {
             );
         }
 
-        let position_x = shift_position_axis(self.position_x, shift_x);
-        let position_y = shift_position_axis(self.position_y, shift_y);
+        let position_x = shift_position_axis(self.position_x, shift_x + self.margin_shift_x);
+        let position_y = shift_position_axis(self.position_y, shift_y + self.margin_shift_y);
         if position_x.is_some() || position_y.is_some() {
             style.set_prop("Position", format_udim2_prop(position_x, position_y));
         }
@@ -213,6 +226,28 @@ impl PendingAxes {
 
         if let Some(animation) = self.animation.filter(|animation| *animation != "none") {
             style.animation = Some(animation.to_owned());
+        }
+
+        if self.margin_top.is_some()
+            || self.margin_right.is_some()
+            || self.margin_bottom.is_some()
+            || self.margin_left.is_some()
+        {
+            style.margin = Some(MarginSpec {
+                top: self.margin_top.unwrap_or(0.0),
+                right: self.margin_right.unwrap_or(0.0),
+                bottom: self.margin_bottom.unwrap_or(0.0),
+                left: self.margin_left.unwrap_or(0.0),
+            });
+        }
+
+        // A divide color without an axis has no separators to paint.
+        if let Some(axis) = self.divide_axis {
+            style.divide = Some(DivideSpec {
+                axis: axis.to_owned(),
+                thickness: self.divide_thickness.unwrap_or(1.0),
+                color: self.divide_color,
+            });
         }
 
         let text_transform = self.text_transform.filter(|value| *value != "none");
@@ -923,6 +958,104 @@ fn apply_analyzed_token(
                         ease_key,
                         &analysis.parsed.raw,
                     ));
+                }
+            }
+        }
+        UtilityKind::DivideX | UtilityKind::DivideY => {
+            let axis = match &analysis.utility {
+                UtilityKind::DivideX => "x",
+                _ => "y",
+            };
+            match analysis.payload() {
+                None => {
+                    pending.divide_axis = Some(axis);
+                    pending.divide_thickness.get_or_insert(1.0);
+                }
+                Some(thickness_key) => {
+                    if RING_THICKNESS_VALUES.contains(&thickness_key) {
+                        pending.divide_axis = Some(axis);
+                        pending.divide_thickness =
+                            Some(thickness_key.parse::<f64>().unwrap_or(1.0));
+                    } else {
+                        diagnostics.push(unsupported_divide_value_diagnostic(
+                            thickness_key,
+                            &analysis.parsed.raw,
+                        ));
+                    }
+                }
+            }
+        }
+        UtilityKind::DivideColor => {
+            if let Some(color_key) = analysis.payload()
+                && let Some(resolution) = resolve_color_value(
+                    config,
+                    diagnostics,
+                    DIVIDE_COLOR_FAMILY,
+                    color_key,
+                    &analysis.parsed.raw,
+                )
+            {
+                match resolution {
+                    ColorResolution::Expression(value) => {
+                        pending.divide_color = Some(value);
+                    }
+                    ColorResolution::Transparent => {
+                        diagnostics.push(unsupported_color_keyword_diagnostic(
+                            DIVIDE_COLOR_FAMILY.theme_family,
+                            color_key,
+                            &analysis.parsed.raw,
+                        ));
+                    }
+                }
+            }
+        }
+        UtilityKind::Margin(axis) => {
+            if let Some(spacing_key) = analysis.payload() {
+                let negative = analysis.parsed.utility.raw.starts_with("-m");
+                let offset = resolve_spacing_value(config, spacing_key)
+                    .as_deref()
+                    .and_then(spacing_value_to_offset)
+                    .and_then(|value| value.parse::<f64>().ok());
+
+                let Some(offset) = offset else {
+                    diagnostics.push(unsupported_margin_value_diagnostic(
+                        spacing_key,
+                        &analysis.parsed.raw,
+                    ));
+                    return;
+                };
+
+                if negative {
+                    // UIPadding cannot go negative, and a negative right/bottom
+                    // margin would have to pull the *next* sibling closer.
+                    match axis {
+                        PaddingKind::Top => pending.margin_shift_y -= offset,
+                        PaddingKind::Left => pending.margin_shift_x -= offset,
+                        _ => diagnostics
+                            .push(unsupported_negative_margin_diagnostic(&analysis.parsed.raw)),
+                    }
+                    return;
+                }
+
+                match axis {
+                    PaddingKind::All => {
+                        pending.margin_top = Some(offset);
+                        pending.margin_right = Some(offset);
+                        pending.margin_bottom = Some(offset);
+                        pending.margin_left = Some(offset);
+                    }
+                    PaddingKind::X => {
+                        pending.margin_left = Some(offset);
+                        pending.margin_right = Some(offset);
+                    }
+                    PaddingKind::Y => {
+                        pending.margin_top = Some(offset);
+                        pending.margin_bottom = Some(offset);
+                    }
+                    PaddingKind::Top => pending.margin_top = Some(offset),
+                    PaddingKind::Right => pending.margin_right = Some(offset),
+                    PaddingKind::Bottom => pending.margin_bottom = Some(offset),
+                    PaddingKind::Left => pending.margin_left = Some(offset),
                 }
             }
         }

@@ -817,6 +817,122 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
     }
 
     for (label, utility_kind, axis) in [
+        ("divide-x", UtilityKind::DivideX, "vertical"),
+        ("divide-y", UtilityKind::DivideY, "horizontal"),
+    ] {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: label.to_owned(),
+                insert_text: label.to_owned(),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!(
+                    "Insert a 1px {axis} separator frame between children (not for LayoutOrder lists)."
+                ),
+                replacement: None,
+                color: None,
+                sort_text: None,
+            },
+            utility_kind: utility_kind.clone(),
+        });
+
+        for thickness in RING_THICKNESS_VALUES {
+            items.push(CompletionSpec {
+                item: CompletionItem {
+                    label: format!("{label}-{thickness}"),
+                    insert_text: format!("{label}-{thickness}"),
+                    kind: "utility".to_owned(),
+                    category: "layout".to_owned(),
+                    documentation: format!(
+                        "Insert a {thickness}px {axis} separator frame between children."
+                    ),
+                    replacement: None,
+                    color: None,
+                    sort_text: None,
+                },
+                utility_kind: utility_kind.clone(),
+            });
+        }
+    }
+
+    for color_key in color_completion_keys(config) {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("divide-{color_key}"),
+                insert_text: format!("divide-{color_key}"),
+                kind: "utility".to_owned(),
+                category: "color".to_owned(),
+                documentation: format!(
+                    "Paint the divide separators from theme color `{color_key}`."
+                ),
+                replacement: None,
+                color: color_swatch(config, &color_key),
+                sort_text: None,
+            },
+            utility_kind: UtilityKind::DivideColor,
+        });
+    }
+
+    for (prefix, utility_kind, sides) in [
+        ("m", UtilityKind::Margin(PaddingKind::All), "all sides"),
+        (
+            "mx",
+            UtilityKind::Margin(PaddingKind::X),
+            "the left and right",
+        ),
+        (
+            "my",
+            UtilityKind::Margin(PaddingKind::Y),
+            "the top and bottom",
+        ),
+        ("mt", UtilityKind::Margin(PaddingKind::Top), "the top"),
+        ("mr", UtilityKind::Margin(PaddingKind::Right), "the right"),
+        ("mb", UtilityKind::Margin(PaddingKind::Bottom), "the bottom"),
+        ("ml", UtilityKind::Margin(PaddingKind::Left), "the left"),
+    ] {
+        for key in spacing_completion_keys(config) {
+            items.push(CompletionSpec {
+                item: CompletionItem {
+                    label: format!("{prefix}-{key}"),
+                    insert_text: format!("{prefix}-{key}"),
+                    kind: "utility".to_owned(),
+                    category: "layout".to_owned(),
+                    documentation: format!(
+                        "Wrap the element in a margin box padded by spacing `{key}` on {sides}."
+                    ),
+                    replacement: None,
+                    color: None,
+                    sort_text: None,
+                },
+                utility_kind: utility_kind.clone(),
+            });
+        }
+    }
+
+    for (prefix, utility_kind) in [
+        ("-mt", UtilityKind::Margin(PaddingKind::Top)),
+        ("-ml", UtilityKind::Margin(PaddingKind::Left)),
+    ] {
+        for key in spacing_completion_keys(config) {
+            items.push(CompletionSpec {
+                item: CompletionItem {
+                    label: format!("{prefix}-{key}"),
+                    insert_text: format!("{prefix}-{key}"),
+                    kind: "utility".to_owned(),
+                    category: "layout".to_owned(),
+                    documentation: format!(
+                        "Shift Position by negative spacing `{key}` (margin pull)."
+                    ),
+                    replacement: None,
+                    color: None,
+                    sort_text: None,
+                },
+                utility_kind: utility_kind.clone(),
+            });
+        }
+    }
+
+    for (label, utility_kind, axis) in [
         ("mx-auto", UtilityKind::CenterX, "X"),
         ("my-auto", UtilityKind::CenterY, "Y"),
     ] {

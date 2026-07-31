@@ -98,6 +98,7 @@ fn candidate_keys(config: &TailwindConfig, utility: &UtilityKind) -> Option<Vec<
         | UtilityKind::MaxHeight
         | UtilityKind::SpaceX
         | UtilityKind::SpaceY => Some(spacing_completion_keys(config)),
+        UtilityKind::Margin(_) => Some(spacing_completion_keys(config)),
         UtilityKind::Width | UtilityKind::Height | UtilityKind::Size | UtilityKind::Basis => {
             Some(size_completion_keys(config))
         }

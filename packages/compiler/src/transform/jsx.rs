@@ -56,7 +56,9 @@ pub(crate) fn lower_class_name(
             // static element to the runtime host.
             let needs_runtime_host = !style.runtime_rules.is_empty()
                 || style.runtime_class_value
-                || style.animation.is_some();
+                || style.animation.is_some()
+                || style.margin.is_some()
+                || style.divide.is_some();
             let mut style = style;
             if style.transition.is_some() && !needs_runtime_host {
                 diagnostics.push(transition_without_runtime_diagnostic());
@@ -80,6 +82,8 @@ pub(crate) fn lower_class_name(
                         transition: None,
                         animation: None,
                         text: None,
+                        margin: None,
+                        divide: None,
                     },
                     preserved_attrs,
                     runtime_class_name: Some(class_name_attr.clone()),
@@ -90,8 +94,11 @@ pub(crate) fn lower_class_name(
             let collapse = collapse_class_value_expr(expr, scopes);
             let runtime_class_value = collapse.is_dynamic();
             let style = resolve_class_tokens(collapse.static_tokens.clone(), config, diagnostics);
-            let needs_runtime_host =
-                !style.runtime_rules.is_empty() || runtime_class_value || style.animation.is_some();
+            let needs_runtime_host = !style.runtime_rules.is_empty()
+                || runtime_class_value
+                || style.animation.is_some()
+                || style.margin.is_some()
+                || style.divide.is_some();
             let runtime_class_name = collapse.dynamic_expr.map(|expr| {
                 let mut runtime_attr = class_name_attr.clone();
                 runtime_attr.value = Some(JSXAttrValue::JSXExprContainer(JSXExprContainer {
@@ -119,6 +126,8 @@ pub(crate) fn lower_class_name(
                 transition: None,
                 animation: None,
                 text: None,
+                margin: None,
+                divide: None,
             },
             preserved_attrs,
             runtime_class_name: Some(class_name_attr.clone()),

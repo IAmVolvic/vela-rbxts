@@ -66,6 +66,10 @@ pub(crate) enum UtilityKind {
     Animation,
     TextTransform,
     TextDecoration,
+    Margin(PaddingKind),
+    DivideX,
+    DivideY,
+    DivideColor,
     SpaceX,
     SpaceY,
     Whitespace,
@@ -284,6 +288,13 @@ pub(crate) const OUTLINE_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
     color_prop: "Color",
     transparency_prop: Some("Transparency"),
 };
+pub(crate) const DIVIDE_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
+    theme_family: "divide color",
+    color_prop: "BackgroundColor3",
+    transparency_prop: None,
+};
+/// Tailwind's default divide color (gray-200).
+pub(crate) const DEFAULT_DIVIDE_COLOR: &str = "Color3.fromRGB(229, 231, 235)";
 pub(crate) const ANCHOR_ORIGIN_VALUES: [&str; 9] = [
     "top-left",
     "top",
@@ -395,6 +406,8 @@ impl UtilityKind {
                 | UtilityKind::SpaceY
                 | UtilityKind::Ring
                 | UtilityKind::Outline
+                | UtilityKind::Margin(_)
+                | UtilityKind::DivideColor
                 | UtilityKind::MinWidth
                 | UtilityKind::MaxWidth
                 | UtilityKind::MinHeight
@@ -470,6 +483,13 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("-order-", "order", UtilityKind::LayoutOrder),
         ("-translate-x-", "translate", UtilityKind::TranslateX),
         ("-translate-y-", "translate", UtilityKind::TranslateY),
+        ("-mx-", "mx", UtilityKind::Margin(PaddingKind::X)),
+        ("-my-", "my", UtilityKind::Margin(PaddingKind::Y)),
+        ("-mt-", "mt", UtilityKind::Margin(PaddingKind::Top)),
+        ("-mr-", "mr", UtilityKind::Margin(PaddingKind::Right)),
+        ("-mb-", "mb", UtilityKind::Margin(PaddingKind::Bottom)),
+        ("-ml-", "ml", UtilityKind::Margin(PaddingKind::Left)),
+        ("-m-", "m", UtilityKind::Margin(PaddingKind::All)),
     ] {
         if let Some(value) = token.strip_prefix(prefix) {
             return ParsedUtility {
@@ -505,6 +525,8 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("mx-auto", UtilityKind::CenterX),
         ("my-auto", UtilityKind::CenterY),
         ("transition", UtilityKind::Transition),
+        ("divide-x", UtilityKind::DivideX),
+        ("divide-y", UtilityKind::DivideY),
     ] {
         if token == exact {
             return ParsedUtility {
@@ -661,6 +683,13 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("pb-", UtilityKind::Padding(PaddingKind::Bottom)),
         ("pl-", UtilityKind::Padding(PaddingKind::Left)),
         ("gap-", UtilityKind::Gap),
+        ("mx-", UtilityKind::Margin(PaddingKind::X)),
+        ("my-", UtilityKind::Margin(PaddingKind::Y)),
+        ("mt-", UtilityKind::Margin(PaddingKind::Top)),
+        ("mr-", UtilityKind::Margin(PaddingKind::Right)),
+        ("mb-", UtilityKind::Margin(PaddingKind::Bottom)),
+        ("ml-", UtilityKind::Margin(PaddingKind::Left)),
+        ("m-", UtilityKind::Margin(PaddingKind::All)),
         ("min-w-", UtilityKind::MinWidth),
         ("max-w-", UtilityKind::MaxWidth),
         ("min-h-", UtilityKind::MinHeight),
@@ -703,6 +732,9 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("overscroll-", UtilityKind::Overscroll),
         ("ring-", UtilityKind::Ring),
         ("outline-", UtilityKind::Outline),
+        ("divide-x-", UtilityKind::DivideX),
+        ("divide-y-", UtilityKind::DivideY),
+        ("divide-", UtilityKind::DivideColor),
         ("transition-", UtilityKind::Transition),
         ("duration-", UtilityKind::TransitionDuration),
         ("ease-", UtilityKind::TransitionEase),

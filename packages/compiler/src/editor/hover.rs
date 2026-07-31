@@ -7,11 +7,11 @@ use crate::semantic::{
     analyze::analyze_class_token,
     utility::{
         ANIMATION_VALUES, BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution,
-        DEFAULT_TRANSITION_TIME, GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, OUTLINE_COLOR_FAMILY,
-        PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY, SHADOW_COLOR_FAMILY,
-        StrokePayload, TEXT_COLOR_FAMILY, UtilityKind, classify_stroke_payload,
-        end_relative_position_axis, font_face_expression, is_automatic_size_key,
-        is_known_unsupported_border_payload, is_utility_allowed_on_host,
+        DEFAULT_TRANSITION_TIME, DIVIDE_COLOR_FAMILY, GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY,
+        OUTLINE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY,
+        SHADOW_COLOR_FAMILY, StrokePayload, TEXT_COLOR_FAMILY, UtilityKind,
+        classify_stroke_payload, end_relative_position_axis, font_face_expression,
+        is_automatic_size_key, is_known_unsupported_border_payload, is_utility_allowed_on_host,
         resolve_align_content_flex_value, resolve_align_items_value, resolve_align_self_value,
         resolve_anchor_point_value, resolve_aspect_ratio_value, resolve_border_thickness_value,
         resolve_color_value, resolve_duration_seconds, resolve_ease_value,
@@ -426,6 +426,65 @@ fn describe_token(
                 documentation: format!(
                     "{variant_prefix}Sets the transition easing to `Enum.EasingStyle.{style}` / `Enum.EasingDirection.{direction}`."
                 ),
+            })
+        }
+        UtilityKind::DivideX | UtilityKind::DivideY => {
+            let axis = match &analysis.utility {
+                UtilityKind::DivideX => "vertical",
+                _ => "horizontal",
+            };
+            let thickness = analysis.payload().unwrap_or("1");
+            Some(HoverContent {
+                display: format!("`{token}` -> child separators"),
+                documentation: format!(
+                    "{variant_prefix}Inserts a {thickness}px {axis} separator frame between the element's children. Not compatible with children that set an explicit `LayoutOrder`."
+                ),
+            })
+        }
+        UtilityKind::DivideColor => {
+            let color_key = analysis.payload()?;
+            let mut diagnostics = Vec::new();
+            let resolution = resolve_color_value(
+                config,
+                &mut diagnostics,
+                DIVIDE_COLOR_FAMILY,
+                color_key,
+                token,
+            )?;
+            let ColorResolution::Expression(value) = resolution else {
+                return None;
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> separator color"),
+                documentation: format!(
+                    "{variant_prefix}Paints the `divide-x`/`divide-y` separators with `{value}`."
+                ),
+            })
+        }
+        UtilityKind::Margin(axis) => {
+            let spacing_key = analysis.payload()?;
+            let value = resolve_spacing_value(config, spacing_key)?;
+            let negative = analysis.parsed.utility.raw.starts_with("-m");
+            let sides = match axis {
+                PaddingKind::All => "all sides",
+                PaddingKind::X => "the left and right",
+                PaddingKind::Y => "the top and bottom",
+                PaddingKind::Top => "the top",
+                PaddingKind::Right => "the right",
+                PaddingKind::Bottom => "the bottom",
+                PaddingKind::Left => "the left",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> margin box"),
+                documentation: if negative {
+                    format!(
+                        "{variant_prefix}Shifts `Position` by `-{value}` (negative margins pull from the top/left edge)."
+                    )
+                } else {
+                    format!(
+                        "{variant_prefix}Wraps the element in a transparent margin box padded by `{value}` on {sides}."
+                    )
+                },
             })
         }
         UtilityKind::TextTransform => {

@@ -24,6 +24,26 @@ pub(crate) struct StyleIr {
     pub(crate) animation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) text: Option<TextSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) margin: Option<MarginSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) divide: Option<DivideSpec>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub(crate) struct DivideSpec {
+    pub(crate) axis: String,
+    pub(crate) thickness: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) color: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub(crate) struct MarginSpec {
+    pub(crate) top: f64,
+    pub(crate) right: f64,
+    pub(crate) bottom: f64,
+    pub(crate) left: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

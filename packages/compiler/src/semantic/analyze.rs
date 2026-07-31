@@ -164,6 +164,7 @@ fn is_color_utility(utility: &UtilityKind) -> bool {
             | UtilityKind::GradientTo
             | UtilityKind::Ring
             | UtilityKind::Outline
+            | UtilityKind::DivideColor
     )
 }
 
@@ -178,13 +179,6 @@ fn is_known_tailwind_family(family: &str) -> bool {
         "grid"
             | "translate"
             | "basis"
-            | "m"
-            | "mt"
-            | "mr"
-            | "mb"
-            | "ml"
-            | "mx"
-            | "my"
             | "ms"
             | "me"
             | "space"
@@ -212,7 +206,6 @@ fn is_known_tailwind_family(family: &str) -> bool {
             | "antialiased"
             | "list"
             | "ring"
-            | "divide"
             | "outline"
             | "blur"
             | "brightness"

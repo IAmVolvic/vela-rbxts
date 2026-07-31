@@ -161,6 +161,40 @@ pub(crate) fn unsupported_animation_value_diagnostic(value: &str, token: &str) -
     }
 }
 
+pub(crate) fn unsupported_divide_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-divide-value".to_owned(),
+        message: format!("Divide thickness \"{value}\" is not supported; use 0, 1, 2, 4, or 8."),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_negative_margin_diagnostic(token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-negative-margin".to_owned(),
+        message: format!(
+            "Negative margins can only pull from the top or left edge in Roblox, so \"{token}\" is ignored; use -mt-* or -ml-*."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_margin_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-margin-value".to_owned(),
+        message: format!(
+            "Margin value \"{value}\" is not supported; use a spacing key, or mx-auto/my-auto for centering."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
 pub(crate) fn decoration_on_richtext_diagnostic() -> Diagnostic {
     Diagnostic {
         level: "warning".to_owned(),

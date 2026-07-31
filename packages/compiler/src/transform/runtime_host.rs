@@ -163,6 +163,32 @@ type RuntimeTextSpec = {
 	decoration?: string;
 };
 
+type RuntimeDivide = {
+	axis: string;
+	thickness: number;
+	color?: string;
+};
+
+type RuntimeDivideState = {
+	axis?: string;
+	thickness?: number;
+	color?: string;
+};
+
+type RuntimeMargin = {
+	top: number;
+	right: number;
+	bottom: number;
+	left: number;
+};
+
+type RuntimeMarginState = {
+	top?: number;
+	right?: number;
+	bottom?: number;
+	left?: number;
+};
+
 type RuntimeResolution = {
 	props: RuntimePropMap;
 	helpers: RuntimeHelper[];
@@ -170,6 +196,8 @@ type RuntimeResolution = {
 	animation?: string;
 	textTransform?: string;
 	textDecoration?: string;
+	margin?: RuntimeMarginState;
+	divide?: RuntimeDivideState;
 };
 
 type VelaRuntimeHostProps = {
@@ -178,6 +206,8 @@ type VelaRuntimeHostProps = {
 	__velaTransition?: RuntimeTransition;
 	__velaAnimation?: string;
 	__velaText?: RuntimeTextSpec;
+	__velaMargin?: RuntimeMargin;
+	__velaDivide?: RuntimeDivide;
 	className?: ClassValue;
 	children?: defined | readonly defined[];
 } & Record<string, unknown>;
@@ -212,6 +242,8 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 		const animation = resolution.animation ?? props.__velaAnimation;
 		const animationActive =
 			instanceCapable && animation !== undefined && animation !== "none";
+		const margin = resolveMarginConfig(props.__velaMargin, resolution.margin);
+		const divide = resolveDivideConfig(props.__velaDivide, resolution.divide);
 
 		const instanceRef = __VelaReact.useRef<Instance | undefined>(undefined);
 		const heldProps = __VelaReact.useRef<RuntimePropMap | undefined>(undefined);
@@ -224,6 +256,9 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 				name !== "__velaRules" &&
 				name !== "__velaTransition" &&
 				name !== "__velaAnimation" &&
+				name !== "__velaText" &&
+				name !== "__velaMargin" &&
+				name !== "__velaDivide" &&
 				name !== "className" &&
 				name !== "children"
 			) {
@@ -247,6 +282,11 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			const held = heldProps.current;
 			for (const [name, value] of pairs(resolution.props)) {
 				if (!isTweenableValue(value)) {
+					continue;
+				}
+				// Layout props move to the margin wrapper, which the inner
+				// instance ref cannot tween; they apply instantly instead.
+				if (margin !== undefined && isMarginWrapperProp(name as string)) {
 					continue;
 				}
 				tweenGoal[name as string] = value;
@@ -317,19 +357,289 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 				allChildren.push(child);
 			}
 		}
-		for (const child of normalizeChildren(children)) {
+		let userChildren = normalizeChildren(children);
+		if (divide !== undefined) {
+			userChildren = interleaveDivideSeparators(divide, userChildren);
+		}
+		for (const child of userChildren) {
 			if (child !== undefined) {
 				allChildren.push(child);
 			}
 		}
 
+		const wrapperProps =
+			margin !== undefined ? prepareMarginWrapper(margin, hostProps) : undefined;
+
 		// React renders a component reference the same way it renders a host tag.
-		return __VelaReact.createElement(
+		const element = __VelaReact.createElement(
 			__velaTag as SupportedHostElementTag,
 			hostProps,
 			...allChildren,
 		);
+
+		if (margin !== undefined && wrapperProps !== undefined) {
+			return renderMarginWrapper(margin, wrapperProps, element) as never;
+		}
+
+		return element;
 	});
+}
+
+function divideState(resolution: RuntimeResolution): RuntimeDivideState {
+	let state = resolution.divide;
+	if (state === undefined) {
+		state = {};
+		resolution.divide = state;
+	}
+	return state;
+}
+
+/// Consumes `divide-*` tokens from dynamic class values.
+function applyDivideToken(
+	theme: RuntimeTheme,
+	token: string,
+	resolution: RuntimeResolution,
+): boolean {
+	if (token === "divide-x" || token === "divide-y") {
+		const state = divideState(resolution);
+		state.axis = token === "divide-x" ? "x" : "y";
+		if (state.thickness === undefined) {
+			state.thickness = 1;
+		}
+		return true;
+	}
+
+	for (const prefix of ["divide-x-", "divide-y-"]) {
+		if (!startsWith(token, prefix)) {
+			continue;
+		}
+		const thickness = tonumber(substring(token, stringLength(prefix)));
+		if (thickness !== undefined) {
+			const state = divideState(resolution);
+			state.axis = prefix === "divide-x-" ? "x" : "y";
+			state.thickness = thickness;
+		}
+		return true;
+	}
+
+	if (startsWith(token, "divide-")) {
+		const key = substring(token, stringLength("divide-"));
+		const color = resolveDivideColor(theme, key);
+		if (color !== undefined) {
+			divideState(resolution).color = color;
+		}
+		return true;
+	}
+
+	return false;
+}
+
+function resolveDivideColor(theme: RuntimeTheme, key: string): string | undefined {
+	const [colorName, shade] = splitColorKey(key);
+	const value = theme.colors[colorName];
+	if (typeIs(value, "string")) {
+		return shade === undefined ? value : undefined;
+	}
+	if (typeIs(value, "table")) {
+		const scale = value as RuntimeColorScale;
+		const entry = scale[shade ?? PALETTE_DEFAULT_KEY];
+		if (entry !== undefined) {
+			return `Color3.fromRGB(${math.floor(entry.R * 255 + 0.5)}, ${math.floor(entry.G * 255 + 0.5)}, ${math.floor(entry.B * 255 + 0.5)})`;
+		}
+	}
+	return undefined;
+}
+
+function resolveDivideConfig(
+	base: RuntimeDivide | undefined,
+	dynamic: RuntimeDivideState | undefined,
+): RuntimeDivide | undefined {
+	const axis = dynamic?.axis ?? base?.axis;
+	if (axis === undefined) {
+		return undefined;
+	}
+
+	return {
+		axis,
+		thickness: dynamic?.thickness ?? base?.thickness ?? 1,
+		color: dynamic?.color ?? base?.color,
+	};
+}
+
+/// Interleaves a separator frame between consecutive children. Separators rely
+/// on hierarchy order, so lists that assign explicit LayoutOrder will scatter
+/// them.
+function interleaveDivideSeparators(
+	divide: RuntimeDivide,
+	children: defined[],
+): defined[] {
+	const color =
+		(divide.color !== undefined ? parseColor3(divide.color) : undefined) ??
+		Color3.fromRGB(229, 231, 235);
+	const size =
+		divide.axis === "x"
+			? new UDim2(0, divide.thickness, 1, 0)
+			: new UDim2(1, 0, 0, divide.thickness);
+
+	const result: defined[] = [];
+	for (const child of children) {
+		if (arraySize(result) > 0) {
+			result.push(
+				__VelaReact.createElement("frame", {
+					BackgroundColor3: color,
+					BorderSizePixel: 0,
+					Size: size,
+				} as never),
+			);
+		}
+		result.push(child);
+	}
+	return result;
+}
+
+function marginState(resolution: RuntimeResolution): RuntimeMarginState {
+	let state = resolution.margin;
+	if (state === undefined) {
+		state = {};
+		resolution.margin = state;
+	}
+	return state;
+}
+
+/// Consumes positive `m-*` family tokens from dynamic class values. Negative
+/// margins shift `Position` and are compile-time only.
+function applyMarginToken(
+	theme: RuntimeTheme,
+	token: string,
+	resolution: RuntimeResolution,
+): boolean {
+	const prefixes: Array<[string, Array<"top" | "right" | "bottom" | "left">]> = [
+		["mx-", ["left", "right"]],
+		["my-", ["top", "bottom"]],
+		["mt-", ["top"]],
+		["mr-", ["right"]],
+		["mb-", ["bottom"]],
+		["ml-", ["left"]],
+		["m-", ["top", "right", "bottom", "left"]],
+	];
+
+	for (const [prefix, sides] of prefixes) {
+		if (!startsWith(token, prefix)) {
+			continue;
+		}
+		const key = substring(token, stringLength(prefix));
+		if (key === "auto") {
+			return true;
+		}
+		const value = resolveSpacingValue(theme, key);
+		if (value !== undefined && value.Scale === 0) {
+			const state = marginState(resolution);
+			for (const side of sides) {
+				state[side] = value.Offset;
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
+function resolveMarginConfig(
+	base: RuntimeMargin | undefined,
+	dynamic: RuntimeMarginState | undefined,
+): RuntimeMargin | undefined {
+	const margin: RuntimeMargin = {
+		top: dynamic?.top ?? base?.top ?? 0,
+		right: dynamic?.right ?? base?.right ?? 0,
+		bottom: dynamic?.bottom ?? base?.bottom ?? 0,
+		left: dynamic?.left ?? base?.left ?? 0,
+	};
+
+	if (
+		margin.top === 0 &&
+		margin.right === 0 &&
+		margin.bottom === 0 &&
+		margin.left === 0
+	) {
+		return undefined;
+	}
+
+	return margin;
+}
+
+const MARGIN_WRAPPER_PROPS = [
+	"Size",
+	"Position",
+	"AnchorPoint",
+	"LayoutOrder",
+	"ZIndex",
+	"Visible",
+] as const;
+
+function isMarginWrapperProp(name: string): boolean {
+	for (const wrapperProp of MARGIN_WRAPPER_PROPS) {
+		if (name === wrapperProp) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/// Moves the layout props onto the CSS margin box (the wrapper) and resizes
+/// the inner element to fill it. Mutates `hostProps`, so this must run before
+/// the inner element is created.
+function prepareMarginWrapper(
+	margin: RuntimeMargin,
+	hostProps: Record<string, unknown>,
+): Record<string, unknown> {
+	const wrapperProps: Record<string, unknown> = {
+		BackgroundTransparency: 1,
+		BorderSizePixel: 0,
+	};
+
+	for (const wrapperProp of MARGIN_WRAPPER_PROPS) {
+		const value = hostProps[wrapperProp];
+		if (value !== undefined) {
+			wrapperProps[wrapperProp] = value;
+			hostProps[wrapperProp] = undefined;
+		}
+	}
+
+	const declaredSize = wrapperProps["Size"];
+	const automaticSize = hostProps["AutomaticSize"];
+	if (typeIs(declaredSize, "UDim2")) {
+		wrapperProps["Size"] = new UDim2(
+			declaredSize.X.Scale,
+			declaredSize.X.Offset + margin.left + margin.right,
+			declaredSize.Y.Scale,
+			declaredSize.Y.Offset + margin.top + margin.bottom,
+		);
+		hostProps["Size"] = UDim2.fromScale(1, 1);
+	} else if (automaticSize !== undefined) {
+		// Content-sized element: the wrapper grows with it, padding included.
+		wrapperProps["AutomaticSize"] = automaticSize;
+	} else {
+		wrapperProps["AutomaticSize"] = Enum.AutomaticSize.XY;
+	}
+
+	return wrapperProps;
+}
+
+/// Renders the margin box: a transparent wrapper padded by the margins, with
+/// the real element filling the remaining space.
+function renderMarginWrapper(
+	margin: RuntimeMargin,
+	wrapperProps: Record<string, unknown>,
+	element: defined,
+): defined {
+	const padding = __VelaReact.createElement("uipadding", {
+		PaddingTop: new UDim(0, margin.top),
+		PaddingRight: new UDim(0, margin.right),
+		PaddingBottom: new UDim(0, margin.bottom),
+		PaddingLeft: new UDim(0, margin.left),
+	} as never);
+
+	return __VelaReact.createElement("frame", wrapperProps as never, padding, element);
 }
 
 function escapeRichText(value: string): string {
@@ -568,6 +878,14 @@ function applyToken(
 	}
 
 	if (!segments.every((segment) => matchesVariant(segment, environment))) {
+		return;
+	}
+
+	if (applyDivideToken(theme, utility, resolution)) {
+		return;
+	}
+
+	if (applyMarginToken(theme, utility, resolution)) {
 		return;
 	}
 
