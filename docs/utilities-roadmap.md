@@ -113,6 +113,10 @@ React.createElement(VelaRuntimeHost, {
 
 - `transition-colors|opacity|transform|all` 등 프로퍼티 필터는 1차에서는 전부
   `all`로 취급(단순화), 필터링은 후속.
+- `hover:` variant는 호스트가 MouseEnter/MouseLeave로 상태를 추적해 지원한다
+  (소비자 Event 핸들러와 합성). `bg-[#hex]` arbitrary 색과 `색/불투명도`
+  수식어(`bg-blue-600/50` → transparency prop)도 지원 — 수식어는 transparency
+  prop이 있는 패밀리(bg/text/image/shadow/ring/outline)에서만 동작한다.
 - 트랜지션 토큰만 있고 runtime rule이 없는 요소는 지금은 정적 lowering되므로,
   `transition`이 있으면 **호스트로 승격**해야 한다 (`needsRuntimeHost` 조건에 추가).
 
