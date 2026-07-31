@@ -28,11 +28,13 @@ pub(crate) fn no_roblox_equivalent_diagnostic(family: &str, token: &str) -> Diag
 }
 
 pub(crate) fn unknown_variant_diagnostic(variant: &str, token: &str) -> Diagnostic {
+    let supported = crate::semantic::variant::supported_variant_list();
+
     Diagnostic {
         level: "warning".to_owned(),
         code: "unknown-variant".to_owned(),
         message: format!(
-            "Unknown variant \"{variant}\" in \"{token}\"; supported variants are sm, md, lg, portrait, landscape, touch, mouse, gamepad, and hover."
+            "Unknown variant \"{variant}\" in \"{token}\"; supported variants are {supported}."
         ),
         token: Some(token.to_owned()),
         range: None,

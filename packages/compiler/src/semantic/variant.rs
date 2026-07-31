@@ -21,6 +21,16 @@ pub(crate) fn variant_condition(prefix: &str) -> Option<&'static str> {
         .map(|(_, condition)| *condition)
 }
 
+/// "sm, md, ..., and hover" for diagnostics, so the message tracks the table.
+pub(crate) fn supported_variant_list() -> String {
+    let (last, rest) = RUNTIME_VARIANTS
+        .split_last()
+        .expect("RUNTIME_VARIANTS is never empty");
+    let rest = rest.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+
+    format!("{}, and {}", rest.join(", "), last.0)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum VariantKind {
     Width {
