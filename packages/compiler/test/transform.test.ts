@@ -312,7 +312,8 @@ test("border static and runtime classifiers stay in parity", () => {
 		const result = transform(`<frame className="border-${form}" />`);
 		expect(
 			result.diagnostics.some(
-				(diagnostic) => diagnostic.code === "unsupported-border-value",
+				(diagnostic: { code: string }) =>
+					diagnostic.code === "unsupported-border-value",
 			),
 		).toBe(true);
 		expect(result.code).not.toMatch(/<uistroke\b/i);

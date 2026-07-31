@@ -765,7 +765,9 @@ test("offers completions inside a component className", () => {
 	});
 
 	expect(response.isInClassNameContext).toBe(true);
-	expect(response.items.map((item) => item.label)).toContain("bg-slate-500");
+	expect(response.items.map((item: { label: string }) => item.label)).toContain(
+		"bg-slate-500",
+	);
 });
 
 test("offers completions inside a member expression component className", () => {
@@ -785,7 +787,9 @@ test("keeps host-only utilities available on components", () => {
 
 	expect(getDiagnostics({ source: componentSource }).diagnostics).toEqual([]);
 	expect(
-		getDiagnostics({ source: hostSource }).diagnostics.map((item) => item.code),
+		getDiagnostics({ source: hostSource }).diagnostics.map(
+			(item: { code: string }) => item.code,
+		),
 	).toEqual(["unsupported-host-utility"]);
 });
 
@@ -804,7 +808,9 @@ test("reports document colors inside a component className", () => {
 	const source = `export const A = () => <Box className="bg-slate-700" />;`;
 	const response = getDocumentColors({ source });
 
-	expect(response.colors.map((color) => color.token)).toEqual(["bg-slate-700"]);
+	expect(
+		response.colors.map((color: { token: string }) => color.token),
+	).toEqual(["bg-slate-700"]);
 });
 
 test("ignores className on elements the transformer does not lower", () => {
@@ -1002,7 +1008,7 @@ test("returns document colors for shadow and gradient color stops", () => {
 			'<frame className="shadow-slate-700 from-blue-600 via-rose-500 to-slate-500 shadow-md" />',
 	});
 
-	expect(result.colors.map((color) => color.token)).toEqual([
+	expect(result.colors.map((color: { token: string }) => color.token)).toEqual([
 		"shadow-slate-700",
 		"from-blue-600",
 		"via-rose-500",
