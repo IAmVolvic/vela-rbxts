@@ -4,6 +4,9 @@
   "type": "module",
   "description": "Semantic boundary and supported Roblox host element contracts for vela-rbxts.",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "author": "astra-void",
   "keywords": [
     "roblox",

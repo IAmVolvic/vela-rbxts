@@ -4,6 +4,9 @@
   "type": "module",
   "description": "Tailwind-style className support for roblox-ts React UI.",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "author": "astra-void",
   "keywords": [
     "roblox",
@@ -45,7 +48,8 @@
       "import": "./dist/transformer.cjs",
       "require": "./dist/transformer.cjs",
       "default": "./dist/transformer.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "pnpm run clean && pnpm run build:types",

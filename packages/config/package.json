@@ -4,6 +4,9 @@
   "type": "module",
   "description": "Config schema, defaults, and defineConfig() helper for vela-rbxts.",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "author": "astra-void",
   "keywords": [
     "roblox",
