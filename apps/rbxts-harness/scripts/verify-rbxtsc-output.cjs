@@ -174,12 +174,8 @@ const requiredPatterns = [
 		pattern: /__velaStringSub\([^)]*\)/,
 	},
 	{
-		description: "runtime helper aliases table.getn locally",
-		pattern: /local __velaTableGetn = table\.getn/,
-	},
-	{
-		description: "runtime helper calls the table getn alias",
-		pattern: /__velaTableGetn\([^)]*\)/,
+		description: "runtime helper lowers array size to the # operator",
+		pattern: /function arraySize\(value\)\s*return #value\s*end/,
 	},
 ];
 
@@ -205,15 +201,11 @@ const forbiddenPatterns = [
 		pattern: /string\.sub\s*\(/,
 	},
 	{
-		description: "runtime helper must not call table.getn as a method",
-		pattern: /table:getn\s*\(/,
+		description: "runtime helper must not use the deprecated table.getn",
+		pattern: /table\s*[.:]\s*getn\b/,
 	},
 	{
-		description: "runtime helper must not call table.getn directly",
-		pattern: /table\.getn\s*\(/,
-	},
-	{
-		description: "runtime helper must not call string size method",
+		description: "runtime helper must not call an unlowered size method",
 		pattern: /[:.]size\s*\(/,
 	},
 	{

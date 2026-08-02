@@ -2202,12 +2202,6 @@ declare const string: {
 const __velaStringLen = string.len;
 const __velaStringSub = string.sub;
 
-declare const table: {
-	getn: (value: unknown[]) => number;
-};
-
-const __velaTableGetn = table.getn;
-
 function stringLength(value: string): number {
 	return __velaStringLen(value);
 }
@@ -2384,7 +2378,7 @@ function isNaNNumber(value: number): boolean {
 }
 
 function arraySize<T>(value: T[]): number {
-	return __velaTableGetn(value);
+	return value.size();
 }
 "###;
 
