@@ -89,8 +89,31 @@ where
     }
 
     pending.flush(&mut style);
+    default_list_layout_sort_order(&mut style);
     reset_variant_color_opacity(&mut style);
     style
+}
+
+/// `UIListLayout.SortOrder` defaults to `Name`, which would sort children by
+/// their instance name and silently ignore every `order-*`.
+fn default_list_layout_sort_order(style: &mut StyleIr) {
+    let Some(helper) = style
+        .base
+        .helpers
+        .iter_mut()
+        .find(|helper| helper.tag == "uilistlayout")
+    else {
+        return;
+    };
+
+    if helper.props.iter().any(|prop| prop.name == "SortOrder") {
+        return;
+    }
+
+    helper.props.push(PropEntry {
+        name: "SortOrder",
+        value: "Enum.SortOrder.LayoutOrder".to_owned(),
+    });
 }
 
 const COLOR_OPACITY_FAMILIES: [ColorFamilySpec; 3] = [

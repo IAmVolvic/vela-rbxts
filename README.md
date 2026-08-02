@@ -298,7 +298,7 @@ The exhaustive table of accepted values lives in the [utility reference](https:/
 | Flex layout | `flex`, `flex-row`, `flex-col`, `flex-wrap`, `flex-nowrap`, `justify-*`, `items-*`, `content-*` | `UIListLayout`. `justify-{start,center,end}` sets `HorizontalAlignment` while `justify-{between,around,evenly}` sets `HorizontalFlex`; `items-stretch` sets `VerticalFlex`; `content-*` packs the cross axis. |
 | Flex items | `flex-1`, `flex-auto`, `flex-initial`, `flex-none`, `grow`, `grow-0`, `shrink`, `shrink-0`, `self-*`, `basis-*` | `UIFlexItem` (`FlexMode`, `ItemLineAlignment`); `basis-*` sizes the main axis |
 | Grid | `grid`, `grid-cols-{1..12}`, `grid-rows-{1..12}` | `UIGridLayout`; `gap-*` feeds `CellPadding` |
-| Order | `order-*`, `order-{first,last,none}`, `-order-*` | `LayoutOrder` |
+| Order | `order-*`, `order-{first,last,none}`, `-order-*` | `LayoutOrder`; every emitted `UIListLayout` and `UIGridLayout` carries `SortOrder = LayoutOrder` so the values take effect |
 | Aspect ratio | `aspect-square`, `aspect-video`, `aspect-[W/H]`, `aspect-[N]` | `UIAspectRatioConstraint` |
 | Transform | `rotate-*`, `-rotate-*`, `scale-*` | `Rotation`, `UIScale` |
 | Effects | `opacity-*` | `BackgroundTransparency`, integers 0 to 100 |

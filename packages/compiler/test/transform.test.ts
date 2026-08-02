@@ -1664,6 +1664,35 @@ test("treats bare flex as a horizontal UIListLayout", () => {
 	);
 });
 
+test("sorts UIListLayout children by LayoutOrder so order-* applies", () => {
+	const flex = transform(
+		`export const A = () => (
+			<frame className="flex">
+				<textbutton className="order-2" />
+				<textlabel className="order-1" />
+			</frame>
+		);`,
+		null,
+	);
+
+	expect(flex.diagnostics).toEqual([]);
+	expect(flex.code).toMatch(
+		/<uilistlayout\b[^>]*SortOrder=\{Enum\.SortOrder\.LayoutOrder\}[^>]*\/>/i,
+	);
+
+	const gap = transform('<frame className="gap-4" />');
+
+	expect(gap.code).toMatch(
+		/<uilistlayout\b[^>]*SortOrder=\{Enum\.SortOrder\.LayoutOrder\}[^>]*\/>/i,
+	);
+
+	const space = transform('<frame className="space-y-2" />');
+
+	expect(space.code).toMatch(
+		/<uilistlayout\b[^>]*SortOrder=\{Enum\.SortOrder\.LayoutOrder\}[^>]*\/>/i,
+	);
+});
+
 test("warns on unsupported flex directions while lowering flex distribution", () => {
 	const result = transform(
 		'<frame className="flex-row-reverse justify-between items-stretch" />',

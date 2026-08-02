@@ -389,6 +389,7 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			);
 			__VelaTweenService.Create(instance, info, changed as never).Play();
 		});
+		applyHelperDefaults(resolution.helpers);
 		const runtimeChildren = resolution.helpers.map((helper) =>
 			__VelaReact.createElement(helper.tag, helperToProps(helper.props)),
 		);
@@ -2118,6 +2119,25 @@ function setHelperEntryProp(
 	}
 
 	props.push({ name, value });
+}
+
+/// UIListLayout.SortOrder defaults to Name, which sorts children by their
+/// instance name and silently ignores every `order-*`.
+function applyHelperDefaults(helpers: RuntimeHelper[]) {
+	for (const helper of helpers) {
+		if (helper.tag !== "uilistlayout") {
+			continue;
+		}
+
+		if (helper.props.find((prop) => prop.name === "SortOrder") !== undefined) {
+			continue;
+		}
+
+		helper.props.push({
+			name: "SortOrder",
+			value: Enum.SortOrder.LayoutOrder,
+		});
+	}
 }
 
 function helperToProps(props: RuntimeHelperProp[]): Record<string, unknown> {
