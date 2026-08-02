@@ -401,6 +401,30 @@ function verifyStagedArtifacts(
 		}
 	}
 
+	// `vscode-languageclient` 10 exports no `./package.json`, so its manifest has
+	// to be found by walking up from an entry point the exports map does name.
+	function resolvePackageManifest(entryPath, packageName) {
+		let dir = path.dirname(entryPath);
+
+		for (;;) {
+			const candidate = path.join(dir, "package.json");
+			if (
+				fs.existsSync(candidate) &&
+				JSON.parse(fs.readFileSync(candidate, "utf8")).name === packageName
+			) {
+				return candidate;
+			}
+
+			const parent = path.dirname(dir);
+			if (parent === dir) {
+				throw new Error(
+					`[${target}] Failed resolving ${packageName}/package.json from ${entryPath}.`,
+				);
+			}
+			dir = parent;
+		}
+	}
+
 	let resolvedWrapperPath;
 	try {
 		resolvedWrapperPath = stageRequire.resolve("@vela-rbxts/lsp");
@@ -429,8 +453,9 @@ function verifyStagedArtifacts(
 	);
 
 	const runtimeClientPath = stageRequire.resolve("vscode-languageclient/node");
-	const runtimeClientPackageJsonPath = stageRequire.resolve(
-		"vscode-languageclient/package.json",
+	const runtimeClientPackageJsonPath = resolvePackageManifest(
+		runtimeClientPath,
+		"vscode-languageclient",
 	);
 	assertWithinStage(runtimeClientPath, "vscode-languageclient/node");
 	assertWithinStage(
