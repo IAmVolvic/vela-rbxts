@@ -1,10 +1,25 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Deserialize, Serialize, Default)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct TailwindConfig {
+    #[serde(default = "preflight_default")]
+    pub(crate) preflight: bool,
     #[serde(default)]
     pub(crate) theme: ThemeConfig,
+}
+
+impl Default for TailwindConfig {
+    fn default() -> Self {
+        Self {
+            preflight: preflight_default(),
+            theme: ThemeConfig::default(),
+        }
+    }
+}
+
+fn preflight_default() -> bool {
+    true
 }
 
 #[derive(Clone, Deserialize, Serialize, Default)]
@@ -31,6 +46,7 @@ pub(crate) type ColorScale = BTreeMap<String, String>;
 
 #[derive(Clone, Deserialize, Default)]
 pub(crate) struct TailwindConfigInput {
+    pub(crate) preflight: Option<bool>,
     pub(crate) theme: Option<ThemeConfigInput>,
 }
 

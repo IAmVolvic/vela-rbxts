@@ -176,6 +176,101 @@ mod tests {
             .expect("the element must produce a style IR")
     }
 
+    fn source_ir(source: &str) -> String {
+        let result = transform_impl(source.to_owned(), None);
+        result
+            .ir
+            .into_iter()
+            .next()
+            .expect("the element must produce a style IR")
+    }
+
+    fn no_preflight_ir(class_name: &str) -> String {
+        let mut config = crate::config::defaults::default_config();
+        config.preflight = false;
+
+        let result = transform_impl(
+            format!("const ui = <frame className=\"{class_name}\" />;"),
+            Some(TransformOptions {
+                config_json: Some(
+                    serde_json::to_string(&config).expect("config must serialize to JSON"),
+                ),
+            }),
+        );
+        result
+            .ir
+            .into_iter()
+            .next()
+            .expect("the element must produce a style IR")
+    }
+
+    fn base_props(ir: &str) -> &str {
+        ir.split_once("\"runtimeRules\"")
+            .map_or(ir, |(base, _)| base)
+    }
+
+    #[test]
+    fn preflight_neutralizes_the_roblox_host_defaults() {
+        let ir = element_ir("w-full");
+
+        assert!(
+            ir.contains("\"BackgroundTransparency\",\"value\":\"1\""),
+            "an unpainted element must not fall back to the default gray box: {ir}"
+        );
+        assert!(
+            ir.contains("\"BorderSizePixel\",\"value\":\"0\""),
+            "the default 1px border must go with it: {ir}"
+        );
+    }
+
+    #[test]
+    fn preflight_leaves_a_painted_background_opaque() {
+        let ir = element_ir("bg-slate-700");
+
+        assert!(
+            !ir.contains("BackgroundTransparency"),
+            "a bg-* utility already means opaque, so preflight has nothing to neutralize: {ir}"
+        );
+    }
+
+    #[test]
+    fn preflight_carries_a_variant_background_over_the_neutralized_base() {
+        let ir = element_ir("hover:bg-blue-600");
+        let (base, rules) = ir
+            .split_once("\"runtimeRules\"")
+            .expect("the hover variant must survive as a runtime rule");
+
+        assert!(
+            base.contains("\"BackgroundTransparency\",\"value\":\"1\""),
+            "the base stays neutralized: {ir}"
+        );
+        assert!(
+            rules.contains("\"BackgroundTransparency\",\"value\":\"0\""),
+            "the variant must reopen the background it paints: {ir}"
+        );
+    }
+
+    #[test]
+    fn preflight_defers_to_a_declared_prop() {
+        let ir =
+            source_ir("const ui = <frame BackgroundTransparency={0.25} className=\"w-full\" />;");
+
+        assert!(
+            !base_props(&ir).contains("BackgroundTransparency"),
+            "an explicitly declared prop outranks the neutralization: {ir}"
+        );
+    }
+
+    #[test]
+    fn preflight_can_be_turned_off() {
+        let ir = no_preflight_ir("w-full");
+
+        assert!(
+            !ir.contains("BackgroundTransparency") && !ir.contains("BorderSizePixel"),
+            "`preflight: false` must leave the engine defaults alone: {ir}"
+        );
+    }
+
     #[test]
     fn a_variant_color_clears_the_base_opacity_modifier() {
         let ir = element_ir("bg-blue-600/50 hover:bg-blue-600");

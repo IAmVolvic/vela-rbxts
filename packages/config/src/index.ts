@@ -30,6 +30,7 @@ export type ThemeConfig = {
 };
 
 export type TailwindConfig = {
+	preflight: boolean;
 	theme: ThemeConfig;
 };
 
@@ -45,12 +46,14 @@ export type ThemeConfigInput = {
 };
 
 export type TailwindConfigInput = {
+	preflight?: boolean;
 	theme?: ThemeConfigInput;
 };
 
 const defaultConfigInput = defaultConfigSource satisfies TailwindConfigInput;
 
 const emptyConfig: TailwindConfig = {
+	preflight: false,
 	theme: {
 		colors: {},
 		radius: {},
@@ -74,6 +77,7 @@ function resolveConfig(
 	const extend = input.theme?.extend;
 
 	return {
+		preflight: input.preflight ?? base.preflight,
 		theme: {
 			colors: resolveThemeColors(
 				base.theme.colors,

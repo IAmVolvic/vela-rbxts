@@ -6,6 +6,12 @@ function buildColorPalette(entries: Record<string, string>) {
 	return entries;
 }
 
+// Preflight would put its own background props on every element, which hides
+// what a token-resolution test is actually asserting.
+const withoutPreflight = {
+	configJson: JSON.stringify(defineConfig({ preflight: false })),
+};
+
 test("applies theme.extend while top-level theme scales replace the family", () => {
 	const config = defineConfig({
 		theme: {
@@ -28,6 +34,7 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 	});
 
 	expect(config).toEqual({
+		preflight: true,
 		theme: {
 			colors: {
 				primary: "Color3.fromRGB(99, 102, 241)",
@@ -108,10 +115,10 @@ test("resolves normalized shade tokens from config colors", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toContain(
-		"<frame BackgroundColor3={Color3.fromRGB(40, 48, 66)}/>",
+		"<frame BackgroundColor3={Color3.fromRGB(40, 48, 66)} BorderSizePixel={0}/>",
 	);
 	expect(result.code).toContain(
-		"<frame BackgroundColor3={Color3.fromRGB(4, 5, 6)}/>",
+		"<frame BackgroundColor3={Color3.fromRGB(4, 5, 6)} BorderSizePixel={0}/>",
 	);
 });
 
@@ -148,16 +155,16 @@ test("merges extend colors without inventing fake singleton shades", () => {
 		defaultConfig.theme.colors.slate as Record<string, string>
 	)["700"];
 	expect(result.code).toContain(
-		`<frame BackgroundColor3={${defaultSlate700}}/>`,
+		`<frame BackgroundColor3={${defaultSlate700}} BorderSizePixel={0}/>`,
 	);
 	expect(result.code).toContain(
-		"<frame BackgroundColor3={Color3.fromRGB(100, 116, 139)}/>",
+		"<frame BackgroundColor3={Color3.fromRGB(100, 116, 139)} BorderSizePixel={0}/>",
 	);
 	expect(result.code).toContain(
-		"<frame BackgroundColor3={Color3.fromRGB(37, 99, 235)}/>",
+		"<frame BackgroundColor3={Color3.fromRGB(37, 99, 235)} BorderSizePixel={0}/>",
 	);
 	expect(result.code).toContain(
-		"<frame BackgroundColor3={Color3.fromRGB(251, 113, 133)}/>",
+		"<frame BackgroundColor3={Color3.fromRGB(251, 113, 133)} BorderSizePixel={0}/>",
 	);
 });
 
@@ -198,7 +205,7 @@ test("rejects unshaded palette access and invalid singleton shade access", () =>
 	);
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toContain(
-		"<frame BackgroundColor3={Color3.fromRGB(78, 90, 123)}/>",
+		"<frame BackgroundColor3={Color3.fromRGB(78, 90, 123)} BorderSizePixel={0}/>",
 	);
 	expect(result.code).not.toContain("Color3.fromRGB(12, 34, 56)");
 });
@@ -217,7 +224,9 @@ test("resolves normalized default background colors and transparent keywords", (
 	expect(
 		result.code.split(`BackgroundColor3={${defaultSlate700}}`),
 	).toHaveLength(2);
-	expect(result.code).toContain("<frame BackgroundTransparency={1}/>");
+	expect(result.code).toContain(
+		"<frame BackgroundTransparency={1} BorderSizePixel={0}/>",
+	);
 });
 
 test("lowers border utilities to UIStroke helpers", () => {
@@ -334,7 +343,10 @@ test("border static and runtime classifiers stay in parity", () => {
 });
 
 test("warns on unknown background color keys unless config defines them", () => {
-	const result = transform('<frame className="bg-surface" />');
+	const result = transform(
+		'<frame className="bg-surface" />',
+		withoutPreflight,
+	);
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
@@ -351,7 +363,10 @@ test("warns on unknown background color keys unless config defines them", () => 
 });
 
 test("does not pretend to support unsupported color keywords", () => {
-	const result = transform('<frame className="bg-current bg-inherit" />');
+	const result = transform(
+		'<frame className="bg-current bg-inherit" />',
+		withoutPreflight,
+	);
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
@@ -401,10 +416,14 @@ test("shares the color resolver across text image and placeholder utilities", ()
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toContain("<textlabel TextTransparency={1}/>");
-	expect(result.code).toContain("<imagelabel ImageTransparency={1}/>");
 	expect(result.code).toContain(
-		"<textbox PlaceholderColor3={Color3.fromRGB(251, 113, 133)}/>",
+		"<textlabel TextTransparency={1} BorderSizePixel={0} BackgroundTransparency={1}/>",
+	);
+	expect(result.code).toContain(
+		"<imagelabel ImageTransparency={1} BorderSizePixel={0} BackgroundTransparency={1}/>",
+	);
+	expect(result.code).toContain(
+		"<textbox PlaceholderColor3={Color3.fromRGB(251, 113, 133)} BorderSizePixel={0} BackgroundTransparency={1}/>",
 	);
 	expect(result.code).not.toContain("TextColor3=");
 	expect(result.code).not.toContain("ImageColor3=");
@@ -419,25 +438,25 @@ test("resolves built-in radius presets out of the box", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toContain(
-		"<textbutton><uicorner CornerRadius={new UDim(0, 0)}/></textbutton>",
+		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 0)}/></textbutton>",
 	);
 	expect(result.code).toContain(
-		"<imagebutton><uicorner CornerRadius={new UDim(0, 4)}/></imagebutton>",
+		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 4)}/></imagebutton>",
 	);
 	expect(result.code).toContain(
-		"<textbutton><uicorner CornerRadius={new UDim(0, 6)}/></textbutton>",
+		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 6)}/></textbutton>",
 	);
 	expect(result.code).toContain(
-		"<imagebutton><uicorner CornerRadius={new UDim(0, 8)}/></imagebutton>",
+		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 8)}/></imagebutton>",
 	);
 	expect(result.code).toContain(
-		"<textbutton><uicorner CornerRadius={new UDim(0, 12)}/></textbutton>",
+		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 12)}/></textbutton>",
 	);
 	expect(result.code).toContain(
-		"<imagebutton><uicorner CornerRadius={new UDim(0, 16)}/></imagebutton>",
+		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 16)}/></imagebutton>",
 	);
 	expect(result.code).toContain(
-		"<textbutton><uicorner CornerRadius={new UDim(0.5, 0)}/></textbutton>",
+		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0.5, 0)}/></textbutton>",
 	);
 });
 
@@ -697,7 +716,7 @@ test("lowers gap spacing utilities to a UIListLayout helper", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toMatch(
-		/<frame><uilistlayout\b[^>]*Padding=\{new UDim\(0, 16\)\}[^>]*\/><\/frame>/i,
+		/<frame\b[^>]*><uilistlayout\b[^>]*Padding=\{new UDim\(0, 16\)\}[^>]*\/><\/frame>/i,
 	);
 });
 
@@ -1575,7 +1594,10 @@ test("lowers opacity utilities to BackgroundTransparency", () => {
 });
 
 test("warns on out-of-range opacity values", () => {
-	const result = transform('<frame className="opacity-150" />');
+	const result = transform(
+		'<frame className="opacity-150" />',
+		withoutPreflight,
+	);
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
@@ -2817,4 +2839,43 @@ test("applies color opacity modifiers as transparency", () => {
 	expect(notAModifier.diagnostics).toEqual([
 		expect.objectContaining({ code: "unknown-theme-key" }),
 	]);
+});
+
+test("preflight neutralizes the Roblox host defaults by default", () => {
+	const result = transform(
+		`export const A = () => <frame className="w-full" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/BackgroundTransparency=\{1\}/);
+	expect(result.code).toMatch(/BorderSizePixel=\{0\}/);
+
+	const painted = transform(
+		`export const B = () => <frame className="bg-slate-700" />;`,
+		null,
+	);
+
+	expect(painted.code).not.toMatch(/BackgroundTransparency/);
+
+	const off = transform(
+		`export const C = () => <frame className="w-full" />;`,
+		{
+			configJson: JSON.stringify(defineConfig({ preflight: false })),
+		},
+	);
+
+	expect(off.code).not.toMatch(/BackgroundTransparency|BorderSizePixel/);
+});
+
+test("preflight lets a runtime-resolved background reopen the neutralized base", () => {
+	const result = transform(
+		`export const A = ({ on }: { on: boolean }) => <frame className={on ? "bg-slate-700" : "w-full"} />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("withPreflightBackground");
+	expect(result.code).toMatch(/"preflight":\s*true/);
 });

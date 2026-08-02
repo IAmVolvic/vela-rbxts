@@ -348,7 +348,21 @@ Where it matters, branch between two fully static string literals so both branch
 
 The project config file is named `vela.config.ts` or `vela.config.json` — those exact filenames, with no `.js`, `.mjs`, or `.cjs` variant. The host resolves it by walking upward from each source file and loading the nearest one it finds, preferring `.ts` within a directory and falling back to the built-in defaults when there is none. See [step 3](#3-add-velaconfigts) for the shape and [Theme Axes](#theme-axes) for the merge rules.
 
-The schema is only `theme.colors`, `theme.radius`, `theme.spacing`, and their `theme.extend` counterparts. There is no `content`, `plugins`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
+The schema is only `preflight`, `theme.colors`, `theme.radius`, `theme.spacing`, and their `theme.extend` counterparts. There is no `content`, `plugins`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
+
+### `preflight`
+
+Roblox paints every `GuiObject` as an opaque gray box with a 1px border, and a framework that only ever adds properties can never take that back. Preflight neutralizes those defaults, so every **host element that carries a `className`** starts from `BackgroundTransparency = 1` and `BorderSizePixel = 0` — `<frame className="w-40 h-10" />` is an invisible box, not a gray rectangle, and `bg-transparent` no longer has to be spelled out everywhere.
+
+A `bg-*` utility still wins, including one that only appears in a variant (`hover:bg-blue-600`) or in a dynamic class value, and a prop written on the element itself (`<frame BackgroundTransparency={0.25} className="w-full" />`) is left alone. Props arriving through a spread are not — the transformer cannot see their names, so preflight overrides them like any other utility does.
+
+It is deliberately not global: an element with no `className` keeps the Roblox defaults, so `<frame />` and `<frame className="w-full" />` do not render the same. Components are skipped too, since the eventual host element is unknown.
+
+Preflight is on by default. Turn it off to keep the engine defaults:
+
+```ts
+export default defineConfig({ preflight: false });
+```
 
 The `.ts` config is transpiled and executed rather than type-checked, so a type error in it passes silently while a syntax error fails the build. The `.json` config is parsed, with a `$schema` key ignored. Project `paths` and ambient types are not available inside it. It is also re-read and re-executed for every eligible source file, so keep it cheap.
 

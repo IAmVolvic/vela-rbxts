@@ -17,6 +17,7 @@ type ClassValue =
 	| ClassValue[];
 
 type VelaRuntimeConfig = {
+	preflight: boolean;
 	theme: {
 		colors: Record<string, string | Record<string, string>>;
 		radius: Record<string, string>;
@@ -238,6 +239,7 @@ type VelaRuntimeHostComponent = <Tag extends VelaRuntimeTag>(
 
 function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 	const theme = normalizeTheme(config);
+	const preflight = config.preflight;
 
 	// forwardRef so slotting libraries (asChild-style cloneElement) and plain
 	// consumer refs reach the rendered instance instead of dying on a function
@@ -261,6 +263,7 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			environment,
 			__velaRules as RuntimeRule[],
 			className,
+			preflight,
 		);
 		// A component tag decides its own rendering, so there is no instance to
 		// tween; motion utilities only engage on real host tags.
@@ -918,6 +921,7 @@ function resolveRuntimeResolution(
 	environment: RuntimeEnvironment,
 	runtimeRules: readonly RuntimeRule[],
 	className: ClassValue | undefined,
+	preflight: boolean,
 ): RuntimeResolution {
 	const resolution: RuntimeResolution = {
 		props: {},
@@ -934,7 +938,7 @@ function resolveRuntimeResolution(
 	}
 
 	for (const token of normalizeClassValue(className)) {
-		applyToken(theme, environment, token, resolution);
+		applyToken(theme, environment, token, resolution, preflight);
 	}
 
 	return resolution;
@@ -945,6 +949,7 @@ function applyToken(
 	environment: RuntimeEnvironment,
 	token: string,
 	resolution: RuntimeResolution,
+	preflight: boolean,
 ) {
 	if (!token) {
 		return;
@@ -1023,7 +1028,39 @@ function applyToken(
 		return;
 	}
 
-	applyResolvedEffectBundle(resolution, effect);
+	applyResolvedEffectBundle(
+		resolution,
+		withPreflightBackground(effect, preflight),
+	);
+}
+
+/// Preflight leaves the base transparent, so a background color resolved from a
+/// dynamic class value has to state its own opacity or it would never show.
+function withPreflightBackground(
+	effect: RuntimeResolvedEffectBundle,
+	preflight: boolean,
+): RuntimeResolvedEffectBundle {
+	if (!preflight) {
+		return effect;
+	}
+
+	let setsColor = false;
+	for (const prop of effect.props) {
+		if (prop.name === "BackgroundTransparency") {
+			return effect;
+		}
+		if (prop.name === "BackgroundColor3") {
+			setsColor = true;
+		}
+	}
+
+	if (!setsColor) {
+		return effect;
+	}
+
+	const props = [...effect.props];
+	props.push({ name: "BackgroundTransparency", value: 0 });
+	return { props, helpers: effect.helpers };
 }
 
 function transitionState(resolution: RuntimeResolution): RuntimeTransitionState {

@@ -122,6 +122,32 @@ const COLOR_OPACITY_FAMILIES: [ColorFamilySpec; 3] = [
     IMAGE_COLOR_FAMILY,
 ];
 
+/// Roblox paints a `GuiObject` as an opaque gray box with a 1px border unless
+/// something says otherwise, and a utility framework that only adds properties
+/// can never take that back. Preflight neutralizes it on the elements vela
+/// already owns, so only an explicit `bg-*` paints.
+pub(crate) fn apply_preflight(style: &mut StyleIr, declared_props: &[String]) {
+    let declared = |name: &str| declared_props.iter().any(|prop| prop == name);
+    let styled =
+        |style: &StyleIr, name: &str| style.base.props.iter().any(|prop| prop.name == name);
+
+    if !styled(style, "BorderSizePixel") && !declared("BorderSizePixel") {
+        style.set_prop("BorderSizePixel", "0".to_owned());
+    }
+
+    // A background the base already paints is opaque on purpose, and a variant
+    // that paints over a neutralized base is carried by the opacity reset.
+    if !styled(style, "BackgroundColor3")
+        && !styled(style, "BackgroundTransparency")
+        && !declared("BackgroundColor3")
+        && !declared("BackgroundTransparency")
+    {
+        style.set_prop("BackgroundTransparency", "1".to_owned());
+    }
+
+    reset_variant_color_opacity(style);
+}
+
 /// A variant bundle overlays the base at runtime, so dropping the transparency
 /// prop from the variant's own bundle — all a bare `hover:bg-blue-600` can do
 /// while it is resolved in isolation — leaves the base `/50` standing. The

@@ -8,6 +8,11 @@
 		"$schema": {
 			"type": "string"
 		},
+		"preflight": {
+			"type": "boolean",
+			"default": true,
+			"description": "Neutralizes the Roblox defaults (opaque gray background, 1px border) on every className-bearing host element, so only explicit bg-* and border utilities paint. Set to false to keep the engine defaults."
+		},
 		"theme": {
 			"type": "object",
 			"additionalProperties": false,

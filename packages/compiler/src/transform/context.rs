@@ -110,6 +110,15 @@ impl VisitMut for VelaTransformer {
             lowered.style_ir.animation = None;
         }
 
+        // A component decides its own rendering, so there is no Roblox default
+        // to neutralize and no attribute list that speaks for the instance.
+        if self.config.preflight && !is_component {
+            crate::transform::runtime::apply_preflight(
+                &mut lowered.style_ir,
+                &declared_prop_names(&lowered.preserved_attrs),
+            );
+        }
+
         // A consumer-managed RichText would be double-escaped by the decoration
         // wrapper, so the decoration backs off with a warning.
         if lowered
@@ -271,6 +280,19 @@ impl VisitMut for VelaTransformer {
             .chain(existing_children)
             .collect();
     }
+}
+
+fn declared_prop_names(attrs: &[JSXAttrOrSpread]) -> Vec<String> {
+    attrs
+        .iter()
+        .filter_map(|attr| match attr {
+            JSXAttrOrSpread::JSXAttr(JSXAttr {
+                name: JSXAttrName::Ident(ident),
+                ..
+            }) => Some(ident.sym.to_string()),
+            _ => None,
+        })
+        .collect()
 }
 
 fn has_attr(attrs: &[JSXAttrOrSpread], name: &str) -> bool {
