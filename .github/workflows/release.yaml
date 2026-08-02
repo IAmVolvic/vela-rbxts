@@ -1,0 +1,161 @@
+name: Release
+
+# Changesets pile up on `main` and a release happens when this workflow is run
+# by hand, so no release PR has to stand open between releases.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Version the workspace and print the result without committing, tagging, or publishing
+        required: false
+        default: false
+        type: boolean
+      publish_vscode_extension:
+        description: Publish VS Code extension to Marketplace
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  actions: write
+  contents: write
+
+env:
+  NODE_VERSION: 24
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: version and release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check the dispatch ref
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "${REF}" != "refs/heads/main" ]; then
+            echo "Release runs from main only; got ${REF}." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # A dispatch over the API can deliver a typed boolean as a string, so the
+      # release gate is decided once here rather than in every later `if`.
+      - name: Resolve run mode
+        id: mode
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          case "${DRY_RUN}" in
+            true|True|TRUE|1|yes|Yes|YES|on|On|ON) mode="dry-run" ;;
+            false|False|FALSE|0|no|No|NO|off|Off|OFF|"") mode="release" ;;
+            *) echo "Invalid dry_run value: ${DRY_RUN}" >&2; exit 1 ;;
+          esac
+
+          echo "Run mode: ${mode}."
+          echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check pending changesets
+        run: |
+          pending="$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')"
+
+          if [ "${pending}" -eq 0 ]; then
+            echo "No pending changesets on main; nothing to release." >&2
+            exit 1
+          fi
+
+          echo "${pending} pending changeset(s)."
+
+      - name: Version packages
+        run: pnpm release:version
+
+      - name: Resolve release tag
+        id: version
+        run: |
+          version="$(pnpm -s release:current-version)"
+
+          case "${version}" in
+            *-*) npm_tag="next" ;;
+            *) npm_tag="latest" ;;
+          esac
+
+          echo "Resolved v${version} on the ${npm_tag} dist-tag."
+          echo "release_tag=v${version}" >> "${GITHUB_OUTPUT}"
+          echo "npm_tag=${npm_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Summarise the dry run
+        if: ${{ steps.mode.outputs.mode == 'dry-run' }}
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          NPM_TAG: ${{ steps.version.outputs.npm_tag }}
+        run: |
+          echo "dry_run=true, so nothing was committed, tagged, or published."
+          echo "A real run would release ${RELEASE_TAG} on the ${NPM_TAG} dist-tag."
+          git --no-pager diff --stat
+
+      # The branch push goes first: if something landed on main meanwhile it is
+      # rejected, and the run stops before a tag exists for a release that never
+      # happened.
+      - name: Commit and tag the release
+        if: ${{ steps.mode.outputs.mode == 'release' }}
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Tag ${RELEASE_TAG} already exists." >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(release): ${RELEASE_TAG}"
+          git push origin HEAD:main
+          git tag -a "${RELEASE_TAG}" -m "${RELEASE_TAG}"
+          git push origin "${RELEASE_TAG}"
+
+          echo "Pushed ${RELEASE_TAG}."
+
+      # A tag pushed with GITHUB_TOKEN raises no `push` event, so publish.yaml
+      # has to be started explicitly. `workflow_dispatch` through the API is the
+      # documented exception to that rule and needs no separate PAT.
+      - name: Start publish
+        if: ${{ steps.mode.outputs.mode == 'release' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          NPM_TAG: ${{ steps.version.outputs.npm_tag }}
+          PUBLISH_VSCODE_EXTENSION: ${{ inputs.publish_vscode_extension }}
+        run: |
+          case "${PUBLISH_VSCODE_EXTENSION}" in
+            false|False|FALSE|0|no|No|NO|off|Off|OFF) publish_vscode="false" ;;
+            *) publish_vscode="true" ;;
+          esac
+
+          gh workflow run publish.yaml \
+            --ref "${RELEASE_TAG}" \
+            -f release_tag="${RELEASE_TAG}" \
+            -f npm_tag="${NPM_TAG}" \
+            -f dry_run=false \
+            -f publish_vscode_extension="${publish_vscode}"
+
+          echo "Dispatched publish.yaml for ${RELEASE_TAG} on the ${NPM_TAG} dist-tag."

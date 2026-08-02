@@ -23,18 +23,26 @@ Publishing scripts never build. Build scripts never publish.
 
 ## Release Flow
 
-A release runs itself once changesets land on `main`:
+Changesets accumulate on `main` and a release starts when `release.yaml` is dispatched:
 
-1. `version.yaml` opens or refreshes the **release PR** (`chore(release): version packages`)
-   for as long as changesets are pending.
-2. Merging that PR moves the root version. `version.yaml` notices the bump by comparing
-   against the previous tip, tags `vX.Y.Z`, and dispatches `publish.yaml` on that tag.
+```bash
+gh workflow run release.yaml --ref main
+```
+
+1. `release.yaml` refuses a ref other than `main` and a run with no pending changesets, then
+   runs `release:version` to bump every package and write the changelogs.
+2. It commits the bump straight to `main` as `chore(release): vX.Y.Z`, tags that commit, and
+   dispatches `publish.yaml` on the tag.
 3. `publish.yaml` validates, builds every target, packs, verifies, and publishes to npm.
 4. `publish.yaml` then dispatches `publish-vscode.yaml`, which packages the VSIX from the
    binaries npm just received and publishes it to the Marketplace.
 
-Merge the release PR with any method — the version comparison recognises a merge commit, a
-squash, and a rebase alike.
+Nothing opens a pull request. Releasing is the moment the workflow is dispatched, so changesets
+can pile up for as long as you like and go out in one batch.
+
+The branch push in step 2 happens before the tag: if something landed on `main` after the run
+started, the push is rejected and no tag exists for a release that never happened. Re-dispatch
+once `main` is settled.
 
 The dispatch in step 2 is deliberate: a tag pushed with `GITHUB_TOKEN` raises no `push` event,
 so `on: push: tags` never fires for an automated release. `workflow_dispatch` through the API
@@ -194,6 +202,14 @@ express, and the two channels would otherwise collide on one number. A `vX.Y.Z-n
 still selects the `next` npm dist-tag — only the Marketplace channel is unaffected by it.
 
 ## Manual Dispatch Options
+
+For `workflow_dispatch` on `.github/workflows/release.yaml`:
+
+- `dry_run=true`: version the workspace and print the tag and dist-tag it would release, without
+  committing, tagging, or publishing anything. This is how you preview a bump now that no release
+  PR shows it.
+- `publish_vscode_extension=false`: release npm only; `publish.yaml` will not dispatch the
+  extension workflow.
 
 For `workflow_dispatch` on `.github/workflows/publish.yaml`:
 
