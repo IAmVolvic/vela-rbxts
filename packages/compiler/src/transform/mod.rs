@@ -191,6 +191,34 @@ mod tests {
     }
 
     #[test]
+    fn the_runtime_host_types_its_ref_from_the_host_tag() {
+        let result = transform_impl(
+            "const ui = <frame className=\"bg-slate-700 hover:bg-blue-600\" />;".to_owned(),
+            None,
+        );
+
+        assert!(
+            result.needs_runtime_host,
+            "a hover variant must promote the element to the runtime host"
+        );
+        // forwardRef alone pins one ref type for every tag, which types every
+        // consumer ref as `unknown`; the generic restatement is what keeps
+        // `ref` following the lowered host tag.
+        assert!(
+            result
+                .code
+                .contains("ref?: __VelaReact.Ref<VelaRefTarget<Tag>>"),
+            "the host component type must derive its ref from the tag"
+        );
+        assert!(
+            result
+                .code
+                .contains("as unknown as VelaRuntimeHostComponent"),
+            "the host instance must be cast to that component type"
+        );
+    }
+
+    #[test]
     fn a_variant_color_leaves_opacity_alone_when_the_base_never_set_it() {
         let ir = element_ir("bg-blue-600 hover:bg-rose-500");
 

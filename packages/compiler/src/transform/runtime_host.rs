@@ -24,17 +24,25 @@ type VelaRuntimeConfig = {
 	};
 };
 
-type SupportedHostElementTag =
-	| "frame"
-	| "scrollingframe"
-	| "canvasgroup"
-	| "textlabel"
-	| "textbutton"
-	| "textbox"
-	| "imagelabel"
-	| "imagebutton";
+type SupportedHostElements = {
+	frame: Frame;
+	scrollingframe: ScrollingFrame;
+	canvasgroup: CanvasGroup;
+	textlabel: TextLabel;
+	textbutton: TextButton;
+	textbox: TextBox;
+	imagelabel: ImageLabel;
+	imagebutton: ImageButton;
+};
+
+type SupportedHostElementTag = keyof SupportedHostElements;
 
 type VelaRuntimeTag = SupportedHostElementTag | ((props: never) => unknown);
+
+// A component element has no instance of its own for a ref to land on.
+type VelaRefTarget<Tag> = Tag extends SupportedHostElementTag
+	? SupportedHostElements[Tag]
+	: unknown;
 
 const PALETTE_DEFAULT_KEY = "DEFAULT";
 
@@ -217,6 +225,16 @@ type VelaRuntimeHostProps = {
 	className?: ClassValue;
 	children?: defined | readonly defined[];
 } & Record<string, unknown>;
+
+// `forwardRef` fixes one ref type for the whole component, which would leave
+// every consumer ref typed as `unknown`. Restating it as a generic call lets
+// `ref` follow whichever host tag the transformer lowered to.
+type VelaRuntimeHostComponent = <Tag extends VelaRuntimeTag>(
+	props: VelaRuntimeHostProps & {
+		__velaTag: Tag;
+		ref?: __VelaReact.Ref<VelaRefTarget<Tag>>;
+	},
+) => __VelaReact.Element;
 
 function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 	const theme = normalizeTheme(config);
@@ -2353,7 +2371,7 @@ function arraySize<T>(value: T[]): number {
 pub(crate) fn create_runtime_host_module_items(config: &TailwindConfig) -> Vec<ModuleItem> {
     let config_json = serde_json::to_string(config).expect("runtime config must serialize to JSON");
     let source = format!(
-        "{RUNTIME_HOST_TEMPLATE}\nconst __VelaRuntimeConfig = {config_json};\nconst VelaRuntimeHost = __createVelaRuntimeHost(__VelaRuntimeConfig);"
+        "{RUNTIME_HOST_TEMPLATE}\nconst __VelaRuntimeConfig = {config_json};\nconst VelaRuntimeHost = __createVelaRuntimeHost(__VelaRuntimeConfig) as unknown as VelaRuntimeHostComponent;"
     );
     let items = parse_module_items(&source);
 
