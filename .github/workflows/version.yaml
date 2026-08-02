@@ -6,6 +6,7 @@ on:
       - main
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -39,7 +40,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Opens/refreshes a release PR while changesets are pending. Once that PR
-      # lands there are none left, and the tag push below starts publish.yaml.
+      # lands there are none left, and the steps below cut and publish the tag.
       - name: Create release pull request
         id: changesets
         uses: changesets/action@v1
@@ -50,13 +51,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Only the landing of a release PR cuts a tag. Keying off the absence of
-      # changesets alone would release on any ordinary push to main.
+      # A landed release PR is the only thing that moves the root version, so
+      # comparing against the previous tip recognises it under any merge method.
+      # Matching the commit message instead would miss a merge commit, and the
+      # absence of changesets alone would release on any ordinary push to main.
       - name: Tag release
-        if: "${{ steps.changesets.outputs.hasChangesets == 'false' && startsWith(github.event.head_commit.message, 'chore(release): version packages') }}"
+        id: tag
+        if: ${{ steps.changesets.outputs.hasChangesets == 'false' }}
         run: |
           version="$(pnpm -s release:current-version)"
           tag="v${version}"
+          previous="$(git show HEAD~1:package.json | node -pe "JSON.parse(require('node:fs').readFileSync(0, 'utf8')).version")"
+
+          if [ "${version}" = "${previous}" ]; then
+            echo "Root version is unchanged at ${version}; nothing to release."
+            exit 0
+          fi
 
           if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
             echo "Tag ${tag} already exists; nothing to release."
@@ -67,4 +77,30 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${tag}" -m "${tag}"
           git push origin "${tag}"
-          echo "Pushed ${tag}; publish.yaml will take over."
+          echo "Pushed ${tag}."
+
+          echo "release_tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      # A tag pushed with GITHUB_TOKEN raises no `push` event, so publish.yaml
+      # has to be started explicitly. `workflow_dispatch` through the API is the
+      # documented exception to that rule and needs no separate PAT.
+      - name: Start publish
+        if: ${{ steps.tag.outputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+        run: |
+          case "${RELEASE_TAG}" in
+            *-*) npm_tag="next" ;;
+            *) npm_tag="latest" ;;
+          esac
+
+          gh workflow run publish.yaml \
+            --ref "${RELEASE_TAG}" \
+            -f release_tag="${RELEASE_TAG}" \
+            -f npm_tag="${npm_tag}" \
+            -f vsix_build_number=1 \
+            -f dry_run=false \
+            -f publish_vscode_extension=true
+
+          echo "Dispatched publish.yaml for ${RELEASE_TAG} on the ${npm_tag} dist-tag."
