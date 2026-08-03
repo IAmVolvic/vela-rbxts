@@ -1,0 +1,49 @@
+{
+  "name": "@vela-rbxts/runtime",
+  "version": "0.8.0",
+  "description": "Source of truth for the runtime class resolver the compiler inlines. Not published: the compiler reads this source at build time.",
+  "license": "MIT",
+  "author": "astra-void",
+  "keywords": [
+    "roblox",
+    "roblox-ts",
+    "rbxts",
+    "tailwind",
+    "tailwindcss",
+    "vela",
+    "classname",
+    "runtime"
+  ],
+  "homepage": "https://github.com/astra-void/vela-rbxts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astra-void/vela-rbxts.git",
+    "directory": "packages/runtime"
+  },
+  "bugs": {
+    "url": "https://github.com/astra-void/vela-rbxts/issues"
+  },
+  "scripts": {
+    "prebuild": "node ./scripts/materialize-rbxts-modules.cjs",
+    "build": "rbxtsc -p tsconfig.json",
+    "postbuild": "node ./scripts/clean-rbxts-modules.cjs",
+    "pretypecheck": "node ./scripts/materialize-rbxts-modules.cjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --fix --unsafe",
+    "clean": "node -e \"const fs=require('node:fs');fs.rmSync('out',{recursive:true,force:true});\""
+  },
+  "peerDependencies": {
+    "@rbxts/react": "^17.3.7-ts.1",
+    "@rbxts/services": "^1.6.0"
+  },
+  "devDependencies": {
+    "@rbxts/compiler-types": "^3.0.0-types.0",
+    "@rbxts/react": "^17.3.7-ts.1",
+    "@rbxts/services": "^1.6.0",
+    "@rbxts/types": "^1.0.935",
+    "roblox-ts": "^3.0.0",
+    "typescript": "5.9.3"
+  },
+  "private": true
+}

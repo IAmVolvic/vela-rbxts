@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn the_runtime_host_types_its_ref_from_the_host_tag() {
+    fn the_runtime_host_is_scoped_and_typed_from_the_host_tag() {
         let result = transform_impl(
             "const ui = <frame className=\"bg-slate-700 hover:bg-blue-600\" />;".to_owned(),
             None,
@@ -296,14 +296,13 @@ mod tests {
             result.needs_runtime_host,
             "a hover variant must promote the element to the runtime host"
         );
-        // forwardRef alone pins one ref type for every tag, which types every
-        // consumer ref as `unknown`; the generic restatement is what keeps
-        // `ref` following the lowered host tag.
+        // Luau caps a function at 200 local registers and the module body is
+        // one. The runtime has to arrive as a single local, or a component with
+        // enough parts of its own stops compiling — `card` did.
         assert!(
-            result
-                .code
-                .contains("ref?: __VelaReact.Ref<VelaRefTarget<Tag>>"),
-            "the host component type must derive its ref from the tag"
+            result.code.contains("const VelaRuntimeHost = (()=>{")
+                || result.code.contains("const VelaRuntimeHost = (() => {"),
+            "the runtime must be scoped inside one initializer, not spread over the module body"
         );
         assert!(
             result
