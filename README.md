@@ -284,8 +284,17 @@ Supported variants:
 - `hover:`, tracked per element through `MouseEnter`/`MouseLeave`
 - `active:`, tracked through `InputBegan`/`InputEnded` for mouse and touch presses
 - `focus:`, tracked through `Focused`/`FocusLost` on a `textbox` and through `SelectionGained`/`SelectionLost` everywhere else
+- `dark:`, read from the local player's `VelaColorScheme` attribute
 
 Prefixes chain, and every condition has to match. Orientation is derived from the viewport as `width >= height ? landscape : portrait`. Input mode resolves gamepad first, then touch, then mouse. When the element also carries `transition`, a state change tweens instead of snapping.
+
+Roblox exposes no color scheme to a running game — there is no `prefers-color-scheme` and no player setting a game can read — so `dark:` is app-owned. It matches when `Players.LocalPlayer` carries the attribute `VelaColorScheme = "dark"`; anything else, including a missing attribute, is light. Set it from your own settings menu, or from the server for a specific player, and every element with a `dark:` rule follows:
+
+```ts
+Players.LocalPlayer.SetAttribute("VelaColorScheme", dark ? "dark" : "light");
+```
+
+An attribute is what makes this work at all: the runtime helper is inlined per module, so a React context or a module-level store could never be shared between them, while every copy can read the same instance.
 
 The three interaction variants attach their listeners only when a rule actually uses them, and compose with whatever handlers you declared in `Event` — yours still run. A press that ends outside the element never reaches its `InputEnded`, so `active:` also clears on `MouseLeave`. There is no `disabled:`: Roblox has no disabled state to observe. Model it with your own prop and `pointer-events-none`.
 
