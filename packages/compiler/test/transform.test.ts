@@ -3078,6 +3078,21 @@ test("lowers active and focus variants into runtime rules", () => {
 	expect(focused.code).toContain("SelectionGained");
 });
 
+test("lowers the dark variant into a color scheme rule", () => {
+	const result = transform(
+		`export const A = () => <frame className="bg-white dark:bg-slate-900" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toMatch(/"kind": "color-scheme"/);
+	expect(result.code).toMatch(/"value": "dark"/);
+	// Roblox exposes no color scheme, so the app owns it through an attribute.
+	expect(result.code).toContain("VelaColorScheme");
+	expect(result.code).toContain("GetAttributeChangedSignal");
+});
+
 test("resolves arbitrary hex colors", () => {
 	const result = transform(
 		`export const A = () => <frame className="bg-[#ff0000] border-[#0f0]" />;`,

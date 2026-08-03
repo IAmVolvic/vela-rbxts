@@ -259,6 +259,7 @@ async function main() {
 		"hover:bg-blue-600",
 		"active:bg-rose-500",
 		"focus:border-blue-600",
+		"dark:bg-slate-900",
 		"bg-[#ff0000]",
 		"bg-blue-600/50",
 		"transition",

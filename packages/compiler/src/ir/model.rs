@@ -87,6 +87,9 @@ pub(crate) enum RuntimeCondition {
     Input {
         value: String,
     },
+    ColorScheme {
+        value: String,
+    },
     Hover,
     Active,
     Focus,

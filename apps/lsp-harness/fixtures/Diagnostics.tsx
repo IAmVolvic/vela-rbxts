@@ -9,6 +9,7 @@ export const Diagnostics = () => (
 			"grid-cols-3 -translate-x-1/2 basis-1/2 divide-y-2 divide-slate-500",
 			"mx-auto pointer-events-none space-y-2 ring-2 m-4 -ml-2",
 			"hover:bg-blue-600 active:bg-rose-500 focus:border-blue-600",
+			"dark:bg-slate-900",
 			"bg-[#ff0000] bg-blue-600/50",
 			"transition duration-300 ease-out duration-fast",
 			"animate-spin animate-ping",

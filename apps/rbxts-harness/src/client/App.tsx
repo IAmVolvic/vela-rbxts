@@ -109,6 +109,7 @@ export const App = () => {
 					Text="press me"
 					className="bg-slate-700 active:bg-blue-600 transition size-6"
 				/>
+				<frame className="bg-white dark:bg-slate-900 size-6" />
 				<textbox
 					PlaceholderText="type here"
 					className="border border-slate-500 focus:border-blue-600 size-6"

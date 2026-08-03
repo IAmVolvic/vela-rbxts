@@ -4,7 +4,7 @@ use swc_core::ecma::ast::ModuleItem;
 
 const RUNTIME_HOST_TEMPLATE: &str = r###"
 import __VelaReact from "@rbxts/react";
-import { TweenService as __VelaTweenService, UserInputService as __VelaUserInputService, Workspace as __VelaWorkspace } from "@rbxts/services";
+import { Players as __VelaPlayers, TweenService as __VelaTweenService, UserInputService as __VelaUserInputService, Workspace as __VelaWorkspace } from "@rbxts/services";
 
 type ClassDictionary = Record<string, boolean | null | undefined>;
 type ClassValue =
@@ -97,6 +97,10 @@ type RuntimeCondition =
 			value: "touch" | "mouse" | "gamepad";
 	  }
 	| {
+			kind: "color-scheme";
+			value: "light" | "dark";
+	  }
+	| {
 			kind: "hover";
 	  }
 	| {
@@ -130,6 +134,7 @@ type RuntimeEnvironment = {
 	width: number;
 	orientation: "portrait" | "landscape";
 	input: "touch" | "mouse" | "gamepad";
+	colorScheme: "light" | "dark";
 	hovered: boolean;
 	pressed: boolean;
 	focused: boolean;
@@ -265,6 +270,7 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			width: globalEnvironment.width,
 			orientation: globalEnvironment.orientation,
 			input: globalEnvironment.input,
+			colorScheme: globalEnvironment.colorScheme,
 			hovered,
 			pressed,
 			focused,
@@ -795,9 +801,22 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 	const [camera, setCamera] = __VelaReact.useState(
 		() => __VelaWorkspace.CurrentCamera as RuntimeCamera | undefined,
 	);
+	const [player, setPlayer] = __VelaReact.useState(() => __VelaPlayers.LocalPlayer);
 	const [environment, setEnvironment] = __VelaReact.useState(() =>
 		readRuntimeEnvironment(camera),
 	);
+
+	// The local player arrives after the first render on some load paths, and
+	// its attribute is where the color scheme lives.
+	__VelaReact.useEffect(() => {
+		const connection = __VelaPlayers.GetPropertyChangedSignal(
+			"LocalPlayer",
+		).Connect(() => setPlayer(__VelaPlayers.LocalPlayer));
+
+		return () => {
+			connection.Disconnect();
+		};
+	}, []);
 
 	__VelaReact.useEffect(() => {
 		const updateCamera = () =>
@@ -817,7 +836,8 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 				const latest = readRuntimeEnvironment(camera);
 				return previous.width === latest.width &&
 					previous.orientation === latest.orientation &&
-					previous.input === latest.input
+					previous.input === latest.input &&
+					previous.colorScheme === latest.colorScheme
 					? previous
 					: latest;
 			});
@@ -836,6 +856,14 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 			),
 		];
 
+		if (player !== undefined) {
+			connections.push(
+				player
+					.GetAttributeChangedSignal(VELA_COLOR_SCHEME_ATTRIBUTE)
+					.Connect(updateEnvironment),
+			);
+		}
+
 		// ViewportSize stays 1x1 until the first frame renders, so breakpoints have
 		// to follow the signal instead of the mount-time read.
 		if (camera !== undefined) {
@@ -851,7 +879,7 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 				connection.Disconnect();
 			}
 		};
-	}, [camera]);
+	}, [camera, player]);
 
 	return environment;
 }
@@ -867,10 +895,27 @@ function readRuntimeEnvironment(
 		width,
 		orientation: width >= height ? "landscape" : "portrait",
 		input: detectInputMode(),
+		colorScheme: readColorScheme(),
 		hovered: false,
 		pressed: false,
 		focused: false,
 	};
+}
+
+/// Roblox exposes no color scheme to a running game, so the app owns the
+/// choice: `dark:` reads this attribute off the local player, which the server
+/// can also set per player.
+const VELA_COLOR_SCHEME_ATTRIBUTE = "VelaColorScheme";
+
+function readColorScheme(): RuntimeEnvironment["colorScheme"] {
+	const player = __VelaPlayers.LocalPlayer;
+	if (player === undefined) {
+		return "light";
+	}
+
+	return player.GetAttribute(VELA_COLOR_SCHEME_ATTRIBUTE) === "dark"
+		? "dark"
+		: "light";
 }
 
 function detectInputMode(): RuntimeEnvironment["input"] {
@@ -1298,6 +1343,8 @@ function matchesVariant(
 			return environment.input === "mouse";
 		case "gamepad":
 			return environment.input === "gamepad";
+		case "dark":
+			return environment.colorScheme === "dark";
 		case "hover":
 			return environment.hovered;
 		case "active":
@@ -1425,6 +1472,8 @@ function matchesRuntimeCondition(
 			return environment.orientation === condition.value;
 		case "input":
 			return environment.input === condition.value;
+		case "color-scheme":
+			return environment.colorScheme === condition.value;
 		case "hover":
 			return environment.hovered;
 		case "active":

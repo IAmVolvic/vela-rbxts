@@ -2,7 +2,7 @@ use crate::ir::model::RuntimeCondition;
 
 /// Runtime variant names paired with the condition they check, phrased for
 /// editor documentation. Keep the widths in sync with `parse_variant_prefix`.
-pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 11] = [
+pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 12] = [
     ("sm", "the viewport is at least 640px wide"),
     ("md", "the viewport is at least 768px wide"),
     ("lg", "the viewport is at least 1024px wide"),
@@ -14,6 +14,7 @@ pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 11] = [
     ("hover", "the pointer is over the element"),
     ("active", "the element is being pressed"),
     ("focus", "the element holds input focus"),
+    ("dark", "the player's color scheme is dark"),
 ];
 
 pub(crate) fn variant_condition(prefix: &str) -> Option<&'static str> {
@@ -46,6 +47,9 @@ pub(crate) enum VariantKind {
     Input {
         value: String,
     },
+    ColorScheme {
+        value: String,
+    },
     Hover,
     Active,
     Focus,
@@ -74,6 +78,9 @@ impl ParsedVariant {
                 value: value.clone(),
             },
             VariantKind::Input { value } => RuntimeCondition::Input {
+                value: value.clone(),
+            },
+            VariantKind::ColorScheme { value } => RuntimeCondition::ColorScheme {
                 value: value.clone(),
             },
             VariantKind::Hover => RuntimeCondition::Hover,
@@ -114,6 +121,9 @@ pub(crate) fn parse_variant_prefix(prefix: &str) -> Option<VariantKind> {
         }),
         "gamepad" => Some(VariantKind::Input {
             value: "gamepad".to_owned(),
+        }),
+        "dark" => Some(VariantKind::ColorScheme {
+            value: "dark".to_owned(),
         }),
         "hover" => Some(VariantKind::Hover),
         "active" => Some(VariantKind::Active),

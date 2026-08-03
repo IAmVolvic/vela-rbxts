@@ -51,6 +51,8 @@ const requiredFragments = [
 	"BackgroundTransparency = 0.5",
 	'kind = "hover"',
 	'kind = "active"',
+	'kind = "color-scheme"',
+	"VelaColorScheme",
 	'kind = "focus"',
 	"attachHoverTracking",
 	"attachActiveTracking",
@@ -58,6 +60,7 @@ const requiredFragments = [
 	"MouseEnter",
 	"InputBegan",
 	"SelectionGained",
+	"GetAttributeChangedSignal",
 	// Held tween values seed from the merged props. Narrowing this back to
 	// resolution.props loses every statically lowered base value, and a
 	// variant then has nothing to tween from.
