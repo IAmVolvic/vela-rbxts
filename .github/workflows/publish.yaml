@@ -468,6 +468,8 @@ jobs:
         if: ${{ needs.release-metadata.outputs.publish_vscode_extension == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job never checks out, so `gh` has no git remote to infer from.
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.release-metadata.outputs.release_tag }}
           VSIX_VERSION: ${{ needs.release-metadata.outputs.vsix_version }}
           DRY_RUN: ${{ needs.release-metadata.outputs.dry_run }}
