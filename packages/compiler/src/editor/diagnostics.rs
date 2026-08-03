@@ -37,6 +37,7 @@ pub(crate) fn get_diagnostics_impl(request: DiagnosticsRequest) -> DiagnosticsRe
             crate::transform::runtime::resolve_class_tokens(
                 vec![token.text.as_str()],
                 &config,
+                context.element_tag.as_deref(),
                 &mut compiler_diagnostics,
             );
 

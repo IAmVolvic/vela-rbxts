@@ -1652,6 +1652,18 @@ test("lowers opacity utilities to BackgroundTransparency", () => {
 	expect(result.code).toMatch(/BackgroundTransparency=\{0\.75\}/);
 });
 
+test("lowers opacity on a canvas group to GroupTransparency", () => {
+	const result = transform('<canvasgroup className="opacity-25" />');
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/GroupTransparency=\{0\.75\}/);
+	expect(result.code).not.toMatch(/BackgroundTransparency=\{0\.75\}/);
+
+	const runtime = transform('<canvasgroup className="md:opacity-25" />');
+	expect(runtime.code).toContain("__velaRules");
+	expect(runtime.code).toContain("GroupTransparency");
+});
+
 test("warns on out-of-range opacity values", () => {
 	const result = transform(
 		'<frame className="opacity-150" />',

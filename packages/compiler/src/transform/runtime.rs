@@ -54,9 +54,12 @@ use crate::semantic::{
     },
 };
 
+/// `element_tag` is `None` for a component, whose Roblox host element is not
+/// known here, so host-specific lowering keeps its generic form.
 pub(crate) fn resolve_class_tokens<T, I>(
     tokens: I,
     config: &TailwindConfig,
+    element_tag: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> StyleIr
 where
@@ -75,7 +78,8 @@ where
                 .runtime_condition
                 .clone()
                 .expect("runtime-aware analysis must carry a runtime condition");
-            let runtime_style = resolve_single_analyzed_token(&analysis, config, diagnostics);
+            let runtime_style =
+                resolve_single_analyzed_token(&analysis, config, element_tag, diagnostics);
             if !runtime_style.base.props.is_empty() || !runtime_style.base.helpers.is_empty() {
                 style.runtime_rules.push(RuntimeRule {
                     condition,
@@ -85,7 +89,14 @@ where
             continue;
         }
 
-        apply_analyzed_token(&analysis, config, diagnostics, &mut style, &mut pending);
+        apply_analyzed_token(
+            &analysis,
+            config,
+            element_tag,
+            diagnostics,
+            &mut style,
+            &mut pending,
+        );
     }
 
     pending.flush(&mut style, SizeEmission::Combined);
@@ -485,11 +496,19 @@ fn automatic_size_axis(x: bool, y: bool) -> Option<&'static str> {
 fn resolve_single_analyzed_token(
     analysis: &AnalyzedClassToken,
     config: &TailwindConfig,
+    element_tag: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> StyleIr {
     let mut style = StyleIr::default();
     let mut pending = PendingAxes::default();
-    apply_analyzed_token(analysis, config, diagnostics, &mut style, &mut pending);
+    apply_analyzed_token(
+        analysis,
+        config,
+        element_tag,
+        diagnostics,
+        &mut style,
+        &mut pending,
+    );
     pending.flush(&mut style, SizeEmission::PerAxis);
     style
 }
@@ -497,6 +516,7 @@ fn resolve_single_analyzed_token(
 fn apply_analyzed_token(
     analysis: &AnalyzedClassToken,
     config: &TailwindConfig,
+    element_tag: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
     style: &mut StyleIr,
     pending: &mut PendingAxes,
@@ -790,7 +810,16 @@ fn apply_analyzed_token(
         UtilityKind::Opacity => {
             if let Some(percent) = analysis.payload() {
                 if let Some(value) = resolve_opacity_value(percent) {
-                    style.set_prop("BackgroundTransparency", value);
+                    // A CanvasGroup composites its whole subtree, so
+                    // `GroupTransparency` is the only property that means what
+                    // CSS `opacity` means; every other host only has its own
+                    // background to fade.
+                    let prop = if element_tag == Some("canvasgroup") {
+                        "GroupTransparency"
+                    } else {
+                        "BackgroundTransparency"
+                    };
+                    style.set_prop(prop, value);
                 } else {
                     diagnostics.push(unsupported_opacity_value_diagnostic(
                         percent,

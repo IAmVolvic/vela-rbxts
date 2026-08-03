@@ -93,9 +93,12 @@ impl VisitMut for VelaTransformer {
             return;
         }
 
+        let element_tag = (!is_component).then(|| element_tag_name(&element.opening.name));
+
         let Some(mut lowered) = lower_class_name(
             &element.opening.attrs,
             &self.config,
+            element_tag.as_deref(),
             &self.class_value_scopes,
             &mut self.diagnostics,
         ) else {

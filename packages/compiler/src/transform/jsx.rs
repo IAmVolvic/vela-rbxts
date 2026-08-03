@@ -19,6 +19,7 @@ pub(crate) struct LoweredClassName {
 pub(crate) fn lower_class_name(
     attrs: &[JSXAttrOrSpread],
     config: &crate::config::model::TailwindConfig,
+    element_tag: Option<&str>,
     scopes: &ClassValueScopeStack,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<LoweredClassName> {
@@ -49,6 +50,7 @@ pub(crate) fn lower_class_name(
             let style = resolve_class_tokens(
                 spans.iter().map(|token| token.text.as_str()),
                 config,
+                element_tag,
                 diagnostics,
             );
             attach_token_ranges(&mut diagnostics[diagnostics_before..], &spans);
@@ -93,7 +95,12 @@ pub(crate) fn lower_class_name(
 
             let collapse = collapse_class_value_expr(expr, scopes);
             let runtime_class_value = collapse.is_dynamic();
-            let style = resolve_class_tokens(collapse.static_tokens.clone(), config, diagnostics);
+            let style = resolve_class_tokens(
+                collapse.static_tokens.clone(),
+                config,
+                element_tag,
+                diagnostics,
+            );
             let needs_runtime_host = !style.runtime_rules.is_empty()
                 || runtime_class_value
                 || style.animation.is_some()
