@@ -1,5 +1,22 @@
 # @vela-rbxts/config
 
+## 0.7.0
+
+### Minor Changes
+
+- e464a5a: Add plugin utilities and a motion driver seam.
+
+  `plugins.utilities` lets a config name its own tokens, expanding either to a
+  utility class list or straight to Roblox property assignments, with a depth cap
+  so a self-referential definition fails the config rather than the build.
+
+  `plugins.motion` lets a driver take over transitions or animations one method at
+  a time; whatever it leaves alone stays on the built-in TweenService path.
+
+### Patch Changes
+
+- @vela-rbxts/types@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes

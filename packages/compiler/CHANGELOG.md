@@ -1,5 +1,30 @@
 # @vela-rbxts/compiler
 
+## 0.7.0
+
+### Minor Changes
+
+- e464a5a: Add plugin utilities and a motion driver seam.
+
+  `plugins.utilities` lets a config name its own tokens, expanding either to a
+  utility class list or straight to Roblox property assignments, with a depth cap
+  so a self-referential definition fails the config rather than the build.
+
+  `plugins.motion` lets a driver take over transitions or animations one method at
+  a time; whatever it leaves alone stays on the built-in TweenService path.
+
+- e464a5a: Resolve layout, sizing and text utilities on the runtime class path.
+
+  The runtime host implemented a strict subset of the static lowering, so a
+  component whose `className` comes from a helper — the normal shape for a variant
+  recipe — silently lost most of its styling: `flex-row`, `items-*`, `justify-*`,
+  `w-fit`/`h-auto`/`size-fit`, `text-<size>`, `text-left|center|right` and
+  `font-<weight>` all fell through.
+
+  They now resolve with the same semantics the static path uses. `font-<family>`
+  remains static-only, because the runtime theme carries colors, radius and
+  spacing but no font families.
+
 ## 0.6.0
 
 ### Minor Changes
