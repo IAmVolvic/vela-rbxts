@@ -87,7 +87,8 @@ fn candidate_keys(config: &TailwindConfig, utility: &UtilityKind) -> Option<Vec<
         | UtilityKind::GradientTo
         | UtilityKind::Border
         | UtilityKind::Ring
-        | UtilityKind::Outline => Some(color_completion_keys(config)),
+        | UtilityKind::Outline
+        | UtilityKind::ScrollbarColor => Some(color_completion_keys(config)),
         UtilityKind::Radius => Some(radius_completion_keys(config)),
         UtilityKind::Padding(PaddingKind::All | PaddingKind::X | PaddingKind::Y)
         | UtilityKind::Padding(PaddingKind::Top | PaddingKind::Right)
@@ -98,7 +99,8 @@ fn candidate_keys(config: &TailwindConfig, utility: &UtilityKind) -> Option<Vec<
         | UtilityKind::MinHeight
         | UtilityKind::MaxHeight
         | UtilityKind::SpaceX
-        | UtilityKind::SpaceY => Some(spacing_completion_keys(config)),
+        | UtilityKind::SpaceY
+        | UtilityKind::ScrollbarThickness => Some(spacing_completion_keys(config)),
         UtilityKind::Margin(_) => Some(spacing_completion_keys(config)),
         UtilityKind::Width | UtilityKind::Height | UtilityKind::Size | UtilityKind::Basis => {
             Some(size_completion_keys(config))

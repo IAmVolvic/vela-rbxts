@@ -76,6 +76,10 @@ pub(crate) enum UtilityKind {
     SpaceY,
     Whitespace,
     Overscroll,
+    ScrollDirection,
+    ScrollbarThickness,
+    ScrollbarColor,
+    CanvasSize,
     Ring,
     Outline,
     CenterX,
@@ -251,6 +255,21 @@ pub(crate) const OVERSCROLL_VALUES: [(&str, &str); 3] = [
     ("contain", "WhenScrollable"),
     ("none", "Never"),
 ];
+/// `scroll-none` turns scrolling off outright, so it carries `ScrollingEnabled`
+/// instead of a `ScrollingDirection` member.
+pub(crate) const SCROLL_DIRECTION_VALUES: [(&str, &str); 3] =
+    [("x", "X"), ("y", "Y"), ("xy", "XY")];
+pub(crate) const CANVAS_SIZE_VALUES: [(&str, &str); 4] = [
+    ("auto", "XY"),
+    ("auto-x", "X"),
+    ("auto-y", "Y"),
+    ("none", "None"),
+];
+pub(crate) const SCROLLBAR_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
+    theme_family: "scrollbar color",
+    color_prop: "ScrollBarImageColor3",
+    transparency_prop: Some("ScrollBarImageTransparency"),
+};
 pub(crate) const RING_THICKNESS_VALUES: [&str; 5] = ["0", "1", "2", "4", "8"];
 pub(crate) const TRANSITION_PROPERTY_VALUES: [&str; 5] =
     ["all", "colors", "opacity", "shadow", "transform"];
@@ -415,6 +434,8 @@ impl UtilityKind {
                 | UtilityKind::MinHeight
                 | UtilityKind::MaxHeight
                 | UtilityKind::ShadowColor
+                | UtilityKind::ScrollbarThickness
+                | UtilityKind::ScrollbarColor
                 | UtilityKind::GradientFrom
                 | UtilityKind::GradientVia
                 | UtilityKind::GradientTo
@@ -452,7 +473,11 @@ pub(crate) fn is_utility_allowed_on_host(element_tag: Option<&str>, kind: &Utili
             matches!(element_tag, "imagelabel" | "imagebutton")
         }
         UtilityKind::PlaceholderColor => element_tag == "textbox",
-        UtilityKind::Overscroll => element_tag == "scrollingframe",
+        UtilityKind::Overscroll
+        | UtilityKind::ScrollDirection
+        | UtilityKind::ScrollbarThickness
+        | UtilityKind::ScrollbarColor
+        | UtilityKind::CanvasSize => element_tag == "scrollingframe",
         _ => true,
     }
 }
@@ -518,6 +543,20 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
             family: "grid".to_owned(),
             payload: None,
             kind: UtilityKind::Grid,
+        };
+    }
+
+    // `scrollbar-none` hides the bar by zeroing its thickness, so it belongs to
+    // the thickness family rather than the color one it looks like.
+    if let Some(payload) = token
+        .strip_prefix("scrollbar-w-")
+        .or_else(|| (token == "scrollbar-none").then_some("none"))
+    {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "scrollbar".to_owned(),
+            payload: Some(payload.to_owned()),
+            kind: UtilityKind::ScrollbarThickness,
         };
     }
 
@@ -734,6 +773,9 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("space-y-", UtilityKind::SpaceY),
         ("whitespace-", UtilityKind::Whitespace),
         ("overscroll-", UtilityKind::Overscroll),
+        ("scrollbar-", UtilityKind::ScrollbarColor),
+        ("scroll-", UtilityKind::ScrollDirection),
+        ("canvas-", UtilityKind::CanvasSize),
         ("ring-", UtilityKind::Ring),
         ("outline-", UtilityKind::Outline),
         ("divide-x-", UtilityKind::DivideX),
@@ -1471,6 +1513,20 @@ pub(crate) fn resolve_overscroll_value(key: &str) -> Option<&'static str> {
         .iter()
         .find(|(name, _)| *name == key)
         .map(|(_, behavior)| *behavior)
+}
+
+pub(crate) fn resolve_scroll_direction_value(key: &str) -> Option<&'static str> {
+    SCROLL_DIRECTION_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, direction)| *direction)
+}
+
+pub(crate) fn resolve_canvas_size_value(key: &str) -> Option<&'static str> {
+    CANVAS_SIZE_VALUES
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, axis)| *axis)
 }
 
 /// `ring`/`outline` payloads with a stroke meaning; anything else falls

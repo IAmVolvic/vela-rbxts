@@ -234,7 +234,6 @@ fn is_known_tailwind_family(family: &str) -> bool {
             | "cursor"
             | "pointer"
             | "resize"
-            | "scroll"
             | "snap"
             | "select"
             | "accent"

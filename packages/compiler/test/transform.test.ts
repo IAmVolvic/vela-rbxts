@@ -2460,6 +2460,88 @@ test("lowers overscroll utilities into ElasticBehavior on scrolling frames", () 
 	);
 });
 
+test("lowers scroll utilities into ScrollingDirection and ScrollingEnabled", () => {
+	const result = transform(
+		`export const A = () => <scrollingframe className="scroll-y" />;`,
+		null,
+	);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/ScrollingDirection=\{Enum\.ScrollingDirection\.Y\}/,
+	);
+
+	const disabled = transform(
+		`export const B = () => <scrollingframe className="scroll-none" />;`,
+		null,
+	);
+	expect(disabled.code).toMatch(/ScrollingEnabled=\{false\}/);
+
+	const invalid = transform(
+		`export const C = () => <scrollingframe className="scroll-smooth" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-scroll-value" }),
+	]);
+});
+
+test("lowers scrollbar utilities into thickness and image color", () => {
+	const result = transform(
+		`export const A = () => <scrollingframe className="scrollbar-w-2 scrollbar-slate-500" />;`,
+		null,
+	);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/ScrollBarThickness=\{8\}/);
+	expect(result.code).toMatch(
+		/ScrollBarImageColor3=\{Color3\.fromRGB\(98, 116, 142\)\}/,
+	);
+
+	const faded = transform(
+		`export const B = () => <scrollingframe className="scrollbar-slate-500/50" />;`,
+		null,
+	);
+	expect(faded.code).toMatch(/ScrollBarImageTransparency=\{0\.5\}/);
+
+	const hidden = transform(
+		`export const C = () => <scrollingframe className="scrollbar-none" />;`,
+		null,
+	);
+	expect(hidden.code).toMatch(/ScrollBarThickness=\{0\}/);
+
+	const invalid = transform(
+		`export const D = () => <scrollingframe className="scrollbar-w-thin" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-scrollbar-thickness" }),
+	]);
+});
+
+test("lowers canvas utilities into AutomaticCanvasSize", () => {
+	const result = transform(
+		`export const A = () => <scrollingframe className="canvas-auto-y" />;`,
+		null,
+	);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/AutomaticCanvasSize=\{Enum\.AutomaticSize\.Y\}/);
+
+	const none = transform(
+		`export const B = () => <scrollingframe className="canvas-none" />;`,
+		null,
+	);
+	expect(none.code).toMatch(
+		/AutomaticCanvasSize=\{Enum\.AutomaticSize\.None\}/,
+	);
+
+	const invalid = transform(
+		`export const C = () => <scrollingframe className="canvas-full" />;`,
+		null,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-canvas-size-value" }),
+	]);
+});
+
 test("lowers ring and outline utilities into the shared UIStroke", () => {
 	const ring = transform(
 		`export const A = () => <frame className="ring ring-rose-500" />;`,

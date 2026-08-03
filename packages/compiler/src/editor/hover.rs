@@ -9,24 +9,25 @@ use crate::semantic::{
         ANIMATION_VALUES, BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorResolution,
         DEFAULT_TRANSITION_TIME, DIVIDE_COLOR_FAMILY, GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY,
         OUTLINE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY,
-        SHADOW_COLOR_FAMILY, StrokePayload, TEXT_COLOR_FAMILY, UtilityKind,
+        SCROLLBAR_COLOR_FAMILY, SHADOW_COLOR_FAMILY, StrokePayload, TEXT_COLOR_FAMILY, UtilityKind,
         classify_stroke_payload, end_relative_position_axis, font_face_expression,
         is_automatic_size_key, is_known_unsupported_border_payload, is_utility_allowed_on_host,
         resolve_align_content_flex_value, resolve_align_items_value, resolve_align_self_value,
         resolve_anchor_point_value, resolve_aspect_ratio_value, resolve_border_thickness_value,
-        resolve_color_value, resolve_duration_seconds, resolve_ease_value,
-        resolve_flex_direction_value, resolve_flex_item_mode, resolve_flex_wrap_value,
-        resolve_font_style_value, resolve_font_weight_value, resolve_gradient_rotation,
-        resolve_grid_cell_count, resolve_items_flex_value, resolve_justify_flex_value,
-        resolve_justify_value, resolve_layout_order_value, resolve_line_height_value,
-        resolve_line_join_value, resolve_object_fit_value, resolve_opacity_value,
-        resolve_overflow_value, resolve_overscroll_value, resolve_pointer_events_value,
-        resolve_position_axis_value, resolve_radius_value, resolve_rotation_value,
-        resolve_scale_value, resolve_shadow_preset, resolve_size_axis_value,
-        resolve_size_spacing_offset, resolve_spacing_value, resolve_text_decoration_value,
-        resolve_text_size_value, resolve_text_transform_value, resolve_text_wrap_value,
-        resolve_text_x_alignment_value, resolve_text_y_alignment_value, resolve_transition_toggle,
-        resolve_visibility_value, resolve_whitespace_value, resolve_z_index_value,
+        resolve_canvas_size_value, resolve_color_value, resolve_duration_seconds,
+        resolve_ease_value, resolve_flex_direction_value, resolve_flex_item_mode,
+        resolve_flex_wrap_value, resolve_font_style_value, resolve_font_weight_value,
+        resolve_gradient_rotation, resolve_grid_cell_count, resolve_items_flex_value,
+        resolve_justify_flex_value, resolve_justify_value, resolve_layout_order_value,
+        resolve_line_height_value, resolve_line_join_value, resolve_object_fit_value,
+        resolve_opacity_value, resolve_overflow_value, resolve_overscroll_value,
+        resolve_pointer_events_value, resolve_position_axis_value, resolve_radius_value,
+        resolve_rotation_value, resolve_scale_value, resolve_scroll_direction_value,
+        resolve_shadow_preset, resolve_size_axis_value, resolve_size_spacing_offset,
+        resolve_spacing_value, resolve_text_decoration_value, resolve_text_size_value,
+        resolve_text_transform_value, resolve_text_wrap_value, resolve_text_x_alignment_value,
+        resolve_text_y_alignment_value, resolve_transition_toggle, resolve_visibility_value,
+        resolve_whitespace_value, resolve_z_index_value, spacing_value_to_offset,
     },
 };
 
@@ -581,6 +582,56 @@ fn describe_token(
                 display: format!("`{token}` -> ElasticBehavior"),
                 documentation: format!(
                     "{variant_prefix}Sets `ElasticBehavior` to `Enum.ElasticBehavior.{behavior}`."
+                ),
+            })
+        }
+        UtilityKind::ScrollDirection => {
+            let payload = analysis.payload()?;
+            if payload == "none" {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> ScrollingEnabled"),
+                    documentation: format!("{variant_prefix}Sets `ScrollingEnabled` to `false`."),
+                });
+            }
+
+            let direction = resolve_scroll_direction_value(payload)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ScrollingDirection"),
+                documentation: format!(
+                    "{variant_prefix}Sets `ScrollingDirection` to `Enum.ScrollingDirection.{direction}`."
+                ),
+            })
+        }
+        UtilityKind::ScrollbarThickness => {
+            let payload = analysis.payload()?;
+            let thickness = if payload == "none" {
+                "0".to_owned()
+            } else {
+                resolve_spacing_value(config, payload)
+                    .as_deref()
+                    .and_then(spacing_value_to_offset)?
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> ScrollBarThickness"),
+                documentation: format!(
+                    "{variant_prefix}Sets `ScrollBarThickness` to `{thickness}`."
+                ),
+            })
+        }
+        UtilityKind::ScrollbarColor => describe_color_token(
+            token,
+            analysis.payload()?,
+            config,
+            SCROLLBAR_COLOR_FAMILY,
+            "ScrollBarImageColor3",
+            variant_prefix,
+        ),
+        UtilityKind::CanvasSize => {
+            let axis = resolve_canvas_size_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> AutomaticCanvasSize"),
+                documentation: format!(
+                    "{variant_prefix}Sets `AutomaticCanvasSize` to `Enum.AutomaticSize.{axis}`."
                 ),
             })
         }

@@ -109,6 +109,40 @@ pub(crate) fn unsupported_overscroll_value_diagnostic(value: &str, token: &str) 
     }
 }
 
+pub(crate) fn unsupported_scroll_value_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-scroll-value".to_owned(),
+        message: format!("Scroll value \"{value}\" is not supported; use x, y, xy, or none."),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_scrollbar_thickness_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-scrollbar-thickness".to_owned(),
+        message: format!(
+            "Scrollbar thickness \"{value}\" is not supported; use a spacing key from `vela.config.ts`."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
+pub(crate) fn unsupported_canvas_size_diagnostic(value: &str, token: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "unsupported-canvas-size-value".to_owned(),
+        message: format!(
+            "Canvas size \"{value}\" is not supported; use auto, auto-x, auto-y, or none."
+        ),
+        token: Some(token.to_owned()),
+        range: None,
+    }
+}
+
 pub(crate) fn unsupported_space_value_diagnostic(value: &str, token: &str) -> Diagnostic {
     Diagnostic {
         level: "warning".to_owned(),

@@ -1064,6 +1064,60 @@ test("completes Phase 1 utilities with host awareness", () => {
 	expect(scrollLabels).toEqual(expect.arrayContaining(["overscroll-none"]));
 });
 
+test("offers scrolling frame utilities only on scrolling frames", () => {
+	const frameSource = '<frame className="" />';
+	const frameLabels = getCompletions({
+		source: frameSource,
+		position: positionAfter(frameSource, 'className="'),
+	}).items.map((item: { label: string }) => item.label);
+	expect(frameLabels).not.toContain("scroll-y");
+	expect(frameLabels).not.toContain("scrollbar-none");
+	expect(frameLabels).not.toContain("canvas-auto");
+
+	const scrollSource = '<scrollingframe className="" />';
+	const scrollLabels = getCompletions({
+		source: scrollSource,
+		position: positionAfter(scrollSource, 'className="'),
+	}).items.map((item: { label: string }) => item.label);
+	expect(scrollLabels).toEqual(
+		expect.arrayContaining([
+			"scroll-y",
+			"scroll-none",
+			"scrollbar-w-2",
+			"scrollbar-none",
+			"scrollbar-slate-500",
+			"canvas-auto",
+			"canvas-none",
+		]),
+	);
+});
+
+test("hovers scrolling frame utilities with their Roblox targets", () => {
+	const source =
+		'<scrollingframe className="scroll-x scroll-none scrollbar-w-2 scrollbar-slate-500 canvas-auto-y" />';
+
+	expect(
+		getHover({ source, position: positionAfter(source, "scroll-x") - 1 })
+			.contents?.documentation,
+	).toContain("Enum.ScrollingDirection.X");
+	expect(
+		getHover({ source, position: positionAfter(source, "scroll-non") }).contents
+			?.documentation,
+	).toContain("ScrollingEnabled");
+	expect(
+		getHover({ source, position: positionAfter(source, "scrollbar-w-") })
+			.contents?.documentation,
+	).toContain("`8`");
+	expect(
+		getHover({ source, position: positionAfter(source, "scrollbar-slate-") })
+			.contents?.documentation,
+	).toContain("ScrollBarImageColor3");
+	expect(
+		getHover({ source, position: positionAfter(source, "canvas-auto-") })
+			.contents?.documentation,
+	).toContain("Enum.AutomaticSize.Y");
+});
+
 test("hovers Phase 1 utilities with their Roblox targets", () => {
 	const source =
 		'<scrollingframe className="pointer-events-none space-x-4 overscroll-contain ring-2 mx-auto" />';

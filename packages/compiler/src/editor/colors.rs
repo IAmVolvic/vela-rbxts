@@ -3,8 +3,9 @@ use crate::editor::{collect_class_name_contexts, tokenize_class_name_with_ranges
 use crate::semantic::analyze::analyze_class_token;
 use crate::semantic::utility::{
     BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorFamilySpec, ColorResolution,
-    GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, SHADOW_COLOR_FAMILY,
-    TEXT_COLOR_FAMILY, UtilityKind, is_utility_allowed_on_host, resolve_color_value,
+    GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, SCROLLBAR_COLOR_FAMILY,
+    SHADOW_COLOR_FAMILY, TEXT_COLOR_FAMILY, UtilityKind, is_utility_allowed_on_host,
+    resolve_color_value,
 };
 
 pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> DocumentColorsResponse {
@@ -66,6 +67,7 @@ fn color_family_spec(kind: &UtilityKind) -> Option<ColorFamilySpec> {
         UtilityKind::PlaceholderColor => Some(PLACEHOLDER_COLOR_FAMILY),
         UtilityKind::Border => Some(BORDER_COLOR_FAMILY),
         UtilityKind::ShadowColor => Some(SHADOW_COLOR_FAMILY),
+        UtilityKind::ScrollbarColor => Some(SCROLLBAR_COLOR_FAMILY),
         UtilityKind::GradientFrom | UtilityKind::GradientVia | UtilityKind::GradientTo => {
             Some(GRADIENT_COLOR_FAMILY)
         }

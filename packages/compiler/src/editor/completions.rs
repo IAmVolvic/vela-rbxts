@@ -9,15 +9,16 @@ use crate::semantic::{
     utility::{
         ALIGN_CONTENT_VALUES, ALIGN_SELF_VALUES, ALIGNMENT_VALUES, ANCHOR_ORIGIN_VALUES,
         ANIMATION_VALUES, ASPECT_RATIO_VALUES, BACKGROUND_COLOR_FAMILY, BORDER_LINE_JOIN_VALUES,
-        BORDER_THICKNESS_VALUES, ColorResolution, DURATION_PRESET_VALUES, EASE_VALUES,
-        FLEX_DIRECTION_VALUES, FLEX_ITEM_VALUES, FONT_STYLE_VALUES, FONT_WEIGHT_VALUES,
-        GRADIENT_DIRECTION_VALUES, GRID_CELL_COUNT_MAX, JUSTIFY_FLEX_VALUES, LAYOUT_ORDER_KEYWORDS,
-        LINE_HEIGHT_VALUES, OBJECT_FIT_VALUES, OPACITY_VALUES, OVERSCROLL_VALUES,
-        PALETTE_DEFAULT_KEY, POINTER_EVENTS_VALUES, PaddingKind, RING_THICKNESS_VALUES,
-        ROTATION_VALUES, SCALE_VALUES, SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES,
-        TEXT_X_ALIGN_VALUES, TEXT_Y_ALIGN_VALUES, UtilityKind, WHITESPACE_VALUES, Z_INDEX_VALUES,
-        color_completion_keys, is_utility_allowed_on_host, position_completion_keys,
-        radius_completion_keys, resolve_color_value, size_completion_keys, spacing_completion_keys,
+        BORDER_THICKNESS_VALUES, CANVAS_SIZE_VALUES, ColorResolution, DURATION_PRESET_VALUES,
+        EASE_VALUES, FLEX_DIRECTION_VALUES, FLEX_ITEM_VALUES, FONT_STYLE_VALUES,
+        FONT_WEIGHT_VALUES, GRADIENT_DIRECTION_VALUES, GRID_CELL_COUNT_MAX, JUSTIFY_FLEX_VALUES,
+        LAYOUT_ORDER_KEYWORDS, LINE_HEIGHT_VALUES, OBJECT_FIT_VALUES, OPACITY_VALUES,
+        OVERSCROLL_VALUES, PALETTE_DEFAULT_KEY, POINTER_EVENTS_VALUES, PaddingKind,
+        RING_THICKNESS_VALUES, ROTATION_VALUES, SCALE_VALUES, SCROLL_DIRECTION_VALUES,
+        SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES, TEXT_X_ALIGN_VALUES,
+        TEXT_Y_ALIGN_VALUES, UtilityKind, WHITESPACE_VALUES, Z_INDEX_VALUES, color_completion_keys,
+        is_utility_allowed_on_host, position_completion_keys, radius_completion_keys,
+        resolve_color_value, size_completion_keys, spacing_completion_keys,
     },
     variant::RUNTIME_VARIANTS,
 };
@@ -191,6 +192,12 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             "PlaceholderColor3",
             "color",
             UtilityKind::PlaceholderColor,
+        ),
+        (
+            "scrollbar",
+            "ScrollBarImageColor3",
+            "color",
+            UtilityKind::ScrollbarColor,
         ),
     ] {
         for color_key in color_completion_keys(config) {
@@ -682,6 +689,86 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 sort_text: None,
             },
             utility_kind: UtilityKind::Overscroll,
+        });
+    }
+
+    for (key, direction) in SCROLL_DIRECTION_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("scroll-{key}"),
+                insert_text: format!("scroll-{key}"),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!(
+                    "Set Roblox ScrollingDirection to `Enum.ScrollingDirection.{direction}`."
+                ),
+                replacement: None,
+                color: None,
+                sort_text: None,
+            },
+            utility_kind: UtilityKind::ScrollDirection,
+        });
+    }
+
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "scroll-none".to_owned(),
+            insert_text: "scroll-none".to_owned(),
+            kind: "utility".to_owned(),
+            category: "layout".to_owned(),
+            documentation: "Set Roblox ScrollingEnabled to `false`.".to_owned(),
+            replacement: None,
+            color: None,
+            sort_text: None,
+        },
+        utility_kind: UtilityKind::ScrollDirection,
+    });
+
+    for key in spacing_completion_keys(config) {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("scrollbar-w-{key}"),
+                insert_text: format!("scrollbar-w-{key}"),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!("Set Roblox ScrollBarThickness from spacing `{key}`."),
+                replacement: None,
+                color: None,
+                sort_text: None,
+            },
+            utility_kind: UtilityKind::ScrollbarThickness,
+        });
+    }
+
+    items.push(CompletionSpec {
+        item: CompletionItem {
+            label: "scrollbar-none".to_owned(),
+            insert_text: "scrollbar-none".to_owned(),
+            kind: "utility".to_owned(),
+            category: "layout".to_owned(),
+            documentation: "Hide the scrollbar by setting `ScrollBarThickness = 0`.".to_owned(),
+            replacement: None,
+            color: None,
+            sort_text: None,
+        },
+        utility_kind: UtilityKind::ScrollbarThickness,
+    });
+
+    for (key, axis) in CANVAS_SIZE_VALUES {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("canvas-{key}"),
+                insert_text: format!("canvas-{key}"),
+                kind: "utility".to_owned(),
+                category: "layout".to_owned(),
+                documentation: format!(
+                    "Set Roblox AutomaticCanvasSize to `Enum.AutomaticSize.{axis}`."
+                ),
+                replacement: None,
+                color: None,
+                sort_text: None,
+            },
+            utility_kind: UtilityKind::CanvasSize,
         });
     }
 

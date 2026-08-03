@@ -209,6 +209,7 @@ async function main() {
 		["focus:px-2", "unknown-variant"],
 		["duration-fast", "unsupported-transition-value"],
 		["animate-ping", "unsupported-animation-value"],
+		["scroll-smooth", "unsupported-scroll-value"],
 	];
 	for (const [token, code] of expectedCodes) {
 		const diagnostic = diagnosticFor(diagnostics, token);
@@ -263,6 +264,10 @@ async function main() {
 		"animate-spin",
 		"uppercase",
 		"underline",
+		"scroll-y",
+		"scrollbar-w-2",
+		"scrollbar-slate-500",
+		"canvas-auto",
 	]) {
 		check(
 			!diagnosticFor(diagnostics, token),
