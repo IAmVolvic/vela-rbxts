@@ -165,7 +165,10 @@ export const App = () => {
 					]}
 				/>
 				<scrollingframe
-					className={["w-20 h-12", active && "scroll-y scrollbar-w-2 canvas-auto-y"]}
+					className={[
+						"w-20 h-12",
+						active && "scroll-y scrollbar-w-2 canvas-auto-y",
+					]}
 				>
 					<frame BackgroundTransparency={1} />
 				</scrollingframe>
