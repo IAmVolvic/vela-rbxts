@@ -1339,8 +1339,7 @@ test("resolves text colors on the runtime path", () => {
 	// a dropped text color leaves the label on Roblox's near-black default,
 	// which is invisible on any dark surface.
 	expect(result.code).toContain('startsWith(token, "text-")');
-	expect(result.code).toContain('name: "TextColor3"');
-	expect(result.code).toContain("TextTransparency");
+	expect(result.code).toContain('"TextColor3", "TextTransparency"');
 });
 
 test("resolves size and alignment text utilities on the runtime path", () => {
@@ -1352,9 +1351,181 @@ test("resolves size and alignment text utilities on the runtime path", () => {
 	// These share the `text-` prefix with colors and are classified ahead of
 	// them, exactly as the static path does. Leaving them unresolved put every
 	// label on Roblox's 8px default.
-	expect(result.code).toContain('name: "TextSize"');
-	expect(result.code).toContain('name: "TextXAlignment"');
+	expect(result.code).toContain('propEffect("TextSize"');
+	expect(result.code).toContain('propEffect("TextXAlignment"');
 	expect(result.code).toContain("Enum.TextXAlignment.Left");
+});
+
+// The runtime host implemented a strict subset of the static lowering for a
+// long time, and a family missing there is silent: a component whose classes
+// come from a recipe simply renders without them. These pin the whole surface.
+test("the runtime host knows every utility family the static path lowers", () => {
+	const result = transform("<frame className={recipe} />");
+
+	const FAMILY_PREFIXES = [
+		"bg-",
+		"text-",
+		"image-",
+		"placeholder-",
+		"border-",
+		"rounded-",
+		"z-",
+		"p-",
+		"px-",
+		"py-",
+		"pt-",
+		"pr-",
+		"pb-",
+		"pl-",
+		"gap-",
+		"m-",
+		"mx-",
+		"my-",
+		"mt-",
+		"mr-",
+		"mb-",
+		"ml-",
+		"min-w-",
+		"max-w-",
+		"min-h-",
+		"max-h-",
+		"w-",
+		"h-",
+		"size-",
+		"overflow-",
+		"rotate-",
+		"scale-",
+		"opacity-",
+		"aspect-",
+		"flex-",
+		"justify-",
+		"items-",
+		"from-",
+		"via-",
+		"to-",
+		"top-",
+		"left-",
+		"right-",
+		"bottom-",
+		"inset-",
+		"origin-",
+		"content-",
+		"self-",
+		"order-",
+		"leading-",
+		"grid-cols-",
+		"grid-rows-",
+		"auto-rows-",
+		"auto-cols-",
+		"basis-",
+		"translate-x-",
+		"translate-y-",
+		"object-",
+		"pointer-events-",
+		"space-x-",
+		"space-y-",
+		"whitespace-",
+		"overscroll-",
+		"scrollbar-",
+		"scroll-",
+		"canvas-",
+		"ring-",
+		"outline-",
+		"divide-",
+		"shadow-",
+		"font-",
+		"align-",
+		"duration-",
+		"ease-",
+		"delay-",
+		"animate-",
+	] as const;
+
+	for (const prefix of FAMILY_PREFIXES) {
+		expect(result.code).toContain(`"${prefix}"`);
+	}
+
+	const RESOLVED_PROPS = [
+		"ZIndex",
+		"Rotation",
+		"Interactable",
+		"ClipsDescendants",
+		"LayoutOrder",
+		"LineHeight",
+		"ScaleType",
+		"TextYAlignment",
+		"ImageColor3",
+		"PlaceholderColor3",
+		"ElasticBehavior",
+		"ScrollingDirection",
+		"ScrollBarThickness",
+		"ScrollBarImageColor3",
+		"AutomaticCanvasSize",
+		"GroupTransparency",
+		"TextTruncate",
+		"AnchorPoint",
+		"Visible",
+	] as const;
+
+	for (const prop of RESOLVED_PROPS) {
+		expect(result.code).toContain(prop);
+	}
+
+	const RESOLVED_HELPERS = [
+		"uicorner",
+		"uipadding",
+		"uistroke",
+		"uilistlayout",
+		"uigridlayout",
+		"uiflexitem",
+		"uiscale",
+		"uiaspectratioconstraint",
+		"uisizeconstraint",
+		"uigradient",
+		"uishadow",
+	] as const;
+
+	for (const helper of RESOLVED_HELPERS) {
+		expect(result.code).toContain(`"${helper}"`);
+	}
+});
+
+test("composes the runtime families that only meet at the end", () => {
+	const result = transform("<frame className={recipe} />");
+
+	// Position, AnchorPoint, the size constraints, a grid track and the gradient
+	// stops are all built from more than one token, so the dynamic path needs
+	// the same deferred composition the static `PendingAxes::flush` does.
+	expect(result.code).toContain("function applyComposedResolution(");
+	expect(result.code).toContain("function applyComposedTransform(");
+	expect(result.code).toContain("function applyComposedSizeConstraints(");
+	expect(result.code).toContain("function applyComposedGrid(");
+	expect(result.code).toContain("function applyComposedGradient(");
+	expect(result.code).toContain("MinSize");
+	expect(result.code).toContain("MaxSize");
+	expect(result.code).toContain("CellSize");
+	expect(result.code).toContain("CellPadding");
+	expect(result.code).toContain("ColorSequence");
+});
+
+test("drops runtime utilities the host element cannot carry", () => {
+	const result = transform("<frame className={recipe} />");
+
+	// `TextColor3` on a Frame is a hard Roblox error rather than a no-op, so the
+	// dynamic path filters by host tag the way `is_utility_allowed_on_host` does.
+	expect(result.code).toContain("function isPropAllowedOnTag(");
+	expect(result.code).toContain('tag === "textlabel"');
+	expect(result.code).toContain('tag === "imagelabel"');
+	expect(result.code).toContain('tag === "scrollingframe"');
+	expect(result.code).toContain('tag === "textbox"');
+});
+
+test("resolves color opacity modifiers and arbitrary hex on the runtime path", () => {
+	const result = transform("<frame className={recipe} />");
+
+	expect(result.code).toContain("function splitColorOpacity(");
+	expect(result.code).toContain("function opacityToTransparency(");
+	expect(result.code).toContain("function parseArbitraryColor(");
 });
 
 test("rewrites dynamic border object maps through the inline runtime helper", () => {

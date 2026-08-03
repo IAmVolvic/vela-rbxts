@@ -129,6 +129,46 @@ export const App = () => {
 				<scrollingframe className="scroll-y scrollbar-w-2 scrollbar-slate-500 canvas-auto-y w-20 h-12">
 					<frame BackgroundTransparency={1} />
 				</scrollingframe>
+				{/* The variant-recipe shape: these classes only exist as a value, so
+				    every family below has to resolve on the runtime path. */}
+				<frame
+					className={[
+						"size-8 bg-slate-500",
+						active && "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+					]}
+				/>
+				<frame className={["w-20 h-12", roomy && "grid grid-cols-3 gap-2"]} />
+				<frame
+					className={["h-6 bg-slate-700", active && "min-w-16 max-w-40"]}
+				/>
+				<frame
+					className={[
+						"size-8",
+						active && "bg-gradient-to-r from-blue-600 to-rose-500",
+					]}
+				/>
+				<frame
+					className={["size-8", active && "ring-2 ring-rose-500 rounded-md"]}
+				/>
+				<frame
+					className={[
+						"size-8 bg-slate-700",
+						active && "z-20 rotate-45 scale-110 opacity-75",
+					]}
+				/>
+				<textlabel
+					BackgroundTransparency={1}
+					Text="dynamic text probe"
+					className={[
+						"text-sm",
+						active && "text-lg text-slate-100 align-middle leading-snug italic",
+					]}
+				/>
+				<scrollingframe
+					className={["w-20 h-12", active && "scroll-y scrollbar-w-2 canvas-auto-y"]}
+				>
+					<frame BackgroundTransparency={1} />
+				</scrollingframe>
 			</frame>
 		</screengui>
 	);

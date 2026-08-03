@@ -22,6 +22,7 @@ type VelaRuntimeConfig = {
 		colors: Record<string, string | Record<string, string>>;
 		radius: Record<string, string>;
 		spacing: Record<string, string>;
+		fontFamily: Record<string, string>;
 	};
 	plugins?: {
 		utilities?: Record<string, string | Record<string, string>>;
@@ -49,6 +50,7 @@ type VelaRefTarget<Tag> = Tag extends SupportedHostElementTag
 	: unknown;
 
 const PALETTE_DEFAULT_KEY = "DEFAULT";
+const DEFAULT_FONT_FAMILY = "rbxasset://fonts/families/SourceSansPro.json";
 
 type RuntimeRulePropEntry = {
 	name: string;
@@ -122,6 +124,7 @@ type RuntimeTheme = {
 	colors: Record<string, RuntimeColorEntry>;
 	radius: Record<string, UDim>;
 	spacing: Record<string, UDim>;
+	fontFamily: Record<string, string>;
 	pluginUtilities: Record<string, RuntimePluginUtility>;
 };
 
@@ -159,6 +162,7 @@ type RuntimePropValue =
 	| number
 	| boolean
 	| Color3
+	| ColorSequence
 	| UDim
 	| UDim2
 	| Vector2
@@ -262,7 +266,29 @@ type RuntimeResolution = {
 	sizeHeight?: UDim;
 	autoWidth?: boolean;
 	autoHeight?: boolean;
+	positionX?: UDim;
+	positionY?: UDim;
+	translateX?: UDim;
+	translateY?: UDim;
+	centerX?: boolean;
+	centerY?: boolean;
+	marginShiftX?: number;
+	marginShiftY?: number;
+	minWidth?: number;
+	minHeight?: number;
+	maxWidth?: number;
+	maxHeight?: number;
+	fontFamily?: string;
 	fontWeight?: Enum.FontWeight;
+	fontStyle?: Enum.FontStyle;
+	gapOffset?: number;
+	gridCells?: number;
+	gridCellsHorizontal?: boolean;
+	gridCrossExtent?: number;
+	gradientRotation?: number;
+	gradientFrom?: Color3;
+	gradientVia?: Color3;
+	gradientTo?: Color3;
 	usesHover?: boolean;
 	usesActive?: boolean;
 	usesFocus?: boolean;
@@ -316,16 +342,21 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 		const className = props.className;
 		const children = props.children;
 
+		// A component tag decides its own rendering, so there is no instance to
+		// tween; motion utilities only engage on real host tags.
+		const instanceCapable = typeIs(__velaTag, "string");
+		// Host-specific lowering needs the tag, and a component hides it — the
+		// static path takes the same `None` branch there.
+		const hostTag = instanceCapable ? (__velaTag as string) : undefined;
+
 		const resolution = resolveRuntimeResolution(
 			theme,
 			environment,
 			__velaRules as RuntimeRule[],
 			className,
 			preflight,
+			hostTag,
 		);
-		// A component tag decides its own rendering, so there is no instance to
-		// tween; motion utilities only engage on real host tags.
-		const instanceCapable = typeIs(__velaTag, "string");
 		const resolvedTransition = resolveTransitionConfig(
 			props.__velaTransition,
 			resolution.transition,
@@ -361,7 +392,7 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 			hostProps[name] = value;
 		}
 
-		applyResolvedSize(hostProps, resolution);
+		applyComposedResolution(hostProps, resolution, preflight);
 
 		if (resolution.usesHover === true) {
 			attachHoverTracking(hostProps, setHovered);
@@ -457,7 +488,10 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 		});
 		applyHelperDefaults(resolution.helpers);
 		const runtimeChildren = resolution.helpers.map((helper) =>
-			__VelaReact.createElement(helper.tag, helperToProps(helper.props)),
+			__VelaReact.createElement(
+				hostClassName(helper.tag),
+				helperToProps(helper.props),
+			),
 		);
 		const allChildren: defined[] = [];
 		for (const child of runtimeChildren) {
@@ -542,20 +576,15 @@ function applyDivideToken(
 	return false;
 }
 
+/// The divide config travels as an expression string, because the compile-time
+/// half of it arrives that way on `__velaDivide`.
 function resolveDivideColor(theme: RuntimeTheme, key: string): string | undefined {
-	const [colorName, shade] = splitColorKey(key);
-	const value = theme.colors[colorName];
-	if (typeIs(value, "string")) {
-		return shade === undefined ? value : undefined;
+	const color = resolveThemeColor(theme, key)?.color;
+	if (color === undefined) {
+		return undefined;
 	}
-	if (typeIs(value, "table")) {
-		const scale = value as RuntimeColorScale;
-		const entry = scale[shade ?? PALETTE_DEFAULT_KEY];
-		if (entry !== undefined) {
-			return `Color3.fromRGB(${math.floor(entry.R * 255 + 0.5)}, ${math.floor(entry.G * 255 + 0.5)}, ${math.floor(entry.B * 255 + 0.5)})`;
-		}
-	}
-	return undefined;
+
+	return `Color3.fromRGB(${math.floor(color.R * 255 + 0.5)}, ${math.floor(color.G * 255 + 0.5)}, ${math.floor(color.B * 255 + 0.5)})`;
 }
 
 function resolveDivideConfig(
@@ -630,8 +659,10 @@ function marginState(resolution: RuntimeResolution): RuntimeMarginState {
 	return state;
 }
 
-/// Consumes positive `m-*` family tokens from dynamic class values. Negative
-/// margins shift `Position` and are compile-time only.
+/// Consumes the `m-*` family from dynamic class values. `mx-auto`/`my-auto`
+/// center instead of spacing, and a negative margin shifts `Position` because
+/// `UIPadding` cannot go below zero — only the two sides that can pull the
+/// element itself have a meaning, exactly as on the static path.
 function applyMarginToken(
 	theme: RuntimeTheme,
 	token: string,
@@ -648,19 +679,43 @@ function applyMarginToken(
 	];
 
 	for (const [prefix, sides] of prefixes) {
-		if (!startsWith(token, prefix)) {
+		const negative = startsWith(token, `-${prefix}`);
+		if (!negative && !startsWith(token, prefix)) {
 			continue;
 		}
-		const key = substring(token, stringLength(prefix));
+
+		const key = substring(
+			token,
+			stringLength(prefix) + (negative ? 1 : 0),
+		);
 		if (key === "auto") {
+			if (!negative && prefix === "mx-") {
+				resolution.centerX = true;
+				resolution.positionX = new UDim(0.5, 0);
+			} else if (!negative && prefix === "my-") {
+				resolution.centerY = true;
+				resolution.positionY = new UDim(0.5, 0);
+			}
 			return true;
 		}
+
 		const value = resolveSpacingValue(theme, key);
-		if (value !== undefined && value.Scale === 0) {
-			const state = marginState(resolution);
-			for (const side of sides) {
-				state[side] = value.Offset;
+		if (value === undefined || value.Scale !== 0) {
+			return true;
+		}
+
+		if (negative) {
+			if (prefix === "mt-") {
+				resolution.marginShiftY = (resolution.marginShiftY ?? 0) - value.Offset;
+			} else if (prefix === "ml-") {
+				resolution.marginShiftX = (resolution.marginShiftX ?? 0) - value.Offset;
 			}
+			return true;
+		}
+
+		const state = marginState(resolution);
+		for (const side of sides) {
+			state[side] = value.Offset;
 		}
 		return true;
 	}
@@ -966,6 +1021,7 @@ function normalizeTheme(config: VelaRuntimeConfig): RuntimeTheme {
 		colors: normalizeColorRegistry(config.theme.colors),
 		radius: normalizeRadiusScale(config.theme.radius),
 		spacing: normalizeSpacingScale(config.theme.spacing),
+		fontFamily: config.theme.fontFamily,
 		pluginUtilities: config.plugins?.utilities ?? {},
 	};
 }
@@ -1027,6 +1083,7 @@ function resolveRuntimeResolution(
 	runtimeRules: readonly RuntimeRule[],
 	className: ClassValue | undefined,
 	preflight: boolean,
+	tag: string | undefined,
 ): RuntimeResolution {
 	const resolution: RuntimeResolution = {
 		props: {},
@@ -1049,7 +1106,7 @@ function resolveRuntimeResolution(
 	}
 
 	for (const token of normalizeClassValue(className)) {
-		applyToken(theme, environment, token, resolution, preflight, 0);
+		applyToken(theme, environment, tag, token, resolution, preflight, 0);
 	}
 
 	return resolution;
@@ -1062,6 +1119,7 @@ const MAX_PLUGIN_EXPANSION_DEPTH = 8;
 function applyToken(
 	theme: RuntimeTheme,
 	environment: RuntimeEnvironment,
+	tag: string | undefined,
 	token: string,
 	resolution: RuntimeResolution,
 	preflight: boolean,
@@ -1104,6 +1162,7 @@ function applyToken(
 				applyToken(
 					theme,
 					environment,
+					tag,
 					`${prefix}${part}`,
 					resolution,
 					preflight,
@@ -1177,8 +1236,15 @@ function applyToken(
 		return;
 	}
 
-	const effect = resolveUtilityToken(theme, utility);
+	const effect = resolveUtilityToken(theme, tag, utility);
 	if (!effect) {
+		return;
+	}
+
+	// A utility the host element cannot carry is dropped whole, the way the
+	// static path drops it: writing `TextColor3` onto a Frame is a hard Roblox
+	// error, not a no-op.
+	if (!effect.props.every((prop) => isPropAllowedOnTag(tag, prop.name))) {
 		return;
 	}
 
@@ -1186,6 +1252,62 @@ function applyToken(
 		resolution,
 		withPreflightBackground(effect, preflight),
 	);
+}
+
+const TEXT_HOST_PROPS: readonly string[] = [
+	"TextColor3",
+	"TextTransparency",
+	"TextSize",
+	"TextXAlignment",
+	"TextYAlignment",
+	"TextWrapped",
+	"TextTruncate",
+	"LineHeight",
+	"FontFamily",
+	"FontWeight",
+	"FontStyle",
+];
+
+const IMAGE_HOST_PROPS: readonly string[] = [
+	"ImageColor3",
+	"ImageTransparency",
+	"ScaleType",
+];
+
+const SCROLL_HOST_PROPS: readonly string[] = [
+	"ElasticBehavior",
+	"ScrollingDirection",
+	"ScrollingEnabled",
+	"ScrollBarThickness",
+	"ScrollBarImageColor3",
+	"ScrollBarImageTransparency",
+	"AutomaticCanvasSize",
+];
+
+/// Mirrors `is_utility_allowed_on_host`. A component element hides its host tag,
+/// so nothing is filtered there — same as the static path's `None`.
+function isPropAllowedOnTag(tag: string | undefined, name: string): boolean {
+	if (tag === undefined) {
+		return true;
+	}
+
+	if (TEXT_HOST_PROPS.includes(name)) {
+		return tag === "textlabel" || tag === "textbutton" || tag === "textbox";
+	}
+
+	if (IMAGE_HOST_PROPS.includes(name)) {
+		return tag === "imagelabel" || tag === "imagebutton";
+	}
+
+	if (name === "PlaceholderColor3") {
+		return tag === "textbox";
+	}
+
+	if (SCROLL_HOST_PROPS.includes(name)) {
+		return tag === "scrollingframe";
+	}
+
+	return true;
 }
 
 /// Preflight leaves the base transparent, so a background color resolved from a
@@ -1626,8 +1748,11 @@ function isAutomaticSizeKey(key: string): boolean {
 	return key === "fit" || key === "auto";
 }
 
-/// Mirrors TEXT_SIZE_VALUES on the static path.
+/// Mirrors TEXT_SIZE_VALUES on the static path. `text-[15px]` is a size too;
+/// only a number reads that way, so `text-[#f00]` stays a color.
 function resolveTextSizeValue(key: string): number | undefined {
+	const arbitrary = parseArbitraryNumber(key, "px");
+	if (arbitrary !== undefined) return arbitrary;
 	if (key === "xs") return 12;
 	if (key === "sm") return 14;
 	if (key === "base") return 16;
@@ -1653,9 +1778,8 @@ function resolveTextXAlignmentValue(key: string): Enum.TextXAlignment | undefine
 	return undefined;
 }
 
-/// Mirrors FONT_WEIGHT_VALUES. Font *families* are not resolvable here: the
-/// runtime theme carries colors, radius and spacing only, so `font-sans` and
-/// friends stay a static-path feature until that config is plumbed through.
+/// Mirrors FONT_WEIGHT_VALUES. A payload that is not a weight is read as a
+/// `theme.fontFamily` key, the way Tailwind overloads `font-*`.
 function resolveFontWeightValue(key: string): Enum.FontWeight | undefined {
 	if (key === "thin") return Enum.FontWeight.Thin;
 	if (key === "extralight") return Enum.FontWeight.ExtraLight;
@@ -1712,514 +1836,1423 @@ function resolveAlignItemsProp(key: string): RuntimeResolvedPropEntry | undefine
 	return undefined;
 }
 
+function propEffect(
+	name: string,
+	value: RuntimePropValue,
+): RuntimeResolvedEffectBundle {
+	return { props: [{ name, value }], helpers: [] };
+}
+
+function propsEffect(
+	props: RuntimeResolvedPropEntry[],
+): RuntimeResolvedEffectBundle {
+	return { props, helpers: [] };
+}
+
+function helperEffect(
+	tag: string,
+	props: RuntimeResolvedPropEntry[],
+): RuntimeResolvedEffectBundle {
+	return { props: [], helpers: [{ tag, props }] };
+}
+
 function resolveUtilityToken(
 	theme: RuntimeTheme,
+	tag: string | undefined,
 	token: string,
 ): RuntimeResolvedEffectBundle | undefined {
+	// Negative families are their own tokens rather than a payload, so they are
+	// matched before the positive prefixes would swallow them.
+	if (startsWith(token, "-rotate-")) {
+		const value = resolveRotationValue(
+			substring(token, stringLength("-rotate-")),
+			true,
+		);
+		return value === undefined ? undefined : propEffect("Rotation", value);
+	}
+
+	// `-z-*` has no Roblox meaning: ZIndex is unsigned in the layers vela emits.
+	if (startsWith(token, "-z-")) {
+		return undefined;
+	}
+
+	for (const [prefix, positive] of [
+		["-top-", "top-"],
+		["-left-", "left-"],
+		["-right-", "right-"],
+		["-bottom-", "bottom-"],
+		["-inset-", "inset-"],
+		["-order-", "order-"],
+		["-translate-x-", "translate-x-"],
+		["-translate-y-", "translate-y-"],
+	] as Array<[string, string]>) {
+		if (startsWith(token, prefix)) {
+			return resolvePositionalToken(
+				theme,
+				positive,
+				substring(token, stringLength(prefix)),
+				true,
+			);
+		}
+	}
+
 	if (token === "border") {
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uistroke",
-					props: [{ name: "Thickness", value: 1 }],
-				},
-			],
-		};
+		return helperEffect("uistroke", [{ name: "Thickness", value: 1 }]);
 	}
 
-	if (startsWith(token, "border-")) {
-		const key = substring(token, stringLength("border-"));
-		if (key === "transparent") {
-			return {
-				props: [],
-				helpers: [
-					{
-						tag: "uistroke",
-						props: [{ name: "Transparency", value: 1 }],
-					},
-				],
-			};
-		}
-
-		if (key === "0" || key === "1" || key === "2" || key === "4") {
-			return {
-				props: [],
-				helpers: [
-					{
-						tag: "uistroke",
-						props: [{ name: "Thickness", value: toNumber(key) ?? 0 }],
-					},
-				],
-			};
-		}
-
-		const arbitraryThickness = parseArbitraryNumber(key, "px");
-		if (arbitraryThickness !== undefined) {
-			return {
-				props: [],
-				helpers: [
-					{
-						tag: "uistroke",
-						props: [{ name: "Thickness", value: arbitraryThickness }],
-					},
-				],
-			};
-		}
-
-		if (isUnsupportedBorderKey(key)) {
-			return undefined;
-		}
-
-		const [colorName, shade] = splitColorKey(key);
-		const value = theme.colors[colorName];
-		if (typeIs(value, "string")) {
-			if (shade !== undefined) {
-				return undefined;
-			}
-
-			const parsed = parseColor3(value);
-			if (parsed === undefined) {
-				return undefined;
-			}
-
-			return {
-				props: [],
-				helpers: [
-					{
-						tag: "uistroke",
-						props: [
-							{ name: "Color", value: parsed },
-							{ name: "Transparency", value: 0 },
-						],
-					},
-				],
-			};
-		}
-
-		if (value === undefined) {
-			return undefined;
-		}
-
-		const shadeValue = value[shade ?? PALETTE_DEFAULT_KEY];
-		if (shadeValue === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uistroke",
-					props: [
-						{ name: "Color", value: shadeValue },
-						{ name: "Transparency", value: 0 },
-					],
-				},
-			],
-		};
+	if (token === "grid") {
+		return helperEffect("uigridlayout", [
+			{ name: "SortOrder", value: Enum.SortOrder.LayoutOrder },
+		]);
 	}
 
-	if (startsWith(token, "bg-")) {
-		const key = substring(token, 3);
-		const [colorName, shade] = splitColorKey(key);
-		if (colorName === "transparent") {
-			return {
-				props: [{ name: "BackgroundTransparency", value: 1 }],
-				helpers: [],
-			};
-		}
-
-		const value = theme.colors[colorName];
-		if (typeIs(value, "string")) {
-			if (shade !== undefined) {
-				return undefined;
-			}
-
-			const parsed = parseColor3(value);
-			if (parsed === undefined) {
-				return undefined;
-			}
-
-			return {
-				props: [{ name: "BackgroundColor3", value: parsed }],
-				helpers: [],
-			};
-		}
-
-		if (value === undefined) {
-			return undefined;
-		}
-
-		const shadeValue = value[shade ?? PALETTE_DEFAULT_KEY];
-		if (shadeValue === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [{ name: "BackgroundColor3", value: shadeValue }],
-			helpers: [],
-		};
+	// `scrollbar-none` hides the bar by zeroing its thickness, so it belongs to
+	// the thickness family rather than the color one it looks like.
+	if (token === "scrollbar-none") {
+		return propEffect("ScrollBarThickness", 0);
 	}
 
-	// `text-*` is an overloaded prefix: sizes (`text-lg`), alignment
-	// (`text-left`) and colors all share it. Only colors resolve here — every
-	// other key falls through to `undefined` exactly as it did before, so the
-	// non-color halves keep their current behavior rather than resolving to
-	// something wrong.
+	if (startsWith(token, "scrollbar-w-")) {
+		const offset = resolveSpacingOffset(
+			theme,
+			substring(token, stringLength("scrollbar-w-")),
+		);
+		return offset === undefined
+			? undefined
+			: propEffect("ScrollBarThickness", offset);
+	}
+
+	if (token === "ring" || token === "outline") {
+		return strokeThicknessEffect(token === "ring" ? 3 : 2);
+	}
+
+	if (token === "rounded") {
+		const value = resolveRadiusValue(theme, PALETTE_DEFAULT_KEY);
+		return value === undefined
+			? undefined
+			: helperEffect("uicorner", [{ name: "CornerRadius", value }]);
+	}
+
+	if (token === "truncate") {
+		return propEffect("TextTruncate", Enum.TextTruncate.AtEnd);
+	}
+
+	if (token === "italic") {
+		return propEffect("FontStyle", Enum.FontStyle.Italic);
+	}
+
+	if (token === "not-italic") {
+		return propEffect("FontStyle", Enum.FontStyle.Normal);
+	}
+
+	// `text-*` is an overloaded prefix: sizes, alignment, wrapping and colors all
+	// share it, and the static path classifies them in this order.
 	if (startsWith(token, "text-")) {
 		const key = substring(token, stringLength("text-"));
 		const textSize = resolveTextSizeValue(key);
 		if (textSize !== undefined) {
-			return {
-				props: [{ name: "TextSize", value: textSize }],
-				helpers: [],
-			};
+			return propEffect("TextSize", textSize);
 		}
 
 		const alignment = resolveTextXAlignmentValue(key);
 		if (alignment !== undefined) {
-			return {
-				props: [{ name: "TextXAlignment", value: alignment }],
-				helpers: [],
-			};
+			return propEffect("TextXAlignment", alignment);
 		}
 
-		if (key === "transparent") {
-			return {
-				props: [{ name: "TextTransparency", value: 1 }],
-				helpers: [],
-			};
+		const wrap = resolveTextWrapValue(key);
+		if (wrap !== undefined) {
+			return propEffect("TextWrapped", wrap);
 		}
 
-		const [colorName, shade] = splitColorKey(key);
-		const value = theme.colors[colorName];
-		if (typeIs(value, "string")) {
-			if (shade !== undefined) {
-				return undefined;
-			}
-
-			const parsed = parseColor3(value);
-			if (parsed === undefined) {
-				return undefined;
-			}
-
-			return {
-				props: [{ name: "TextColor3", value: parsed }],
-				helpers: [],
-			};
-		}
-
-		if (value === undefined) {
-			return undefined;
-		}
-
-		const shadeValue = value[shade ?? PALETTE_DEFAULT_KEY];
-		if (shadeValue === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [{ name: "TextColor3", value: shadeValue }],
-			helpers: [],
-		};
+		return colorPropEffect(theme, key, "TextColor3", "TextTransparency");
 	}
 
-	if (startsWith(token, "rounded-")) {
-		const key = substring(token, stringLength("rounded-"));
-		const value = resolveRadiusValue(theme, key);
-		if (value === undefined) {
-			return undefined;
+	for (const prefix of ["bg-gradient-to-", "bg-linear-to-"]) {
+		if (startsWith(token, prefix)) {
+			const rotation = resolveGradientRotation(
+				substring(token, stringLength(prefix)),
+			);
+			return rotation === undefined
+				? undefined
+				: propEffect("GradientRotation", rotation);
 		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uicorner",
-					props: [{ name: "CornerRadius", value }],
-				},
-			],
-		};
 	}
 
-	if (startsWith(token, "p-")) {
-		const key = substring(token, 2);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uipadding",
-					props: [
-						{ name: "PaddingTop", value },
-						{ name: "PaddingRight", value },
-						{ name: "PaddingBottom", value },
-						{ name: "PaddingLeft", value },
-					],
-				},
-			],
-		};
+	if (token === "shadow") {
+		return shadowPresetEffect(3, 1, 0, 0.9);
 	}
 
-	if (startsWith(token, "px-")) {
-		const key = substring(token, 3);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
+	if (startsWith(token, "shadow-")) {
+		const key = substring(token, stringLength("shadow-"));
+		if (key === "none") {
+			return helperEffect("uishadow", [{ name: "Enabled", value: false }]);
+		}
+
+		// An inset shadow has no UIStroke-style equivalent to render into.
+		if (key === "inner") {
 			return undefined;
 		}
 
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uipadding",
-					props: [
-						{ name: "PaddingLeft", value },
-						{ name: "PaddingRight", value },
-					],
-				},
-			],
-		};
-	}
-
-	if (startsWith(token, "py-")) {
-		const key = substring(token, 3);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
-			return undefined;
+		const preset = resolveShadowPreset(key);
+		if (preset !== undefined) {
+			return preset;
 		}
 
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uipadding",
-					props: [
-						{ name: "PaddingTop", value },
-						{ name: "PaddingBottom", value },
-					],
-				},
-			],
-		};
-	}
-
-	if (startsWith(token, "pt-")) {
-		const key = substring(token, 3);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uipadding",
-					props: [{ name: "PaddingTop", value }],
-				},
-			],
-		};
-	}
-
-	if (startsWith(token, "pr-")) {
-		const key = substring(token, 3);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uipadding",
-					props: [{ name: "PaddingRight", value }],
-				},
-			],
-		};
-	}
-
-	if (startsWith(token, "pb-")) {
-		const key = substring(token, 3);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uipadding",
-					props: [{ name: "PaddingBottom", value }],
-				},
-			],
-		};
-	}
-
-	if (startsWith(token, "pl-")) {
-		const key = substring(token, 3);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uipadding",
-					props: [{ name: "PaddingLeft", value }],
-				},
-			],
-		};
-	}
-
-	if (startsWith(token, "gap-")) {
-		const key = substring(token, 4);
-		const value = resolveSpacingValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uilistlayout",
-					props: [{ name: "Padding", value }],
-				},
-			],
-		};
-	}
-
-	if (startsWith(token, "font-")) {
-		const weight = resolveFontWeightValue(substring(token, stringLength("font-")));
-		if (weight === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [{ name: "FontWeight", value: weight }],
-			helpers: [],
-		};
+		return shadowColorEffect(theme, key);
 	}
 
 	if (token === "flex" || token === "flex-row") {
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uilistlayout",
-					props: [{ name: "FillDirection", value: Enum.FillDirection.Horizontal }],
-				},
-			],
-		};
+		return listLayoutEffect("FillDirection", Enum.FillDirection.Horizontal);
 	}
 
 	if (token === "flex-col") {
-		return {
-			props: [],
-			helpers: [
-				{
-					tag: "uilistlayout",
-					props: [{ name: "FillDirection", value: Enum.FillDirection.Vertical }],
-				},
-			],
-		};
+		return listLayoutEffect("FillDirection", Enum.FillDirection.Vertical);
 	}
 
-	if (startsWith(token, "justify-")) {
-		const key = substring(token, stringLength("justify-"));
-		const prop = resolveJustifyProp(key);
-		if (prop === undefined) {
+	if (token === "flex-wrap" || token === "flex-nowrap") {
+		return listLayoutEffect("Wraps", token === "flex-wrap");
+	}
+
+	const flexItem = resolveFlexItemMode(token);
+	if (flexItem !== undefined) {
+		return helperEffect("uiflexitem", [{ name: "FlexMode", value: flexItem }]);
+	}
+
+	if (token === "hidden" || token === "visible") {
+		return propEffect("Visible", token === "visible");
+	}
+
+	// `font-*` carries both the weight scale and the theme's font families; the
+	// fixed weight names win and anything else is read as a theme key.
+	if (startsWith(token, "font-")) {
+		const key = substring(token, stringLength("font-"));
+		const weight = resolveFontWeightValue(key);
+		if (weight !== undefined) {
+			return propEffect("FontWeight", weight);
+		}
+
+		const family = theme.fontFamily[key];
+		return family === undefined
+			? undefined
+			: propEffect("FontFamily", family);
+	}
+
+	if (startsWith(token, "bg-")) {
+		return colorPropEffect(
+			theme,
+			substring(token, stringLength("bg-")),
+			"BackgroundColor3",
+			"BackgroundTransparency",
+		);
+	}
+
+	if (startsWith(token, "align-")) {
+		const alignment = resolveTextYAlignmentValue(
+			substring(token, stringLength("align-")),
+		);
+		return alignment === undefined
+			? undefined
+			: propEffect("TextYAlignment", alignment);
+	}
+
+	if (startsWith(token, "image-")) {
+		return colorPropEffect(
+			theme,
+			substring(token, stringLength("image-")),
+			"ImageColor3",
+			"ImageTransparency",
+		);
+	}
+
+	if (startsWith(token, "placeholder-")) {
+		return colorPropEffect(
+			theme,
+			substring(token, stringLength("placeholder-")),
+			"PlaceholderColor3",
+			undefined,
+		);
+	}
+
+	if (startsWith(token, "border-")) {
+		return resolveBorderToken(theme, substring(token, stringLength("border-")));
+	}
+
+	if (startsWith(token, "rounded-")) {
+		const value = resolveRadiusValue(
+			theme,
+			substring(token, stringLength("rounded-")),
+		);
+		return value === undefined
+			? undefined
+			: helperEffect("uicorner", [{ name: "CornerRadius", value }]);
+	}
+
+	if (startsWith(token, "z-")) {
+		const value = resolveZIndexValue(substring(token, stringLength("z-")));
+		return value === undefined ? undefined : propEffect("ZIndex", value);
+	}
+
+	for (const [prefix, sides] of [
+		["p-", ["PaddingTop", "PaddingRight", "PaddingBottom", "PaddingLeft"]],
+		["px-", ["PaddingLeft", "PaddingRight"]],
+		["py-", ["PaddingTop", "PaddingBottom"]],
+		["pt-", ["PaddingTop"]],
+		["pr-", ["PaddingRight"]],
+		["pb-", ["PaddingBottom"]],
+		["pl-", ["PaddingLeft"]],
+	] as Array<[string, string[]]>) {
+		if (!startsWith(token, prefix)) {
+			continue;
+		}
+
+		const value = resolveSpacingValue(
+			theme,
+			substring(token, stringLength(prefix)),
+		);
+		return value === undefined
+			? undefined
+			: helperEffect(
+					"uipadding",
+					sides.map((name) => ({ name, value })),
+				);
+	}
+
+	if (startsWith(token, "gap-")) {
+		const value = resolveSpacingValue(
+			theme,
+			substring(token, stringLength("gap-")),
+		);
+		if (value === undefined) {
 			return undefined;
 		}
 
+		// The offset travels alongside so a grid can subtract each cell's share
+		// of the gap from its track, exactly as the static path does.
 		return {
-			props: [],
-			helpers: [{ tag: "uilistlayout", props: [prop] }],
+			props: value.Scale === 0 ? [{ name: "GapOffset", value: value.Offset }] : [],
+			helpers: [{ tag: "uilistlayout", props: [{ name: "Padding", value }] }],
 		};
 	}
 
-	if (startsWith(token, "items-")) {
-		const key = substring(token, stringLength("items-"));
-		const prop = resolveAlignItemsProp(key);
-		if (prop === undefined) {
-			return undefined;
+	for (const [prefix, name] of [
+		["min-w-", "MinWidth"],
+		["max-w-", "MaxWidth"],
+		["min-h-", "MinHeight"],
+		["max-h-", "MaxHeight"],
+	] as Array<[string, string]>) {
+		if (!startsWith(token, prefix)) {
+			continue;
 		}
 
-		return {
-			props: [],
-			helpers: [{ tag: "uilistlayout", props: [prop] }],
-		};
+		const offset = resolveSpacingOffset(
+			theme,
+			substring(token, stringLength(prefix)),
+		);
+		return offset === undefined ? undefined : propEffect(name, offset);
 	}
 
 	if (startsWith(token, "w-")) {
-		const key = substring(token, 2);
+		const key = substring(token, stringLength("w-"));
 		if (isAutomaticSizeKey(key)) {
-			return { props: [{ name: "AutoX", value: true }], helpers: [] };
+			return propEffect("AutoX", true);
 		}
 
 		const value = resolveSizeAxisValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [{ name: "SizeX", value: formatSizeAxis(value) }],
-			helpers: [],
-		};
+		return value === undefined
+			? undefined
+			: propEffect("SizeX", formatSizeAxis(value));
 	}
 
 	if (startsWith(token, "h-")) {
-		const key = substring(token, 2);
+		const key = substring(token, stringLength("h-"));
 		if (isAutomaticSizeKey(key)) {
-			return { props: [{ name: "AutoY", value: true }], helpers: [] };
+			return propEffect("AutoY", true);
 		}
 
 		const value = resolveSizeAxisValue(theme, key);
-		if (value === undefined) {
-			return undefined;
-		}
-
-		return {
-			props: [{ name: "SizeY", value: formatSizeAxis(value) }],
-			helpers: [],
-		};
+		return value === undefined
+			? undefined
+			: propEffect("SizeY", formatSizeAxis(value));
 	}
 
 	if (startsWith(token, "size-")) {
 		const key = substring(token, stringLength("size-"));
 		if (isAutomaticSizeKey(key)) {
-			return {
-				props: [
-					{ name: "AutoX", value: true },
-					{ name: "AutoY", value: true },
-				],
-				helpers: [],
-			};
+			return propsEffect([
+				{ name: "AutoX", value: true },
+				{ name: "AutoY", value: true },
+			]);
 		}
 
 		const value = resolveSizeAxisValue(theme, key);
+		return value === undefined
+			? undefined
+			: propsEffect([
+					{ name: "SizeX", value: formatSizeAxis(value) },
+					{ name: "SizeY", value: formatSizeAxis(value) },
+				]);
+	}
+
+	if (startsWith(token, "overflow-")) {
+		const value = resolveOverflowValue(
+			substring(token, stringLength("overflow-")),
+		);
+		return value === undefined
+			? undefined
+			: propEffect("ClipsDescendants", value);
+	}
+
+	if (startsWith(token, "rotate-")) {
+		const value = resolveRotationValue(
+			substring(token, stringLength("rotate-")),
+			false,
+		);
+		return value === undefined ? undefined : propEffect("Rotation", value);
+	}
+
+	if (startsWith(token, "scale-")) {
+		const value = resolveScaleValue(substring(token, stringLength("scale-")));
+		return value === undefined
+			? undefined
+			: helperEffect("uiscale", [{ name: "Scale", value }]);
+	}
+
+	if (startsWith(token, "opacity-")) {
+		const value = resolveOpacityValue(
+			substring(token, stringLength("opacity-")),
+		);
 		if (value === undefined) {
 			return undefined;
 		}
 
+		// A CanvasGroup composites its whole subtree, so `GroupTransparency` is
+		// the only property that means what CSS `opacity` means.
+		return propEffect(
+			tag === "canvasgroup" ? "GroupTransparency" : "BackgroundTransparency",
+			value,
+		);
+	}
+
+	if (startsWith(token, "aspect-")) {
+		const value = resolveAspectRatioValue(
+			substring(token, stringLength("aspect-")),
+		);
+		return value === undefined
+			? undefined
+			: helperEffect("uiaspectratioconstraint", [
+					{ name: "AspectRatio", value },
+				]);
+	}
+
+	if (startsWith(token, "flex-")) {
+		const key = substring(token, stringLength("flex-"));
+		if (key !== "row" && key !== "col") {
+			return undefined;
+		}
+
+		return listLayoutEffect(
+			"FillDirection",
+			key === "row" ? Enum.FillDirection.Horizontal : Enum.FillDirection.Vertical,
+		);
+	}
+
+	if (startsWith(token, "justify-")) {
+		const prop = resolveJustifyProp(substring(token, stringLength("justify-")));
+		return prop === undefined
+			? undefined
+			: helperEffect("uilistlayout", [prop]);
+	}
+
+	if (startsWith(token, "items-")) {
+		const prop = resolveAlignItemsProp(substring(token, stringLength("items-")));
+		return prop === undefined
+			? undefined
+			: helperEffect("uilistlayout", [prop]);
+	}
+
+	for (const [prefix, name] of [
+		["from-", "GradientFrom"],
+		["via-", "GradientVia"],
+	] as Array<[string, string]>) {
+		if (startsWith(token, prefix)) {
+			const stop = resolveGradientStop(
+				theme,
+				substring(token, stringLength(prefix)),
+			);
+			return stop === undefined ? undefined : propEffect(name, stop);
+		}
+	}
+
+	// `top-` must come before `to-`, which would otherwise swallow it.
+	if (startsWith(token, "top-")) {
+		return resolvePositionalToken(
+			theme,
+			"top-",
+			substring(token, stringLength("top-")),
+			false,
+		);
+	}
+
+	if (startsWith(token, "to-")) {
+		const stop = resolveGradientStop(
+			theme,
+			substring(token, stringLength("to-")),
+		);
+		return stop === undefined ? undefined : propEffect("GradientTo", stop);
+	}
+
+	for (const prefix of [
+		"left-",
+		"right-",
+		"bottom-",
+		"inset-",
+		"order-",
+		"translate-x-",
+		"translate-y-",
+		"basis-",
+	]) {
+		if (startsWith(token, prefix)) {
+			return resolvePositionalToken(
+				theme,
+				prefix,
+				substring(token, stringLength(prefix)),
+				false,
+			);
+		}
+	}
+
+	if (startsWith(token, "origin-")) {
+		const value = resolveAnchorPointValue(
+			substring(token, stringLength("origin-")),
+		);
+		return value === undefined ? undefined : propEffect("AnchorPoint", value);
+	}
+
+	if (startsWith(token, "content-")) {
+		const prop = resolveAlignContentProp(
+			substring(token, stringLength("content-")),
+		);
+		return prop === undefined
+			? undefined
+			: helperEffect("uilistlayout", [prop]);
+	}
+
+	if (startsWith(token, "self-")) {
+		const value = resolveAlignSelfValue(substring(token, stringLength("self-")));
+		return value === undefined
+			? undefined
+			: helperEffect("uiflexitem", [
+					{ name: "ItemLineAlignment", value },
+				]);
+	}
+
+	if (startsWith(token, "leading-")) {
+		const value = resolveLineHeightValue(
+			substring(token, stringLength("leading-")),
+		);
+		return value === undefined ? undefined : propEffect("LineHeight", value);
+	}
+
+	for (const prefix of ["grid-cols-", "grid-rows-"]) {
+		if (!startsWith(token, prefix)) {
+			continue;
+		}
+
+		const count = resolveGridCellCount(
+			substring(token, stringLength(prefix)),
+		);
+		if (count === undefined) {
+			return undefined;
+		}
+
+		const horizontal = prefix === "grid-cols-";
 		return {
 			props: [
-				{ name: "SizeX", value: formatSizeAxis(value) },
-				{ name: "SizeY", value: formatSizeAxis(value) },
+				{ name: "GridCells", value: count },
+				{ name: "GridCellsHorizontal", value: horizontal },
 			],
-			helpers: [],
+			helpers: [
+				{
+					tag: "uigridlayout",
+					props: [
+						{ name: "SortOrder", value: Enum.SortOrder.LayoutOrder },
+						{
+							name: "FillDirection",
+							value: horizontal
+								? Enum.FillDirection.Horizontal
+								: Enum.FillDirection.Vertical,
+						},
+						{ name: "FillDirectionMaxCells", value: count },
+					],
+				},
+			],
 		};
 	}
 
+	for (const prefix of ["auto-rows-", "auto-cols-"]) {
+		if (!startsWith(token, prefix)) {
+			continue;
+		}
+
+		const extent = resolveSpacingOffset(
+			theme,
+			substring(token, stringLength(prefix)),
+		);
+		if (extent === undefined) {
+			return undefined;
+		}
+
+		return {
+			props: [{ name: "GridCrossExtent", value: extent }],
+			helpers: [
+				{
+					tag: "uigridlayout",
+					props: [{ name: "SortOrder", value: Enum.SortOrder.LayoutOrder }],
+				},
+			],
+		};
+	}
+
+	if (startsWith(token, "object-")) {
+		const value = resolveObjectFitValue(
+			substring(token, stringLength("object-")),
+		);
+		return value === undefined ? undefined : propEffect("ScaleType", value);
+	}
+
+	if (startsWith(token, "pointer-events-")) {
+		const value = resolvePointerEventsValue(
+			substring(token, stringLength("pointer-events-")),
+		);
+		return value === undefined ? undefined : propEffect("Interactable", value);
+	}
+
+	for (const prefix of ["space-x-", "space-y-"]) {
+		if (!startsWith(token, prefix)) {
+			continue;
+		}
+
+		const value = resolveSpacingValue(
+			theme,
+			substring(token, stringLength(prefix)),
+		);
+		return value === undefined
+			? undefined
+			: helperEffect("uilistlayout", [
+					{ name: "Padding", value },
+					{
+						name: "FillDirection",
+						value:
+							prefix === "space-x-"
+								? Enum.FillDirection.Horizontal
+								: Enum.FillDirection.Vertical,
+					},
+				]);
+	}
+
+	if (startsWith(token, "whitespace-")) {
+		const value = resolveWhitespaceValue(
+			substring(token, stringLength("whitespace-")),
+		);
+		return value === undefined ? undefined : propEffect("TextWrapped", value);
+	}
+
+	if (startsWith(token, "overscroll-")) {
+		const value = resolveOverscrollValue(
+			substring(token, stringLength("overscroll-")),
+		);
+		return value === undefined
+			? undefined
+			: propEffect("ElasticBehavior", value);
+	}
+
+	if (startsWith(token, "scrollbar-")) {
+		return colorPropEffect(
+			theme,
+			substring(token, stringLength("scrollbar-")),
+			"ScrollBarImageColor3",
+			"ScrollBarImageTransparency",
+		);
+	}
+
+	if (startsWith(token, "scroll-")) {
+		const key = substring(token, stringLength("scroll-"));
+		if (key === "none") {
+			return propEffect("ScrollingEnabled", false);
+		}
+
+		const value = resolveScrollDirectionValue(key);
+		return value === undefined
+			? undefined
+			: propEffect("ScrollingDirection", value);
+	}
+
+	if (startsWith(token, "canvas-")) {
+		const value = resolveCanvasSizeValue(
+			substring(token, stringLength("canvas-")),
+		);
+		return value === undefined
+			? undefined
+			: propEffect("AutomaticCanvasSize", value);
+	}
+
+	for (const prefix of ["ring-", "outline-"]) {
+		if (!startsWith(token, prefix)) {
+			continue;
+		}
+
+		const key = substring(token, stringLength(prefix));
+		const thickness = resolveStrokeThickness(prefix === "outline-", key);
+		if (thickness !== undefined) {
+			return strokeThicknessEffect(thickness);
+		}
+
+		if (isUnsupportedStrokeKey(key)) {
+			return undefined;
+		}
+
+		return strokeColorEffect(theme, key);
+	}
+
+	return undefined;
+}
+
+/// The `left`/`top`/`inset`/`translate`/`order`/`basis` families all read a
+/// spacing-or-fraction payload; only where the resolved distance lands differs.
+function resolvePositionalToken(
+	theme: RuntimeTheme,
+	family: string,
+	key: string,
+	negative: boolean,
+): RuntimeResolvedEffectBundle | undefined {
+	if (family === "order-") {
+		const order = resolveLayoutOrderValue(key, negative);
+		return order === undefined ? undefined : propEffect("LayoutOrder", order);
+	}
+
+	if (family === "basis-") {
+		// Main-axis size; the flex default is a row, so basis maps to the width
+		// axis exactly like `w-*`.
+		if (isAutomaticSizeKey(key)) {
+			return propEffect("AutoX", true);
+		}
+
+		const value = resolveSizeAxisValue(theme, key);
+		return value === undefined
+			? undefined
+			: propEffect("SizeX", formatSizeAxis(value));
+	}
+
+	const axis = resolvePositionAxisValue(theme, key, negative);
+	if (axis === undefined) {
+		return undefined;
+	}
+
+	if (family === "translate-x-") {
+		return propEffect("TranslateX", axis);
+	}
+
+	if (family === "translate-y-") {
+		return propEffect("TranslateY", axis);
+	}
+
+	if (family === "left-") {
+		return propEffect("PositionX", axis);
+	}
+
+	if (family === "top-") {
+		return propEffect("PositionY", axis);
+	}
+
+	if (family === "right-") {
+		return propEffect("PositionX", endRelativePositionAxis(axis));
+	}
+
+	if (family === "bottom-") {
+		return propEffect("PositionY", endRelativePositionAxis(axis));
+	}
+
+	return propsEffect([
+		{ name: "PositionX", value: axis },
+		{ name: "PositionY", value: axis },
+	]);
+}
+
+function listLayoutEffect(
+	name: string,
+	value: RuntimePropValue,
+): RuntimeResolvedEffectBundle {
+	return helperEffect("uilistlayout", [{ name, value }]);
+}
+
+function resolveBorderToken(
+	theme: RuntimeTheme,
+	key: string,
+): RuntimeResolvedEffectBundle | undefined {
+	if (key === "0" || key === "1" || key === "2" || key === "4") {
+		return helperEffect("uistroke", [
+			{ name: "Thickness", value: toNumber(key) ?? 0 },
+		]);
+	}
+
+	const arbitraryThickness = parseArbitraryNumber(key, "px");
+	if (arbitraryThickness !== undefined) {
+		return helperEffect("uistroke", [
+			{ name: "Thickness", value: arbitraryThickness },
+		]);
+	}
+
+	if (key === "transparent") {
+		return helperEffect("uistroke", [{ name: "Transparency", value: 1 }]);
+	}
+
+	const lineJoin = resolveLineJoinValue(key);
+	if (lineJoin !== undefined) {
+		return helperEffect("uistroke", [{ name: "LineJoinMode", value: lineJoin }]);
+	}
+
+	if (isUnsupportedBorderKey(key)) {
+		return undefined;
+	}
+
+	return strokeColorEffect(theme, key);
+}
+
+function strokeThicknessEffect(
+	thickness: number,
+): RuntimeResolvedEffectBundle {
+	return helperEffect("uistroke", [
+		{ name: "Thickness", value: thickness },
+		{ name: "ApplyStrokeMode", value: Enum.ApplyStrokeMode.Border },
+	]);
+}
+
+/// `ring`/`outline` payloads with a stroke meaning; anything else is a color.
+function resolveStrokeThickness(
+	isOutline: boolean,
+	key: string,
+): number | undefined {
+	if (
+		key === "0" ||
+		key === "1" ||
+		key === "2" ||
+		key === "4" ||
+		key === "8"
+	) {
+		return toNumber(key);
+	}
+
+	if (isOutline && (key === "none" || key === "hidden")) {
+		return 0;
+	}
+
+	return parseArbitraryNumber(key, "px");
+}
+
+function isUnsupportedStrokeKey(key: string): boolean {
+	if (
+		key === "inset" ||
+		key === "solid" ||
+		key === "dashed" ||
+		key === "dotted" ||
+		key === "double"
+	) {
+		return true;
+	}
+
+	if (startsWith(key, "offset-")) {
+		return true;
+	}
+
+	return toNumber(key) !== undefined;
+}
+
+function strokeColorEffect(
+	theme: RuntimeTheme,
+	key: string,
+): RuntimeResolvedEffectBundle | undefined {
+	const [base, opacity] = splitColorOpacity(key);
+	const resolved = resolveThemeColor(theme, base);
+	if (resolved === undefined) {
+		return undefined;
+	}
+
+	if (resolved.color === undefined) {
+		return helperEffect("uistroke", [{ name: "Transparency", value: 1 }]);
+	}
+
+	return helperEffect("uistroke", [
+		{ name: "Color", value: resolved.color },
+		{
+			name: "Transparency",
+			value: opacity === undefined ? 0 : opacityToTransparency(opacity),
+		},
+	]);
+}
+
+function shadowPresetEffect(
+	blur: number,
+	offsetY: number,
+	spread: number,
+	transparency: number,
+): RuntimeResolvedEffectBundle {
+	const props: RuntimeResolvedPropEntry[] = [
+		{ name: "BlurRadius", value: new UDim(0, blur) },
+		{ name: "Offset", value: UDim2.fromOffset(0, offsetY) },
+	];
+
+	if (spread !== 0) {
+		props.push({ name: "Spread", value: UDim2.fromOffset(spread, spread) });
+	}
+
+	props.push({ name: "Transparency", value: transparency });
+	return helperEffect("uishadow", props);
+}
+
+function resolveShadowPreset(
+	key: string,
+): RuntimeResolvedEffectBundle | undefined {
+	if (key === "sm") return shadowPresetEffect(2, 1, 0, 0.95);
+	if (key === "md") return shadowPresetEffect(6, 4, -1, 0.9);
+	if (key === "lg") return shadowPresetEffect(15, 10, -3, 0.9);
+	if (key === "xl") return shadowPresetEffect(25, 20, -5, 0.9);
+	if (key === "2xl") return shadowPresetEffect(50, 25, -12, 0.75);
+	return undefined;
+}
+
+function shadowColorEffect(
+	theme: RuntimeTheme,
+	key: string,
+): RuntimeResolvedEffectBundle | undefined {
+	const [base, opacity] = splitColorOpacity(key);
+	const resolved = resolveThemeColor(theme, base);
+	if (resolved === undefined) {
+		return undefined;
+	}
+
+	if (resolved.color === undefined) {
+		return helperEffect("uishadow", [{ name: "Transparency", value: 1 }]);
+	}
+
+	const props: RuntimeResolvedPropEntry[] = [
+		{ name: "Color", value: resolved.color },
+	];
+	if (opacity !== undefined) {
+		props.push({
+			name: "Transparency",
+			value: opacityToTransparency(opacity),
+		});
+	}
+
+	return helperEffect("uishadow", props);
+}
+
+function resolveGradientStop(
+	theme: RuntimeTheme,
+	key: string,
+): Color3 | undefined {
+	const [base] = splitColorOpacity(key);
+	return resolveThemeColor(theme, base)?.color;
+}
+
+/// Mirrors `resolve_color_value`: an arbitrary hex, the `transparent` keyword,
+/// or a theme key with an optional shade. `undefined` color means transparent.
+type RuntimeColorValue = {
+	color?: Color3;
+};
+
+function resolveThemeColor(
+	theme: RuntimeTheme,
+	key: string,
+): RuntimeColorValue | undefined {
+	if (startsWith(key, "[") && endsWith(key, "]")) {
+		const arbitrary = parseArbitraryColor(key);
+		return arbitrary === undefined ? undefined : { color: arbitrary };
+	}
+
+	if (key === "current" || key === "inherit") {
+		return undefined;
+	}
+
+	if (key === "transparent") {
+		return {};
+	}
+
+	const [colorName, shade] = splitColorKey(key);
+	const value = theme.colors[colorName];
+	if (typeIs(value, "string")) {
+		if (shade !== undefined) {
+			return undefined;
+		}
+
+		const parsed = parseColor3(value);
+		return parsed === undefined ? undefined : { color: parsed };
+	}
+
+	if (value === undefined) {
+		return undefined;
+	}
+
+	const entry = (value as RuntimeColorScale)[shade ?? PALETTE_DEFAULT_KEY];
+	return entry === undefined ? undefined : { color: entry };
+}
+
+function colorPropEffect(
+	theme: RuntimeTheme,
+	key: string,
+	colorProp: string,
+	transparencyProp: string | undefined,
+): RuntimeResolvedEffectBundle | undefined {
+	const [base, opacity] = splitColorOpacity(key);
+	const resolved = resolveThemeColor(theme, base);
+	if (resolved === undefined) {
+		return undefined;
+	}
+
+	if (resolved.color === undefined) {
+		return transparencyProp === undefined
+			? undefined
+			: propEffect(transparencyProp, 1);
+	}
+
+	const props: RuntimeResolvedPropEntry[] = [
+		{ name: colorProp, value: resolved.color },
+	];
+	if (transparencyProp !== undefined && opacity !== undefined) {
+		props.push({
+			name: transparencyProp,
+			value: opacityToTransparency(opacity),
+		});
+	}
+
+	return propsEffect(props);
+}
+
+/// Splits a trailing `/N` opacity modifier off a color payload. Only a 0-100
+/// integer counts; anything else stays part of the key.
+function splitColorOpacity(key: string): [string, number | undefined] {
+	const separator = lastIndexOf(key, "/");
+	if (separator === -1) {
+		return [key, undefined];
+	}
+
+	const percent = toNumber(substring(key, separator + 1));
+	if (
+		percent === undefined ||
+		percent < 0 ||
+		percent > 100 ||
+		!isWholeNumber(percent)
+	) {
+		return [key, undefined];
+	}
+
+	return [substring(key, 0, separator), percent];
+}
+
+function opacityToTransparency(percent: number): number {
+	return (100 - percent) / 100;
+}
+
+function parseArbitraryColor(key: string): Color3 | undefined {
+	const inner = substring(key, 1, -1);
+	if (!startsWith(inner, "#")) {
+		return undefined;
+	}
+
+	const hex = substring(inner, 1);
+	if (stringLength(hex) === 3) {
+		const red = parseHexDigit(substring(hex, 0, 1));
+		const green = parseHexDigit(substring(hex, 1, 2));
+		const blue = parseHexDigit(substring(hex, 2, 3));
+		if (red === undefined || green === undefined || blue === undefined) {
+			return undefined;
+		}
+
+		return Color3.fromRGB(red * 17, green * 17, blue * 17);
+	}
+
+	if (stringLength(hex) === 6) {
+		const red = parseHexPair(substring(hex, 0, 2));
+		const green = parseHexPair(substring(hex, 2, 4));
+		const blue = parseHexPair(substring(hex, 4, 6));
+		if (red === undefined || green === undefined || blue === undefined) {
+			return undefined;
+		}
+
+		return Color3.fromRGB(red, green, blue);
+	}
+
+	return undefined;
+}
+
+const HEX_DIGITS = "0123456789abcdef";
+
+function parseHexDigit(value: string): number | undefined {
+	const lowered = value.lower();
+	for (let index = 0; index < 16; index++) {
+		if (substring(HEX_DIGITS, index, index + 1) === lowered) {
+			return index;
+		}
+	}
+
+	return undefined;
+}
+
+function parseHexPair(value: string): number | undefined {
+	const high = parseHexDigit(substring(value, 0, 1));
+	const low = parseHexDigit(substring(value, 1, 2));
+	if (high === undefined || low === undefined) {
+		return undefined;
+	}
+
+	return high * 16 + low;
+}
+
+function resolveSpacingOffset(
+	theme: RuntimeTheme,
+	key: string,
+): number | undefined {
+	const value = resolveSpacingValue(theme, key);
+	if (value === undefined || value.Scale !== 0) {
+		return undefined;
+	}
+
+	return value.Offset;
+}
+
+function resolvePositionAxisValue(
+	theme: RuntimeTheme,
+	key: string,
+	negative: boolean,
+): UDim | undefined {
+	let base = parseArbitraryValue(key);
+
+	if (base === undefined && key === "px") {
+		base = { scale: 0, offset: 1 };
+	}
+
+	if (base === undefined && key === "full") {
+		base = { scale: 1, offset: 0 };
+	}
+
+	if (base === undefined) {
+		const fraction = resolveFractionScale(key);
+		if (fraction !== undefined) {
+			base = { scale: fraction, offset: 0 };
+		}
+	}
+
+	if (base === undefined) {
+		const offset = resolveSpacingOffset(theme, key);
+		if (offset === undefined) {
+			return undefined;
+		}
+
+		base = { scale: 0, offset };
+	}
+
+	return negative
+		? new UDim(-base.scale, -base.offset)
+		: new UDim(base.scale, base.offset);
+}
+
+/// Re-anchors a `left`/`top`-style axis to the far edge, mirroring CSS
+/// `right`/`bottom`: the resolved distance is measured back from scale 1.
+function endRelativePositionAxis(axis: UDim): UDim {
+	return new UDim(1 - axis.Scale, -axis.Offset);
+}
+
+function resolveZIndexValue(key: string): number | undefined {
+	if (key === "auto") {
+		return undefined;
+	}
+
+	if (startsWith(key, "[") && endsWith(key, "]")) {
+		// `ZIndex` is an integer, so a fractional arbitrary value would round
+		// silently instead of doing what the class says.
+		const arbitrary = parseArbitraryNumber(key, "");
+		return arbitrary !== undefined && isWholeNumber(arbitrary)
+			? arbitrary
+			: undefined;
+	}
+
+	if (
+		key === "0" ||
+		key === "10" ||
+		key === "20" ||
+		key === "30" ||
+		key === "40" ||
+		key === "50"
+	) {
+		return toNumber(key);
+	}
+
+	return undefined;
+}
+
+function resolveScaleValue(key: string): number | undefined {
+	if (key === "0") return 0;
+	if (key === "50") return 0.5;
+	if (key === "75") return 0.75;
+	if (key === "90") return 0.9;
+	if (key === "95") return 0.95;
+	if (key === "100") return 1;
+	if (key === "105") return 1.05;
+	if (key === "110") return 1.1;
+	if (key === "125") return 1.25;
+	if (key === "150") return 1.5;
+	return undefined;
+}
+
+function resolveRotationValue(
+	key: string,
+	negative: boolean,
+): number | undefined {
+	const arbitrary = parseArbitraryNumber(key, "deg");
+	if (arbitrary !== undefined) {
+		return negative ? -arbitrary : arbitrary;
+	}
+
+	if (
+		key !== "0" &&
+		key !== "1" &&
+		key !== "2" &&
+		key !== "3" &&
+		key !== "6" &&
+		key !== "12" &&
+		key !== "45" &&
+		key !== "90" &&
+		key !== "180"
+	) {
+		return undefined;
+	}
+
+	const degrees = toNumber(key) ?? 0;
+	return negative ? -degrees : degrees;
+}
+
+function resolveOpacityValue(key: string): number | undefined {
+	const percent = toNumber(key);
+	if (
+		percent === undefined ||
+		percent < 0 ||
+		percent > 100 ||
+		!isWholeNumber(percent)
+	) {
+		return undefined;
+	}
+
+	return opacityToTransparency(percent);
+}
+
+function resolveAspectRatioValue(key: string): number | undefined {
+	if (key === "square") {
+		return 1;
+	}
+
+	if (key === "video") {
+		return 16 / 9;
+	}
+
+	if (!startsWith(key, "[") || !endsWith(key, "]")) {
+		return undefined;
+	}
+
+	const inner = substring(key, 1, -1);
+	const [widthText, heightText] = splitOnce(inner, "/");
+	if (heightText === undefined) {
+		const value = toNumber(trim(inner));
+		return value !== undefined && value > 0 ? value : undefined;
+	}
+
+	const width = toNumber(trim(widthText));
+	const height = toNumber(trim(heightText));
+	if (width === undefined || height === undefined || width <= 0 || height <= 0) {
+		return undefined;
+	}
+
+	return width / height;
+}
+
+function resolveAnchorPointValue(key: string): Vector2 | undefined {
+	if (key === "top-left") return new Vector2(0, 0);
+	if (key === "top") return new Vector2(0.5, 0);
+	if (key === "top-right") return new Vector2(1, 0);
+	if (key === "left") return new Vector2(0, 0.5);
+	if (key === "center") return new Vector2(0.5, 0.5);
+	if (key === "right") return new Vector2(1, 0.5);
+	if (key === "bottom-left") return new Vector2(0, 1);
+	if (key === "bottom") return new Vector2(0.5, 1);
+	if (key === "bottom-right") return new Vector2(1, 1);
+	return undefined;
+}
+
+function resolveAlignSelfValue(key: string): Enum.ItemLineAlignment | undefined {
+	if (key === "auto") return Enum.ItemLineAlignment.Automatic;
+	if (key === "start") return Enum.ItemLineAlignment.Start;
+	if (key === "center") return Enum.ItemLineAlignment.Center;
+	if (key === "end") return Enum.ItemLineAlignment.End;
+	if (key === "stretch") return Enum.ItemLineAlignment.Stretch;
+	return undefined;
+}
+
+/// `content-*` distributes the cross axis, which `UIListLayout` exposes as its
+/// vertical properties — the same split `items-*` uses.
+function resolveAlignContentProp(
+	key: string,
+): RuntimeResolvedPropEntry | undefined {
+	if (key === "between") {
+		return { name: "VerticalFlex", value: Enum.UIFlexAlignment.SpaceBetween };
+	}
+	if (key === "around") {
+		return { name: "VerticalFlex", value: Enum.UIFlexAlignment.SpaceAround };
+	}
+	if (key === "evenly") {
+		return { name: "VerticalFlex", value: Enum.UIFlexAlignment.SpaceEvenly };
+	}
+	if (key === "stretch") {
+		return { name: "VerticalFlex", value: Enum.UIFlexAlignment.Fill };
+	}
+	return resolveAlignItemsProp(key);
+}
+
+function resolveFlexItemMode(token: string): Enum.UIFlexMode | undefined {
+	if (token === "grow") return Enum.UIFlexMode.Grow;
+	if (token === "shrink" || token === "flex-initial") {
+		return Enum.UIFlexMode.Shrink;
+	}
+	if (token === "flex-1" || token === "flex-auto") return Enum.UIFlexMode.Fill;
+	if (token === "grow-0" || token === "shrink-0" || token === "flex-none") {
+		return Enum.UIFlexMode.None;
+	}
+	return undefined;
+}
+
+function resolveLineJoinValue(key: string): Enum.LineJoinMode | undefined {
+	if (key === "round") return Enum.LineJoinMode.Round;
+	if (key === "bevel") return Enum.LineJoinMode.Bevel;
+	if (key === "miter") return Enum.LineJoinMode.Miter;
+	return undefined;
+}
+
+function resolveObjectFitValue(key: string): Enum.ScaleType | undefined {
+	if (key === "cover") return Enum.ScaleType.Crop;
+	if (key === "contain") return Enum.ScaleType.Fit;
+	if (key === "fill") return Enum.ScaleType.Stretch;
+	if (key === "tile") return Enum.ScaleType.Tile;
+	return undefined;
+}
+
+function resolvePointerEventsValue(key: string): boolean | undefined {
+	if (key === "none") return false;
+	if (key === "auto") return true;
+	return undefined;
+}
+
+function resolveWhitespaceValue(key: string): boolean | undefined {
+	if (key === "normal") return true;
+	if (key === "nowrap") return false;
+	return undefined;
+}
+
+function resolveOverflowValue(key: string): boolean | undefined {
+	if (key === "hidden" || key === "clip") return true;
+	if (key === "visible") return false;
+	return undefined;
+}
+
+function resolveTextWrapValue(key: string): boolean | undefined {
+	if (key === "wrap") return true;
+	if (key === "nowrap") return false;
+	return undefined;
+}
+
+function resolveOverscrollValue(key: string): Enum.ElasticBehavior | undefined {
+	if (key === "auto") return Enum.ElasticBehavior.Always;
+	if (key === "contain") return Enum.ElasticBehavior.WhenScrollable;
+	if (key === "none") return Enum.ElasticBehavior.Never;
+	return undefined;
+}
+
+function resolveScrollDirectionValue(
+	key: string,
+): Enum.ScrollingDirection | undefined {
+	if (key === "x") return Enum.ScrollingDirection.X;
+	if (key === "y") return Enum.ScrollingDirection.Y;
+	if (key === "xy") return Enum.ScrollingDirection.XY;
+	return undefined;
+}
+
+function resolveCanvasSizeValue(key: string): Enum.AutomaticSize | undefined {
+	if (key === "auto") return Enum.AutomaticSize.XY;
+	if (key === "auto-x") return Enum.AutomaticSize.X;
+	if (key === "auto-y") return Enum.AutomaticSize.Y;
+	if (key === "none") return Enum.AutomaticSize.None;
+	return undefined;
+}
+
+function resolveGridCellCount(key: string): number | undefined {
+	const count = toNumber(key);
+	if (count === undefined || !isWholeNumber(count) || count < 1 || count > 12) {
+		return undefined;
+	}
+
+	return count;
+}
+
+function resolveGradientRotation(direction: string): number | undefined {
+	if (direction === "r") return 0;
+	if (direction === "br") return 45;
+	if (direction === "b") return 90;
+	if (direction === "bl") return 135;
+	if (direction === "l") return 180;
+	if (direction === "tl") return 225;
+	if (direction === "t") return 270;
+	if (direction === "tr") return 315;
+	return undefined;
+}
+
+function resolveLineHeightValue(key: string): number | undefined {
+	const arbitrary = parseArbitraryNumber(key, "");
+	if (arbitrary !== undefined) {
+		return arbitrary;
+	}
+
+	if (key === "none") return 1;
+	if (key === "tight") return 1.25;
+	if (key === "snug") return 1.375;
+	if (key === "normal") return 1.5;
+	if (key === "relaxed") return 1.625;
+	if (key === "loose") return 2;
+	return undefined;
+}
+
+function resolveLayoutOrderValue(
+	key: string,
+	negative: boolean,
+): number | undefined {
+	if (key === "first" || key === "last" || key === "none") {
+		if (negative) {
+			return undefined;
+		}
+
+		return key === "first" ? -9999 : key === "last" ? 9999 : 0;
+	}
+
+	const order = toNumber(key);
+	if (order === undefined || !isWholeNumber(order)) {
+		return undefined;
+	}
+
+	return negative ? -order : order;
+}
+
+function resolveTextYAlignmentValue(
+	key: string,
+): Enum.TextYAlignment | undefined {
+	if (key === "top") return Enum.TextYAlignment.Top;
+	if (key === "middle") return Enum.TextYAlignment.Center;
+	if (key === "bottom") return Enum.TextYAlignment.Bottom;
 	return undefined;
 }
 
@@ -2633,8 +3666,10 @@ function applyResolvedEffectBundle(
 	}
 }
 
-/// `Size` carries two independent utility families, so a bundle that names one
-/// axis travels as that axis alone and only meets the other one at the merge.
+/// Several utility families only meet at the end — two axes of one `Size`, the
+/// three parts of a `FontFace`, a grid track and the gap it has to give back.
+/// They travel as their own entries and are composed here, once every rule and
+/// class token has had its say.
 function applyResolutionProp(
 	resolution: RuntimeResolution,
 	name: string,
@@ -2672,9 +3707,58 @@ function applyResolutionProp(
 		return;
 	}
 
-	// Roblox folds family, weight and style into one `FontFace`, so a weight
-	// cannot be written straight onto the instance — it waits here and is
-	// composed once, after every rule has had its say.
+	if (name === "PositionX") {
+		if (typeIs(value, "UDim")) {
+			resolution.positionX = value;
+		}
+		return;
+	}
+
+	if (name === "PositionY") {
+		if (typeIs(value, "UDim")) {
+			resolution.positionY = value;
+		}
+		return;
+	}
+
+	if (name === "TranslateX") {
+		if (typeIs(value, "UDim")) {
+			resolution.translateX = value;
+		}
+		return;
+	}
+
+	if (name === "TranslateY") {
+		if (typeIs(value, "UDim")) {
+			resolution.translateY = value;
+		}
+		return;
+	}
+
+	if (name === "MinWidth" || name === "MinHeight" || name === "MaxWidth" || name === "MaxHeight") {
+		if (typeIs(value, "number")) {
+			if (name === "MinWidth") {
+				resolution.minWidth = value;
+			} else if (name === "MinHeight") {
+				resolution.minHeight = value;
+			} else if (name === "MaxWidth") {
+				resolution.maxWidth = value;
+			} else {
+				resolution.maxHeight = value;
+			}
+		}
+		return;
+	}
+
+	// Roblox folds family, weight and style into one `FontFace`, so none of them
+	// can be written straight onto the instance.
+	if (name === "FontFamily") {
+		if (typeIs(value, "string")) {
+			resolution.fontFamily = value;
+		}
+		return;
+	}
+
 	if (name === "FontWeight") {
 		if (typeIs(value, "EnumItem")) {
 			resolution.fontWeight = value as Enum.FontWeight;
@@ -2682,23 +3766,99 @@ function applyResolutionProp(
 		return;
 	}
 
+	if (name === "FontStyle") {
+		if (typeIs(value, "EnumItem")) {
+			resolution.fontStyle = value as Enum.FontStyle;
+		}
+		return;
+	}
+
+	if (name === "GapOffset") {
+		if (typeIs(value, "number")) {
+			resolution.gapOffset = value;
+		}
+		return;
+	}
+
+	if (name === "GridCells") {
+		if (typeIs(value, "number")) {
+			resolution.gridCells = value;
+		}
+		return;
+	}
+
+	if (name === "GridCellsHorizontal") {
+		resolution.gridCellsHorizontal = value === true;
+		return;
+	}
+
+	if (name === "GridCrossExtent") {
+		if (typeIs(value, "number")) {
+			resolution.gridCrossExtent = value;
+		}
+		return;
+	}
+
+	if (name === "GradientRotation") {
+		if (typeIs(value, "number")) {
+			resolution.gradientRotation = value;
+		}
+		return;
+	}
+
+	if (name === "GradientFrom" || name === "GradientVia" || name === "GradientTo") {
+		if (typeIs(value, "Color3")) {
+			if (name === "GradientFrom") {
+				resolution.gradientFrom = value;
+			} else if (name === "GradientVia") {
+				resolution.gradientVia = value;
+			} else {
+				resolution.gradientTo = value;
+			}
+		}
+		return;
+	}
+
 	setProp(resolution.props, name, value);
 }
 
-function applyResolvedSize(
+function applyComposedResolution(
+	hostProps: Record<string, unknown>,
+	resolution: RuntimeResolution,
+	preflight: boolean,
+) {
+	applyComposedFont(hostProps, resolution);
+	applyComposedSize(hostProps, resolution);
+	applyComposedTransform(hostProps, resolution);
+	applyComposedSizeConstraints(resolution);
+	applyComposedGrid(resolution);
+	applyComposedGradient(hostProps, resolution, preflight);
+}
+
+function applyComposedFont(
 	hostProps: Record<string, unknown>,
 	resolution: RuntimeResolution,
 ) {
-	const fontWeight = resolution.fontWeight;
-	if (fontWeight !== undefined) {
-		const declared = hostProps["FontFace"];
-		const family = typeIs(declared, "Font")
-			? declared.Family
-			: "rbxasset://fonts/families/SourceSansPro.json";
-		const style = typeIs(declared, "Font") ? declared.Style : Enum.FontStyle.Normal;
-		hostProps["FontFace"] = new Font(family, fontWeight, style);
+	const family = resolution.fontFamily;
+	const weight = resolution.fontWeight;
+	const style = resolution.fontStyle;
+	if (family === undefined && weight === undefined && style === undefined) {
+		return;
 	}
 
+	const declared = hostProps["FontFace"];
+	const isFont = typeIs(declared, "Font");
+	hostProps["FontFace"] = new Font(
+		family ?? (isFont ? declared.Family : DEFAULT_FONT_FAMILY),
+		weight ?? (isFont ? declared.Weight : Enum.FontWeight.Regular),
+		style ?? (isFont ? declared.Style : Enum.FontStyle.Normal),
+	);
+}
+
+function applyComposedSize(
+	hostProps: Record<string, unknown>,
+	resolution: RuntimeResolution,
+) {
 	const autoWidth = resolution.autoWidth === true;
 	const autoHeight = resolution.autoHeight === true;
 	if (autoWidth || autoHeight) {
@@ -2728,6 +3888,192 @@ function applyResolvedSize(
 		resolvedHeight.Scale,
 		resolvedHeight.Offset,
 	);
+}
+
+/// A fractional translate is a shift by the element's own size, which is exactly
+/// what `AnchorPoint` expresses; pixel translates shift `Position`.
+function applyComposedTransform(
+	hostProps: Record<string, unknown>,
+	resolution: RuntimeResolution,
+) {
+	const [translateAnchorX, shiftX] = splitTranslateAxis(resolution.translateX);
+	const [translateAnchorY, shiftY] = splitTranslateAxis(resolution.translateY);
+	const anchorX =
+		translateAnchorX ?? (resolution.centerX === true ? 0.5 : undefined);
+	const anchorY =
+		translateAnchorY ?? (resolution.centerY === true ? 0.5 : undefined);
+	if (anchorX !== undefined || anchorY !== undefined) {
+		hostProps["AnchorPoint"] = new Vector2(anchorX ?? 0, anchorY ?? 0);
+	}
+
+	const positionX = shiftPositionAxis(
+		resolution.positionX,
+		shiftX + (resolution.marginShiftX ?? 0),
+	);
+	const positionY = shiftPositionAxis(
+		resolution.positionY,
+		shiftY + (resolution.marginShiftY ?? 0),
+	);
+	if (positionX === undefined && positionY === undefined) {
+		return;
+	}
+
+	const declared = hostProps["Position"];
+	const base = typeIs(declared, "UDim2") ? declared : new UDim2(0, 0, 0, 0);
+	const resolvedX = positionX ?? base.X;
+	const resolvedY = positionY ?? base.Y;
+
+	hostProps["Position"] = new UDim2(
+		resolvedX.Scale,
+		resolvedX.Offset,
+		resolvedY.Scale,
+		resolvedY.Offset,
+	);
+}
+
+function splitTranslateAxis(
+	axis: UDim | undefined,
+): [number | undefined, number] {
+	if (axis === undefined) {
+		return [undefined, 0];
+	}
+
+	// AnchorPoint moves opposite the shift, so the scale is negated.
+	const anchor = mathAbs(axis.Scale) < 1e-9 ? undefined : -axis.Scale;
+	return [anchor, axis.Offset];
+}
+
+function shiftPositionAxis(
+	axis: UDim | undefined,
+	shift: number,
+): UDim | undefined {
+	if (mathAbs(shift) < 1e-9) {
+		return axis;
+	}
+
+	const base = axis ?? new UDim(0, 0);
+	return new UDim(base.Scale, base.Offset + shift);
+}
+
+function applyComposedSizeConstraints(resolution: RuntimeResolution) {
+	if (resolution.minWidth !== undefined || resolution.minHeight !== undefined) {
+		setResolvedHelperProp(resolution.helpers, "uisizeconstraint", [
+			{
+				name: "MinSize",
+				value: new Vector2(
+					resolution.minWidth ?? 0,
+					resolution.minHeight ?? 0,
+				),
+			},
+		]);
+	}
+
+	if (resolution.maxWidth !== undefined || resolution.maxHeight !== undefined) {
+		setResolvedHelperProp(resolution.helpers, "uisizeconstraint", [
+			{
+				name: "MaxSize",
+				value: new Vector2(
+					resolution.maxWidth ?? math.huge,
+					resolution.maxHeight ?? math.huge,
+				),
+			},
+		]);
+	}
+}
+
+/// Roblox's stock `UIGridLayout.CellSize` extent. `grid-cols-*` divides the axis
+/// it fills and leaves the cross axis here, since a column count says nothing
+/// about row height.
+const GRID_CROSS_AXIS_DEFAULT = 100;
+
+/// `UIGridLayout` stamps `CellSize` onto every child and ignores whatever `Size`
+/// the child set for itself, so a grid that never names a cell size collapses
+/// the whole track to Roblox's 100x100 default.
+function applyComposedGrid(resolution: RuntimeResolution) {
+	const grid = resolution.helpers.find((helper) => helper.tag === "uigridlayout");
+	if (grid === undefined) {
+		return;
+	}
+
+	const gap = resolution.gapOffset ?? 0;
+	const cells = resolution.gridCells;
+	if (cells !== undefined && cells > 0) {
+		const scale = 1 / cells;
+		const gapShare = (gap * (cells - 1)) / cells;
+		const cross = resolution.gridCrossExtent ?? GRID_CROSS_AXIS_DEFAULT;
+		setResolvedHelperProp(resolution.helpers, "uigridlayout", [
+			{
+				name: "CellSize",
+				value:
+					resolution.gridCellsHorizontal === true
+						? new UDim2(scale, -gapShare, 0, cross)
+						: new UDim2(0, cross, scale, -gapShare),
+			},
+		]);
+	}
+
+	if (resolution.gapOffset !== undefined) {
+		setResolvedHelperProp(resolution.helpers, "uigridlayout", [
+			{ name: "CellPadding", value: UDim2.fromOffset(gap, gap) },
+		]);
+	}
+}
+
+function applyComposedGradient(
+	hostProps: Record<string, unknown>,
+	resolution: RuntimeResolution,
+	preflight: boolean,
+) {
+	const stops: Color3[] = [];
+	for (const stop of [
+		resolution.gradientFrom,
+		resolution.gradientVia,
+		resolution.gradientTo,
+	]) {
+		if (stop !== undefined) {
+			stops.push(stop);
+		}
+	}
+
+	if (arraySize(stops) === 0) {
+		return;
+	}
+
+	setResolvedHelperProp(resolution.helpers, "uigradient", [
+		{ name: "Color", value: colorSequenceValue(stops) },
+	]);
+
+	const rotation = resolution.gradientRotation;
+	if (rotation !== undefined && rotation !== 0) {
+		setResolvedHelperProp(resolution.helpers, "uigradient", [
+			{ name: "Rotation", value: rotation },
+		]);
+	}
+
+	// UIGradient modulates BackgroundColor3, so force a white base for true stop
+	// colors — and take back the transparency preflight left behind.
+	hostProps["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+	if (preflight) {
+		hostProps["BackgroundTransparency"] = 0;
+	}
+}
+
+function colorSequenceValue(stops: Color3[]): ColorSequence {
+	if (arraySize(stops) === 1) {
+		return new ColorSequence(stops[0]);
+	}
+
+	if (arraySize(stops) === 2) {
+		return new ColorSequence(stops[0], stops[1]);
+	}
+
+	const last = arraySize(stops) - 1;
+	const keypoints: ColorSequenceKeypoint[] = [];
+	for (let index = 0; index <= last; index++) {
+		keypoints.push(new ColorSequenceKeypoint(index / last, stops[index]));
+	}
+
+	return new ColorSequence(keypoints);
 }
 
 function setProp(props: RuntimePropMap, name: string, value: RuntimePropValue) {
@@ -2811,6 +4157,14 @@ function applyHelperDefaults(helpers: RuntimeHelper[]) {
 			value: Enum.SortOrder.LayoutOrder,
 		});
 	}
+}
+
+/// `@rbxts/react` maps a lowercase tag through a hardcoded class list and passes
+/// anything it does not know straight to `Instance.new`, which is case
+/// sensitive. `UIShadow` is missing from that list, so the lowercase form fails
+/// to instantiate and React unwinds the whole tree.
+function hostClassName(tag: string): string {
+	return tag === "uishadow" ? "UIShadow" : tag;
 }
 
 function helperToProps(props: RuntimeHelperProp[]): Record<string, unknown> {
@@ -3105,4 +4459,22 @@ fn escape_module_specifier(module: &str) -> String {
             other => other.to_string(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RUNTIME_HOST_TEMPLATE;
+    use crate::semantic::utility::UTILITY_PREFIXES;
+
+    /// A family the static path lowers but the runtime host never matches is
+    /// silent: a `className` that arrives as a value simply renders without it.
+    #[test]
+    fn the_runtime_host_matches_every_static_utility_prefix() {
+        for (prefix, _) in UTILITY_PREFIXES {
+            assert!(
+                RUNTIME_HOST_TEMPLATE.contains(&format!("\"{prefix}\"")),
+                "runtime host never matches the \"{prefix}\" family"
+            );
+        }
+    }
 }
