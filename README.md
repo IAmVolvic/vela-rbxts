@@ -301,12 +301,13 @@ The exhaustive table of accepted values lives in the [utility reference](https:/
 | Order | `order-*`, `order-{first,last,none}`, `-order-*` | `LayoutOrder`; every emitted `UIListLayout` and `UIGridLayout` carries `SortOrder = LayoutOrder` so the values take effect |
 | Aspect ratio | `aspect-square`, `aspect-video`, `aspect-[W/H]`, `aspect-[N]` | `UIAspectRatioConstraint` |
 | Transform | `rotate-*`, `-rotate-*`, `scale-*` | `Rotation`, `UIScale` |
-| Effects | `opacity-*` | `BackgroundTransparency`, integers 0 to 100 |
+| Effects | `opacity-*` | `BackgroundTransparency`, integers 0 to 100. On `canvasgroup` it lowers to `GroupTransparency`, which fades the whole subtree the way CSS `opacity` does. |
 | Typography | `text-{xs..9xl}`, `font-*`, `italic`, `not-italic`, `text-{left,center,right}`, `align-*`, `leading-*`, `text-wrap`, `text-nowrap`, `whitespace-{normal,nowrap}`, `truncate`, `uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` | `TextSize`, `FontFace` (weight and style), `TextXAlignment`, `TextYAlignment`, `LineHeight`, `TextWrapped`, `TextTruncate`; case transforms rewrite `Text` (at compile time for literals, at runtime otherwise) and decorations render through `RichText`. The font family is fixed to Source Sans Pro; only the weight is selectable. |
 | Motion | `transition`, `transition-{all,colors,opacity,shadow,transform,none}`, `duration-*`, `ease-{linear,in,out,in-out}`, `delay-*`, `animate-{spin,pulse,bounce,none}` | Runtime style changes tween through `TweenService` instead of snapping; `animate-*` runs looping presets. Warns `motion-on-component` on component elements. |
 | Interaction | `pointer-events-{none,auto}` | `Interactable` |
 | Image fit | `object-{cover,contain,fill,tile}` | `ScaleType` on image hosts (`object-tile` is a Roblox-only extension) |
 | Visibility | `hidden`, `visible`, `overflow-{hidden,clip,visible}`, `overscroll-{auto,contain,none}` | `Visible`, `ClipsDescendants`, `ElasticBehavior` on scrolling frames |
+| Scrolling | `scroll-{x,y,xy}`, `scroll-none`, `scrollbar-w-*`, `scrollbar-none`, `scrollbar-{color}`, `canvas-{auto,auto-x,auto-y,none}` | `ScrollingDirection`, `ScrollingEnabled`, `ScrollBarThickness` (from the spacing scale), `ScrollBarImageColor3`, `AutomaticCanvasSize` — scrolling frames only. `scrollbar-*` and `canvas-*` are Roblox-only extensions. |
 
 Two value forms work across every color family (`bg-`, `text-`, `image-`, `placeholder-`, `border-`, `divide-`, `shadow-`, `ring-`, `outline-`, and the gradient stops):
 
@@ -315,11 +316,13 @@ Two value forms work across every color family (`bg-`, `text-`, `image-`, `place
 
 ### Not Implemented
 
-Tailwind families with no Roblox counterpart emit `no-roblox-equivalent` and are dropped: CSS positioning and display keywords (`static`, `fixed`, `absolute`, `relative`, `sticky`, `block`, `inline`, `table`, `contents`, `float`, `clear`, `columns-*`), text control Roblox's engine lacks (`tracking-*`, `indent-*`, `break-*`, `hyphens-*`, `list-*`, `decoration-*`, `overline`), element-level filters (`blur-*`, `backdrop-*`, `grayscale`, `invert`, `sepia`, `contrast-*`, `saturate-*`, `brightness-*`), 3D transforms (`skew-*`, `perspective-*`, `transform`), and browser interaction utilities (`cursor-*`, `select-*`, `resize-*`, `scroll-*`, `snap-*`, `caret-*`, `accent-*`, `appearance-*`). Roblox has no positioning model to map them onto — everything is already absolutely placed relative to its parent.
+Tailwind families with no Roblox counterpart emit `no-roblox-equivalent` and are dropped: CSS positioning and display keywords (`static`, `fixed`, `absolute`, `relative`, `sticky`, `block`, `inline`, `table`, `contents`, `float`, `clear`, `columns-*`), text control Roblox's engine lacks (`tracking-*`, `indent-*`, `break-*`, `hyphens-*`, `list-*`, `decoration-*`, `overline`), element-level filters (`blur-*`, `backdrop-*`, `grayscale`, `invert`, `sepia`, `contrast-*`, `saturate-*`, `brightness-*`), 3D transforms (`skew-*`, `perspective-*`, `transform`), and browser interaction utilities (`cursor-*`, `select-*`, `resize-*`, `snap-*`, `caret-*`, `accent-*`, `appearance-*`). Roblox has no positioning model to map them onto — everything is already absolutely placed relative to its parent.
 
 `place-*` has no counterpart either; use `content-*` and `self-*`. `col-span-*`/`row-span-*` are unsupported because `UIGridLayout` cannot span cells.
 
 Anything the parser does not recognize at all — typos included — emits `unsupported-utility-family`.
+
+Tailwind's own `scroll-*` utilities (`scroll-smooth`, `scroll-m-*`, `scroll-p-*`) now collide with the Roblox scrolling family, so they report `unsupported-scroll-value` instead of `no-roblox-equivalent`.
 
 `gap-x-*` and `gap-y-*` do not exist, but they fail differently: they match the `gap-` prefix and then fail to resolve `x-4` as a spacing key, so they report `unknown-theme-key` rather than an unknown family. Use `space-x-*`/`space-y-*` for per-axis list spacing.
 

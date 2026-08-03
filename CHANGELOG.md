@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions are released in lockstep across every workspace package.
 
+## [Unreleased]
+
+### Added
+
+- Scrolling frame utilities: `scroll-{x,y,xy}` and `scroll-none` map to `ScrollingDirection`/`ScrollingEnabled`, `scrollbar-w-*` and `scrollbar-none` set `ScrollBarThickness` from the spacing scale, `scrollbar-{color}` (opacity modifier included) sets `ScrollBarImageColor3`, and `canvas-{auto,auto-x,auto-y,none}` sets `AutomaticCanvasSize`. All four families are restricted to `scrollingframe`, with completions, hover, and document colors wired up.
+
+### Changed
+
+- `opacity-*` on a `canvasgroup` now lowers to `GroupTransparency` instead of `BackgroundTransparency`, so it fades the whole subtree the way CSS `opacity` does. Every other host keeps the previous behavior.
+- Tailwind's own `scroll-*` utilities (`scroll-smooth`, `scroll-m-*`) report `unsupported-scroll-value` with the supported values instead of `no-roblox-equivalent`, now that the family carries a Roblox meaning.
+
 ## [0.4.1] - 2026-07-31
 
 ### Added

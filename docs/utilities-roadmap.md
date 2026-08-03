@@ -203,6 +203,37 @@ JSX 자식이 동적이면 컴파일 타임에 불가능하고 런타임 호스�
 한다. 런타임 호스트가 콘텐츠 자식 사이에만 구분선 프레임을 삽입하는 방식으로
 **구현 완료** — 상세는 `phase4-structural-review.md` 참고.
 
+## Phase 5 — Roblox 고유 프로퍼티 (등급 A) — **구현 완료**
+
+Tailwind 파리티가 아니라 Roblox 인스턴스에만 있는 프로퍼티를 채우는 페이즈.
+호스트 제한은 `is_utility_allowed_on_host`가 담당하며, 전부 정적 lowering이다.
+
+### ScrollingFrame 패밀리
+
+`overscroll-*` 하나뿐이던 scrollingframe 지원을 실제로 쓰는 프로퍼티까지 넓혔다.
+
+| 토큰 | 값 |
+| --- | --- |
+| `scroll-x` / `scroll-y` / `scroll-xy` | `ScrollingDirection` |
+| `scroll-none` | `ScrollingEnabled = false` |
+| `scrollbar-w-{spacing}` | `ScrollBarThickness` (spacing 스케일 → offset) |
+| `scrollbar-none` | `ScrollBarThickness = 0` |
+| `scrollbar-{color}` (`/N` 수식어 포함) | `ScrollBarImageColor3` / `ScrollBarImageTransparency` |
+| `canvas-auto` / `canvas-auto-x` / `canvas-auto-y` / `canvas-none` | `AutomaticCanvasSize` |
+
+- `scroll` 패밀리를 `is_known_tailwind_family`에서 꺼냈으므로 Tailwind의
+  `scroll-smooth` / `scroll-m-*`는 `no-roblox-equivalent`가 아니라
+  `unsupported-scroll-value`로 보고된다 — 대체 토큰을 메시지에 담을 수 있다.
+- `scrollbar-*` / `canvas-*`는 Tailwind에 없는 vela 확장 (`object-tile` 선례).
+
+### `opacity-*`의 호스트 인지
+
+`opacity-*`는 `BackgroundTransparency`로만 내려갔는데, CanvasGroup은 서브트리를
+합성하므로 CSS `opacity`에 대응하는 프로퍼티는 `GroupTransparency`뿐이다.
+`canvasgroup` 호스트에서만 그쪽으로 내린다. 이를 위해 lowering이 호스트 태그를
+받도록 `resolve_class_tokens(tokens, config, element_tag, diagnostics)`로 넓혔고,
+컴포넌트 요소는 태그를 알 수 없으므로 `None` — 기존 동작을 유지한다.
+
 ## 영구 미지원 (등급 D — `no-roblox-equivalent` 유지)
 
 | 패밀리 | 근거 |
@@ -214,7 +245,7 @@ JSX 자식이 동적이면 컴파일 타임에 불가능하고 런타임 호스�
 | `float`, `clear`, `columns-*`, `col-span-*`, `row-span-*` | 대응 레이아웃 개념 없음 (UIGridLayout은 span 미지원) |
 | `static/fixed/absolute/relative/sticky`, `block/inline/table/contents` | Roblox는 항상 부모 기준 절대 배치; positioning 모델 자체가 없음 |
 | `cursor-*`, `caret-*`, `accent-*`, `appearance-*`, `select-*` | 요소 단위 커서/캐럿/네이티브 위젯 스타일 없음 |
-| `snap-*`, `scroll-*`, `resize-*` | 스크롤 스냅/스무스 스크롤/리사이즈 핸들 없음 |
+| `snap-*`, `resize-*` | 스크롤 스냅/리사이즈 핸들 없음 |
 | `isolate`, `box-*`, `container`, `sr-*`, `antialiased` | 해당 렌더링 개념 없음 |
 | `brightness-*`, `fill-*`, `stroke-*` | 근사 매핑(ImageColor3)이 의미를 왜곡 — 오해 소지가 커서 제외 |
 
