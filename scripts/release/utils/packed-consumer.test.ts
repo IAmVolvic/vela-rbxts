@@ -28,7 +28,7 @@ describe("packed consumer luau assertions", () => {
 					"PaddingTop = UDim.new(0, 12)",
 					"PaddingBottom = UDim.new(0, 12)",
 					"Padding = UDim.new(0, 16)",
-					"__createVelaRuntimeHost",
+					"local VelaRuntimeHost = (function()",
 					"React.createElement(VelaRuntimeHost",
 					"__velaRules",
 					"__velaTag",
