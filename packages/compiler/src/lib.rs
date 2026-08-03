@@ -15,10 +15,11 @@ pub(crate) mod transform;
 pub(crate) mod utilities;
 
 pub use api::{
-    ClassTokenSpan, CompletionItem, CompletionRequest, CompletionResponse, Diagnostic,
-    DiagnosticsRequest, DiagnosticsResponse, DocumentColor, DocumentColorsRequest,
+    ClassNameEdit, ClassTokenSpan, CompletionItem, CompletionRequest, CompletionResponse,
+    Diagnostic, DiagnosticsRequest, DiagnosticsResponse, DocumentColor, DocumentColorsRequest,
     DocumentColorsResponse, EditorDiagnostic, EditorOptions, EditorRange, HoverContent,
-    HoverRequest, HoverResponse, TransformOptions, TransformResult,
+    HoverRequest, HoverResponse, SortClassNamesRequest, SortClassNamesResponse, TransformOptions,
+    TransformResult,
 };
 
 /// All class tokens in `className` attributes of supported host elements,
@@ -73,6 +74,15 @@ pub fn get_diagnostics(request: DiagnosticsRequest) -> DiagnosticsResponse {
 #[napi(js_name = "getDocumentColors")]
 pub fn get_document_colors(request: DocumentColorsRequest) -> DocumentColorsResponse {
     api::editor::get_document_colors_impl(request)
+}
+
+/// Canonical class order for one document, as replacement edits over each
+/// `className` string. Rust-only consumers and the LSP share this so the
+/// editor never has to know the ordering rules.
+#[cfg(not(target_arch = "wasm32"))]
+#[napi(js_name = "sortClassNames")]
+pub fn sort_class_names(request: SortClassNamesRequest) -> SortClassNamesResponse {
+    api::editor::sort_class_names_impl(request)
 }
 
 #[cfg(target_arch = "wasm32")]

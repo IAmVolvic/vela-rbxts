@@ -3,6 +3,7 @@ import {
 	getDiagnostics,
 	getDocumentColors,
 	getHover,
+	sortClassNames,
 } from "@vela-rbxts/compiler";
 import { expect, test } from "vitest";
 import { defineConfig } from "../../config/src/index";
@@ -1348,4 +1349,36 @@ test("completes and hovers divide utilities", () => {
 		position: positionAfter(hoverSource, "divide-slate-5"),
 	});
 	expect(color.contents?.documentation).toContain("Color3.fromRGB");
+});
+
+test("sorts class names into a canonical order", () => {
+	const source =
+		'<frame className="p-4 bg-slate-700 hover:bg-blue-600 w-40 flex-col rounded-md" />';
+	const result = sortClassNames({ source });
+
+	expect(result.edits).toHaveLength(1);
+	expect(result.edits[0].text).toBe(
+		"flex-col w-40 p-4 bg-slate-700 rounded-md hover:bg-blue-600",
+	);
+	expect(source.slice(result.edits[0].range.start, result.edits[0].range.end)).toBe(
+		"p-4 bg-slate-700 hover:bg-blue-600 w-40 flex-col rounded-md",
+	);
+});
+
+test("leaves an already sorted class name alone", () => {
+	const result = sortClassNames({
+		source: '<frame className="w-40 p-4 bg-slate-700" />',
+	});
+
+	expect(result.edits).toEqual([]);
+});
+
+test("keeps utilities that fight over one Roblox property in their written order", () => {
+	// `gap-*` and `space-y-*` both write UIListLayout.Padding, so whichever the
+	// author put last has to stay last.
+	const result = sortClassNames({
+		source: '<frame className="space-y-2 bg-slate-700 gap-4" />',
+	});
+
+	expect(result.edits[0].text).toBe("space-y-2 gap-4 bg-slate-700");
 });

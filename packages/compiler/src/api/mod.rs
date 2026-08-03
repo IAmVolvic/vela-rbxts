@@ -158,6 +158,26 @@ pub struct DocumentColorsResponse {
     pub colors: Vec<DocumentColor>,
 }
 
+#[cfg_attr(not(target_arch = "wasm32"), napi(object))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SortClassNamesRequest {
+    pub source: String,
+    pub options: Option<EditorOptions>,
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), napi(object))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ClassNameEdit {
+    pub range: EditorRange,
+    pub text: String,
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), napi(object))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SortClassNamesResponse {
+    pub edits: Vec<ClassNameEdit>,
+}
+
 pub mod editor;
 pub mod transform;
 

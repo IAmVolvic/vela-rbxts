@@ -2,6 +2,7 @@ pub(crate) mod colors;
 pub(crate) mod completions;
 pub(crate) mod diagnostics;
 pub(crate) mod hover;
+pub(crate) mod sort;
 
 use crate::api::{EditorOptions, EditorRange};
 use crate::transform::jsx::is_component_element;

@@ -18,3 +18,4 @@ module.exports.getCompletions = nativeBinding.getCompletions;
 module.exports.getHover = nativeBinding.getHover;
 module.exports.getDiagnostics = nativeBinding.getDiagnostics;
 module.exports.getDocumentColors = nativeBinding.getDocumentColors;
+module.exports.sortClassNames = nativeBinding.sortClassNames;

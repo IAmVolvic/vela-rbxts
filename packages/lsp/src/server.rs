@@ -7,7 +7,7 @@ use serde::Deserialize;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams,
+    CodeAction, CodeActionKind, CodeActionOptions, CodeActionOrCommand, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, Color, ColorInformation, ColorPresentation,
     ColorPresentationParams, ColorProviderCapability, CompletionItem, CompletionItemKind,
     CompletionList, CompletionOptions, CompletionParams, CompletionResponse, CompletionTextEdit,
@@ -22,7 +22,8 @@ use tower_lsp::{Client, LanguageServer};
 use vela_rbxts_compiler::{
     ClassTokenSpan, CompletionRequest, DiagnosticsRequest, DocumentColor as CompilerDocumentColor,
     DocumentColorsRequest, EditorDiagnostic as CompilerDiagnostic, EditorOptions, HoverRequest,
-    get_class_tokens, get_completions, get_diagnostics, get_document_colors, get_hover,
+    SortClassNamesRequest, get_class_tokens, get_completions, get_diagnostics, get_document_colors,
+    get_hover,
 };
 
 use crate::documents::Document;
@@ -204,7 +205,17 @@ impl LanguageServer for RbxtsLanguageServer {
                 }),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                // The kinds have to be advertised, or a client never offers the
+                // source action in its menu or runs it on save.
+                code_action_provider: Some(CodeActionProviderCapability::Options(
+                    CodeActionOptions {
+                        code_action_kinds: Some(vec![
+                            CodeActionKind::QUICKFIX,
+                            sort_action_kind(),
+                        ]),
+                        ..Default::default()
+                    },
+                )),
                 document_highlight_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
@@ -351,7 +362,10 @@ impl LanguageServer for RbxtsLanguageServer {
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
-        if !action_kind_allowed(params.context.only.as_ref(), &CodeActionKind::QUICKFIX) {
+        let wants_quickfix =
+            action_kind_allowed(params.context.only.as_ref(), &CodeActionKind::QUICKFIX);
+        let wants_sort = action_kind_allowed(params.context.only.as_ref(), &sort_action_kind());
+        if !wants_quickfix && !wants_sort {
             return Ok(None);
         }
 
@@ -362,7 +376,13 @@ impl LanguageServer for RbxtsLanguageServer {
 
         let mut actions: CodeActionResponse = Vec::new();
 
-        for diagnostic in &params.context.diagnostics {
+        if wants_sort
+            && let Some(action) = sort_action(&uri, &document, &options)
+        {
+            actions.push(CodeActionOrCommand::CodeAction(action));
+        }
+
+        for diagnostic in params.context.diagnostics.iter().filter(|_| wants_quickfix) {
             if diagnostic.source.as_deref() != Some(SOURCE_NAME) {
                 continue;
             }
@@ -747,6 +767,48 @@ fn remove_action(uri: &Url, diagnostic: &Diagnostic, token: &str) -> CodeAction 
         edit: Some(single_edit(uri, diagnostic.range, String::new())),
         ..Default::default()
     }
+}
+
+/// A source action rather than a quickfix: nothing is broken, the classes are
+/// just not in canonical order, so it must not surface as a lightbulb fix.
+fn sort_action_kind() -> CodeActionKind {
+    CodeActionKind::new("source.sortVelaClasses")
+}
+
+fn sort_action(
+    uri: &Url,
+    document: &Document,
+    options: &vela_rbxts_compiler::EditorOptions,
+) -> Option<CodeAction> {
+    let response = vela_rbxts_compiler::sort_class_names(SortClassNamesRequest {
+        source: document.text.clone(),
+        options: Some(options.clone()),
+    });
+    if response.edits.is_empty() {
+        return None;
+    }
+
+    let edits: Vec<TextEdit> = response
+        .edits
+        .into_iter()
+        .map(|edit| TextEdit {
+            range: document.range_to_lsp_range(edit.range.start, edit.range.end),
+            new_text: edit.text,
+        })
+        .collect();
+
+    let mut changes = HashMap::new();
+    changes.insert(uri.clone(), edits);
+
+    Some(CodeAction {
+        title: "Sort vela-rbxts classes".to_owned(),
+        kind: Some(sort_action_kind()),
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        ..Default::default()
+    })
 }
 
 fn single_edit(uri: &Url, range: Range, new_text: String) -> WorkspaceEdit {

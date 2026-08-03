@@ -379,6 +379,27 @@ async function main() {
 		);
 	}
 
+	const sortActions = await request("textDocument/codeAction", {
+		textDocument: { uri: diagnosticsFixture.uri },
+		range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+		context: { diagnostics: [], only: ["source.sortVelaClasses"] },
+	});
+	const sortAction = (sortActions ?? []).find(
+		(action) => action.kind === "source.sortVelaClasses",
+	);
+	check(sortAction, "source action should offer sorting the class names");
+	const sortEdits = sortAction?.edit?.changes?.[diagnosticsFixture.uri] ?? [];
+	check(
+		sortEdits.length > 0,
+		"sort action should carry at least one class name edit",
+	);
+	check(
+		sortEdits.every(
+			(edit) => !sliceRange(diagnosticsFixture.text, edit.range).includes('"'),
+		),
+		"sort edits should stay inside the class name string",
+	);
+
 	const completionsFixture = openFixture("Completions.tsx");
 	await waitForDiagnostics(completionsFixture.uri);
 	const typed = "md:bg-sl";

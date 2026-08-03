@@ -12,8 +12,11 @@ export type {
 	EditorOptions,
 	EditorRange,
 	HoverContent,
+	ClassNameEdit,
 	HoverRequest,
 	HoverResponse,
+	SortClassNamesRequest,
+	SortClassNamesResponse,
 	TransformOptions,
 	TransformResult,
 } from "./index";
@@ -23,5 +26,6 @@ export {
 	getDocumentColors,
 	getHover,
 	implementationKind,
+	sortClassNames,
 	transform,
 } from "./index";
