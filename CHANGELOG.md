@@ -11,6 +11,7 @@ Versions are released in lockstep across every workspace package.
 
 ### Added
 
+- Class sorting: the compiler exposes a canonical class order as per-`className` edits, and the LSP offers it as the `source.sortVelaClasses` source action, which editors can also run on save. Utilities that can write the same Roblox property sort as one group, so the sort never changes which one wins.
 - Arbitrary length values: `[16px]`, `[16]`, `[50%]` and their negatives resolve on the spacing, size, position, radius, and scrollbar-width families, on both the static and the runtime path. `text-[13px]`, `leading-[1.6]`, `rotate-[17deg]`, `z-[15]`, and `border-[3px]`/`ring-[3px]`/`outline-[3px]` read the number in their own unit. A payload the family cannot read still reports `unsupported-arbitrary-value`.
 - `dark:` runtime variant. Roblox exposes no color scheme to a running game, so the app owns it: `dark:` matches when `Players.LocalPlayer` carries `VelaColorScheme = "dark"`, and the runtime host follows the attribute's change signal. An instance attribute is the only shared source that works here, since the runtime helper is inlined per module.
 - `active:` and `focus:` runtime variants. `active:` follows mouse and touch presses through `InputBegan`/`InputEnded` (clearing on `MouseLeave`, since a release outside the element never reaches it), and `focus:` follows `Focused`/`FocusLost` on a `textbox` and `SelectionGained`/`SelectionLost` on every other element. Both compose with the consumer's own `Event` handlers and tween when the element carries `transition`.

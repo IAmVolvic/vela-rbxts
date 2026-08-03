@@ -423,7 +423,21 @@ Install **Vela LSP** (`astra-void.vela-rbxts-lsp`) for VS Code, or point any oth
 
 The standalone Rust LSP lives in `packages/lsp`. It reuses the native compiler as the semantic engine and only handles transport, document state, and protocol translation, so what the editor tells you about a class is what the compiler would do with it.
 
-It provides completions inside a `className` (and nowhere else), hover, push diagnostics, document colors and color presentations, quickfix code actions, and document highlight. It does not provide go-to-definition, references, rename, formatting, semantic tokens, inlay hints, or signature help.
+It provides completions inside a `className` (and nowhere else), hover, push diagnostics, document colors and color presentations, quickfix code actions, class sorting, and document highlight. It does not provide go-to-definition, references, rename, formatting, semantic tokens, inlay hints, or signature help.
+
+### Sorting Classes
+
+The `source.sortVelaClasses` action rewrites every `className` in the file into a canonical order — layout, then box, then color, then typography, then motion, with variant-prefixed utilities after the plain ones. Run it from the editor's source-action menu, or on save:
+
+```json
+{
+  "editor.codeActionsOnSave": {
+    "source.sortVelaClasses": "explicit"
+  }
+}
+```
+
+Sorting never changes what an element renders. Utilities that can write the same Roblox property — `gap-*` with `space-*`, `border-*`/`ring-*`/`outline-*`, `w-*`/`h-*`/`size-*`, `opacity-*` with a `bg-*/N` modifier — sort as one group, so the one you wrote last stays last.
 
 Prebuilt binaries cover darwin arm64 and x64, linux x64 gnu and musl, linux arm64 gnu, and win32 x64. Linux arm64 musl and Windows on ARM have no binary on any channel and need a build from source.
 
