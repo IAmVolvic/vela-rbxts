@@ -1,5 +1,5 @@
 use crate::api::{CompletionItem, CompletionRequest, CompletionResponse};
-use crate::config::model::TailwindConfig;
+use crate::config::model::{PluginUtility, TailwindConfig};
 use crate::editor::colors::parse_color3_from_rgb;
 use crate::editor::{
     class_name_context_at_position, current_prefix, current_token_replacement,
@@ -103,6 +103,17 @@ fn completion_candidates(
         });
     }
 
+    for item in plugin_utility_candidates(config) {
+        let Some(score) = match_score(&item.label, prefix) else {
+            continue;
+        };
+
+        let mut item = item;
+        // A project's own utilities rank ahead of the built-ins on a tie.
+        item.sort_text = Some(sort_text(score.saturating_sub(1), &item.label));
+        items.push(item);
+    }
+
     for base in base_utility_candidates(config) {
         if !is_utility_allowed_on_host(element_tag, &base.utility_kind) {
             continue;
@@ -173,6 +184,41 @@ fn color_swatch(config: &TailwindConfig, color_key: &str) -> Option<String> {
 
     let (red, green, blue) = parse_color3_from_rgb(&value)?;
     Some(format!("#{red:02x}{green:02x}{blue:02x}"))
+}
+
+fn plugin_utility_candidates(config: &TailwindConfig) -> Vec<CompletionItem> {
+    config
+        .plugins
+        .utilities
+        .iter()
+        .map(|(name, utility)| CompletionItem {
+            label: name.clone(),
+            insert_text: name.clone(),
+            kind: "plugin utility".to_owned(),
+            category: "plugin".to_owned(),
+            documentation: describe_plugin_utility(utility),
+            replacement: None,
+            color: None,
+            sort_text: None,
+        })
+        .collect()
+}
+
+pub(crate) fn describe_plugin_utility(utility: &PluginUtility) -> String {
+    match utility {
+        PluginUtility::Classes(classes) => {
+            format!("Plugin utility for `{classes}`.")
+        }
+        PluginUtility::Props(props) => {
+            let body = props
+                .iter()
+                .map(|(name, value)| format!("`{name} = {value}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            format!("Plugin utility setting {body}.")
+        }
+    }
 }
 
 fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {

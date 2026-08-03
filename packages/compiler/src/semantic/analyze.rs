@@ -14,21 +14,9 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
         .find(|variant| variant.kind.is_none())
         .map(|variant| variant.raw.clone());
 
-    let runtime_condition = if parsed.variants.is_empty() || unknown_variant.is_some() {
-        None
-    } else {
-        let conditions: Vec<_> = parsed
-            .variants
-            .iter()
-            .filter_map(|variant| variant.runtime_condition())
-            .collect();
-
-        Some(if conditions.len() == 1 {
-            conditions.into_iter().next().unwrap()
-        } else {
-            crate::ir::model::RuntimeCondition::All { conditions }
-        })
-    };
+    let runtime_condition = super::plugin::variants_runtime_condition(&parsed.variants)
+        .ok()
+        .flatten();
 
     let mut issues = Vec::new();
     if let Some(variant) = unknown_variant.clone() {

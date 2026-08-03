@@ -1,4 +1,5 @@
 pub(crate) mod analyze;
+pub(crate) mod plugin;
 pub(crate) mod result;
 pub(crate) mod token;
 pub(crate) mod utility;

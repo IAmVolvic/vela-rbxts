@@ -32,6 +32,7 @@ import {
 	defaultConfig,
 	defineConfig,
 	PALETTE_DEFAULT_KEY,
+	plugin,
 	SHADES,
 } from "@vela-rbxts/config";
 
@@ -114,6 +115,7 @@ function loadProjectConfig(configFilePath: string): TailwindConfig {
 		"__dirname",
 		"defineConfig",
 		"defaultConfig",
+		"plugin",
 		transpiled.outputText,
 	) as (
 		exports: unknown,
@@ -123,6 +125,7 @@ function loadProjectConfig(configFilePath: string): TailwindConfig {
 		dirname: string,
 		defineConfig: ConfigLoader,
 		defaultConfig: TailwindConfig,
+		plugin: typeof import("@vela-rbxts/config").plugin,
 	) => void;
 
 	executeModule(
@@ -133,6 +136,7 @@ function loadProjectConfig(configFilePath: string): TailwindConfig {
 		path.dirname(configFilePath),
 		defineConfig,
 		defaultConfig,
+		plugin,
 	);
 
 	return coerceTailwindConfig(
@@ -385,8 +389,15 @@ function isTailwindConfig(value: unknown): value is TailwindConfig {
 		isRecord(value.theme) &&
 		isThemeColors(value.theme.colors) &&
 		isThemeScale(value.theme.radius) &&
-		isThemeScale(value.theme.spacing)
+		isThemeScale(value.theme.spacing) &&
+		// A `plugins` array still holds unrun handlers, so the config has to go
+		// back through `defineConfig()` rather than be taken as resolved.
+		(value.plugins === undefined || isResolvedPlugins(value.plugins))
 	);
+}
+
+function isResolvedPlugins(value: unknown): boolean {
+	return isRecord(value) && isRecord(value.utilities);
 }
 
 function isThemeColors(value: unknown): value is ThemeColors {

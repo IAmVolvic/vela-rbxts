@@ -5,6 +5,7 @@ use crate::semantic::utility::{PaddingKind, UtilityKind};
 use crate::semantic::variant::RUNTIME_VARIANTS;
 
 pub(crate) fn sort_class_names_impl(request: SortClassNamesRequest) -> SortClassNamesResponse {
+    let config = crate::editor::parse_editor_config(request.options.as_ref());
     let mut edits = Vec::new();
 
     for context in collect_class_name_contexts(&request.source) {
@@ -14,7 +15,7 @@ pub(crate) fn sort_class_names_impl(request: SortClassNamesRequest) -> SortClass
         }
 
         let mut order: Vec<usize> = (0..tokens.len()).collect();
-        order.sort_by_key(|index| sort_key(&tokens[*index].text, *index));
+        order.sort_by_key(|index| sort_key(&tokens[*index].text, *index, &config));
         if order.iter().enumerate().all(|(to, from)| to == *from) {
             continue;
         }
@@ -38,7 +39,11 @@ pub(crate) fn sort_class_names_impl(request: SortClassNamesRequest) -> SortClass
 /// The last part is what keeps the sort stable, and stability is what keeps it
 /// safe: utilities that write the same Roblox property share a group, so
 /// reordering never changes which one wins.
-fn sort_key(token: &str, index: usize) -> (Vec<usize>, u32, usize) {
+fn sort_key(
+    token: &str,
+    index: usize,
+    config: &crate::config::model::TailwindConfig,
+) -> (Vec<usize>, i64, usize) {
     let analysis = analyze_class_token(token);
     let variants = analysis
         .parsed
@@ -47,8 +52,24 @@ fn sort_key(token: &str, index: usize) -> (Vec<usize>, u32, usize) {
         .map(|variant| variant_rank(&variant.raw))
         .collect();
 
-    (variants, group_rank(&analysis.utility), index)
+    // A plugin utility bundles whole property groups, so it leads: a utility
+    // written beside it is the one meant to win.
+    let group = if crate::semantic::plugin::lookup_plugin_utility(
+        config,
+        crate::semantic::variant::split_variant_prefixes(token).1,
+    )
+    .is_some()
+    {
+        PLUGIN_UTILITY_RANK
+    } else {
+        group_rank(&analysis.utility).into()
+    };
+
+    (variants, group, index)
 }
+
+/// Ahead of every `group_rank`, so a plugin utility sorts to the front.
+const PLUGIN_UTILITY_RANK: i64 = -1;
 
 fn variant_rank(prefix: &str) -> usize {
     RUNTIME_VARIANTS

@@ -199,46 +199,46 @@ impl VisitMut for VelaTransformer {
             );
             if !lowered.style_ir.runtime_rules.is_empty() {
                 attrs.push(create_prop_attr(PropEntry {
-                    name: "__velaRules",
+                    name: "__velaRules".into(),
                     value: serde_json::to_string(&lowered.style_ir.runtime_rules)
                         .expect("runtime rules must serialize to JSON"),
                 }));
             }
             if let Some(transition) = &lowered.style_ir.transition {
                 attrs.push(create_prop_attr(PropEntry {
-                    name: "__velaTransition",
+                    name: "__velaTransition".into(),
                     value: serde_json::to_string(transition)
                         .expect("transition must serialize to JSON"),
                 }));
             }
             if let Some(animation) = &lowered.style_ir.animation {
                 attrs.push(create_prop_attr(PropEntry {
-                    name: "__velaAnimation",
+                    name: "__velaAnimation".into(),
                     value: format!("\"{animation}\""),
                 }));
             }
             if let Some(text) = &lowered.style_ir.text {
                 attrs.push(create_prop_attr(PropEntry {
-                    name: "__velaText",
+                    name: "__velaText".into(),
                     value: serde_json::to_string(text).expect("text spec must serialize to JSON"),
                 }));
             }
             if let Some(divide) = &lowered.style_ir.divide {
                 attrs.push(create_prop_attr(PropEntry {
-                    name: "__velaDivide",
+                    name: "__velaDivide".into(),
                     value: serde_json::to_string(divide)
                         .expect("divide spec must serialize to JSON"),
                 }));
             }
             if let Some(margin) = &lowered.style_ir.margin {
                 attrs.push(create_prop_attr(PropEntry {
-                    name: "__velaMargin",
+                    name: "__velaMargin".into(),
                     value: serde_json::to_string(margin)
                         .expect("margin spec must serialize to JSON"),
                 }));
             }
             attrs.push(create_prop_attr(PropEntry {
-                name: "__velaTag",
+                name: "__velaTag".into(),
                 value: runtime_tag,
             }));
             element.opening.name =

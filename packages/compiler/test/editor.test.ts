@@ -6,7 +6,7 @@ import {
 	sortClassNames,
 } from "@vela-rbxts/compiler";
 import { expect, test } from "vitest";
-import { defineConfig } from "../../config/src/index";
+import { defineConfig, plugin } from "../../config/src/index";
 
 function positionAfter(source: string, needle: string) {
 	const index = source.indexOf(needle);
@@ -1360,9 +1360,9 @@ test("sorts class names into a canonical order", () => {
 	expect(result.edits[0].text).toBe(
 		"flex-col w-40 p-4 bg-slate-700 rounded-md hover:bg-blue-600",
 	);
-	expect(source.slice(result.edits[0].range.start, result.edits[0].range.end)).toBe(
-		"p-4 bg-slate-700 hover:bg-blue-600 w-40 flex-col rounded-md",
-	);
+	expect(
+		source.slice(result.edits[0].range.start, result.edits[0].range.end),
+	).toBe("p-4 bg-slate-700 hover:bg-blue-600 w-40 flex-col rounded-md");
 });
 
 test("leaves an already sorted class name alone", () => {
@@ -1381,4 +1381,75 @@ test("keeps utilities that fight over one Roblox property in their written order
 	});
 
 	expect(result.edits[0].text).toBe("space-y-2 gap-4 bg-slate-700");
+});
+
+const pluginOptions = {
+	configJson: JSON.stringify(
+		defineConfig({
+			plugins: [
+				plugin(({ addUtilities }) => {
+					addUtilities({
+						btn: "bg-blue-600 rounded-lg px-4",
+						panel: { BackgroundColor3: "Color3.fromRGB(1, 2, 3)" },
+					});
+				}),
+			],
+		}),
+	),
+};
+
+test("completes the project's own plugin utilities", () => {
+	const source = '<frame className="bt" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, "bt"),
+		options: pluginOptions,
+	});
+
+	expect(result.items).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				label: "btn",
+				kind: "plugin utility",
+				documentation: "Plugin utility for `bg-blue-600 rounded-lg px-4`.",
+			}),
+		]),
+	);
+});
+
+test("hovers a plugin utility with what it expands to", () => {
+	const source = '<frame className="hover:panel" />';
+	const result = getHover({
+		source,
+		position: positionAfter(source, "hover:pan"),
+		options: pluginOptions,
+	});
+
+	expect(result.contents?.display).toBe("`hover:panel`");
+	expect(result.contents?.documentation).toContain("Runtime variant `hover`");
+	expect(result.contents?.documentation).toContain(
+		"`BackgroundColor3 = Color3.fromRGB(1, 2, 3)`",
+	);
+});
+
+test("does not report a plugin utility as an unknown family", () => {
+	const withPlugins = getDiagnostics({
+		source: '<frame className="btn panel" />',
+		options: pluginOptions,
+	});
+	expect(withPlugins.diagnostics).toEqual([]);
+
+	const withoutPlugins = getDiagnostics({
+		source: '<frame className="btn panel" />',
+	});
+	expect(withoutPlugins.diagnostics).toHaveLength(2);
+});
+
+test("sorts a plugin utility ahead of the utilities that override it", () => {
+	const result = sortClassNames({
+		source: '<frame className="bg-slate-700 btn p-4" />',
+		options: pluginOptions,
+	});
+
+	expect(result.edits[0].text).toBe("btn p-4 bg-slate-700");
 });

@@ -395,7 +395,7 @@ Where it matters, branch between two fully static string literals so both branch
 
 The project config file is named `vela.config.ts` or `vela.config.json` — those exact filenames, with no `.js`, `.mjs`, or `.cjs` variant. The host resolves it by walking upward from each source file and loading the nearest one it finds, preferring `.ts` within a directory and falling back to the built-in defaults when there is none. See [step 3](#3-add-velaconfigts) for the shape and [Theme Axes](#theme-axes) for the merge rules.
 
-The schema is only `preflight`, `theme.colors`, `theme.radius`, `theme.spacing`, `theme.fontFamily`, and their `theme.extend` counterparts. There is no `content`, `plugins`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
+The schema is only `preflight`, `plugins`, `theme.colors`, `theme.radius`, `theme.spacing`, `theme.fontFamily`, and their `theme.extend` counterparts. There is no `content`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
 
 ### `preflight`
 
@@ -409,6 +409,90 @@ Preflight is on by default. Turn it off to keep the engine defaults:
 
 ```ts
 export default defineConfig({ preflight: false });
+```
+
+### `plugins`
+
+A plugin registers class names of your own. It is a function wrapped in `plugin()`, the way a Tailwind plugin is, and it runs while the config resolves — so what reaches the compiler is a plain table of utilities, not a function.
+
+```ts
+// vela.config.ts
+import { defineConfig, plugin } from "vela-rbxts";
+
+export default defineConfig({
+  plugins: [
+    plugin(({ addUtilities, theme }) => {
+      addUtilities({
+        // A class list: `btn` stands for the utilities on the right.
+        btn: "bg-blue-600 rounded-lg px-4 py-2 hover:bg-blue-700",
+        // A property map: Roblox properties, as roblox-ts expression strings.
+        panel: {
+          BackgroundColor3: theme("colors.slate.800"),
+          BorderSizePixel: "0",
+        },
+      });
+    }),
+  ],
+});
+```
+
+```tsx
+<textbutton className="btn" />
+<frame className="panel w-80 md:w-96" />
+```
+
+Both forms are ordinary class tokens once registered:
+
+- **Variants compose.** `md:btn` prefixes every class the utility expands to, and a `hover:` written inside the body composes with it — `md:btn` above resolves `md:hover:bg-blue-700`.
+- **They work on both lowering paths.** A plugin utility inside a dynamic `className` resolves in-game through the same table, which the runtime helper carries.
+- **They can reach each other.** `addUtilities({ card: "panel rounded-xl" })` expands `panel` in turn. A cycle is dropped rather than expanded forever.
+- **Sorting puts them first.** `source.sortVelaClasses` moves a plugin utility ahead of the plain utilities, so a `bg-*` written beside it is the one that wins.
+- **They are not the only extension point.** `setMotionDriver` below replaces what drives `transition` and `animate-*`.
+- **Names are class tokens, not selectors.** A leading `.` is accepted and stripped, since Tailwind plugins are written that way; a `:` is not, because variants belong at the use site.
+
+What a plugin utility expands to is checked where it is used, and a class the body cannot resolve is reported on the token you wrote: `Plugin utility "btn" expands to "bg-nope-500": Unknown theme key "nope-500" …`. A property map is **not** checked — the property name and the expression are emitted as written, and neither is validated against the host element, so `panel` on a `textlabel` is your responsibility.
+
+`theme("colors.slate.800")` reads the resolved theme, including your own `theme.extend` values, and throws when the key is missing unless a second argument gives a fallback. Later plugins overwrite an earlier utility of the same name.
+
+#### Replacing the motion driver
+
+`transition` and `animate-*` run on `TweenService` by default. `setMotionDriver` points the inlined runtime host at a module of your own instead — a spring library, a shared animation service, whatever the project already uses:
+
+```ts
+plugin(({ setMotionDriver }) => {
+  setMotionDriver({ module: "@rbxts/vela-spring", export: "springDriver" });
+});
+```
+
+The module is imported by the runtime helper, which is inlined into **every** transformed module at whatever depth it sits — so the specifier has to resolve from any of them. Use a package name or a `baseUrl`-relative path (`"client/motion"`); a relative `./motion` is rejected. Omit `export` to import the default export.
+
+The driver is an object with two optional methods:
+
+```ts
+export const springDriver = {
+  // Only the properties that changed, plus the resolved `transition` spec
+  // ({ time, style, direction, delay, property }).
+  transition(instance: Instance, goal: Record<string, unknown>, spec) { … },
+  // `animate-spin` and friends, by name. Return a cleanup for when the
+  // animation is taken away.
+  animate(instance: Instance, animation: string) { … return () => {}; },
+};
+```
+
+Each method is taken over independently, so a driver that only implements `transition` keeps the built-in `animate-*` presets. **A driver that implements `transition` owns writing those properties**: while a transition is in play the element renders its held value and never assigns the new one itself, so a driver that does nothing leaves the instance where it was.
+
+Because a JSON config cannot hold a function, `vela.config.json` states the resolved result instead:
+
+```json
+{
+  "plugins": {
+    "utilities": {
+      "btn": "bg-blue-600 rounded-lg px-4 py-2",
+      "panel": { "BorderSizePixel": "0" }
+    },
+    "motion": { "module": "client/motion", "export": "springDriver" }
+  }
+}
 ```
 
 The `.ts` config is transpiled and executed rather than type-checked, so a type error in it passes silently while a syntax error fails the build. The `.json` config is parsed, with a `$schema` key ignored. Project `paths` and ambient types are not available inside it. It is also re-read and re-executed for every eligible source file, so keep it cheap.

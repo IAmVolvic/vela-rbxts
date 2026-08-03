@@ -1,7 +1,12 @@
 import { expect, test } from "vitest";
 
 import defaultsInput from "../src/defaults.json" with { type: "json" };
-import { defaultConfig, defineConfig, resolveThemeColors } from "../src/index";
+import {
+	defaultConfig,
+	defineConfig,
+	plugin,
+	resolveThemeColors,
+} from "../src/index";
 
 function expectPalette(value: unknown, entries: Record<string, string>) {
 	expect(value).toEqual(entries);
@@ -126,4 +131,130 @@ test("top-level colors replace the final family set", () => {
 
 	expect(Object.keys(config.theme.colors)).toEqual(["brand"]);
 	expect(config.theme.colors.brand).toBe("Color3.fromRGB(1, 2, 3)");
+});
+
+test("plugins register utilities against the resolved theme", () => {
+	const config = defineConfig({
+		theme: {
+			extend: {
+				colors: { brand: "Color3.fromRGB(1, 2, 3)" },
+			},
+		},
+		plugins: [
+			plugin(({ addUtilities, theme }) => {
+				addUtilities({
+					".btn": "bg-brand rounded-lg px-4",
+					panel: { BackgroundColor3: theme("colors.brand") },
+				});
+			}),
+		],
+	});
+
+	expect(config.plugins.utilities).toEqual({
+		btn: "bg-brand rounded-lg px-4",
+		panel: { BackgroundColor3: "Color3.fromRGB(1, 2, 3)" },
+	});
+});
+
+test("a later plugin overrides an earlier utility of the same name", () => {
+	const config = defineConfig({
+		plugins: [
+			plugin(({ addUtilities }) => addUtilities({ btn: "px-2" })),
+			plugin(({ addUtilities }) => addUtilities({ btn: "px-4" })),
+		],
+	});
+
+	expect(config.plugins.utilities.btn).toBe("px-4");
+});
+
+test("rejects utility names and values a class token cannot carry", () => {
+	const register = (utilities: Record<string, unknown>) =>
+		defineConfig({
+			plugins: [
+				plugin(({ addUtilities }) =>
+					addUtilities(utilities as Record<string, string>),
+				),
+			],
+		});
+
+	expect(() => register({ "hover:btn": "px-4" })).toThrow(/not a usable class/);
+	expect(() => register({ btn: "  " })).toThrow(/empty class list/);
+	expect(() => register({ btn: { "Background Color3": "x" } })).toThrow(
+		/not a Roblox property name/,
+	);
+	expect(() => register({ btn: { BackgroundColor3: 3 } })).toThrow(
+		/non-string value/,
+	);
+});
+
+test("theme() reports a key the theme does not hold", () => {
+	expect(() =>
+		defineConfig({
+			plugins: [
+				plugin(({ addUtilities, theme }) =>
+					addUtilities({ btn: { BackgroundColor3: theme("colors.nope") } }),
+				),
+			],
+		}),
+	).toThrow(/not a key of the resolved theme/);
+
+	const config = defineConfig({
+		plugins: [
+			plugin(({ addUtilities, theme }) =>
+				addUtilities({
+					btn: {
+						BackgroundColor3: theme("colors.nope", "Color3.fromRGB(0, 0, 0)"),
+						TextColor3: theme("colors.slate.500"),
+					},
+				}),
+			),
+		],
+	});
+
+	expect(config.plugins.utilities.btn).toEqual({
+		BackgroundColor3: "Color3.fromRGB(0, 0, 0)",
+		TextColor3: "Color3.fromRGB(98, 116, 142)",
+	});
+});
+
+test("a JSON config states its plugin utilities already resolved", () => {
+	const config = defineConfig({
+		plugins: { utilities: { btn: "px-4" } },
+	});
+
+	expect(config.plugins.utilities).toEqual({ btn: "px-4" });
+});
+
+test("a plugin can replace the motion driver", () => {
+	const config = defineConfig({
+		plugins: [
+			plugin(({ setMotionDriver }) =>
+				setMotionDriver({
+					module: "@rbxts/vela-spring",
+					export: "springDriver",
+				}),
+			),
+		],
+	});
+
+	expect(config.plugins.motion).toEqual({
+		module: "@rbxts/vela-spring",
+		export: "springDriver",
+	});
+});
+
+test("the motion driver module has to resolve from every module", () => {
+	const setDriver = (driver: { module: string; export?: string }) =>
+		defineConfig({
+			plugins: [plugin(({ setMotionDriver }) => setMotionDriver(driver))],
+		});
+
+	expect(() => setDriver({ module: "./motion" })).toThrow(
+		/relative path cannot resolve/,
+	);
+	expect(() => setDriver({ module: "  " })).toThrow(/no module/);
+	expect(() => setDriver({ module: "m", export: "not an identifier" })).toThrow(
+		/not an identifier/,
+	);
+	expect(setDriver({ module: "m" }).plugins.motion).toEqual({ module: "m" });
 });

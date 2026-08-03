@@ -24,11 +24,12 @@ use crate::diagnostics::compiler::{
     unsupported_z_index_value_diagnostic,
 };
 use crate::ir::model::{
-    DivideSpec, MarginSpec, PropEntry, RuntimeRule, SizeAxisValue, StyleIr, TextSpec,
-    TransitionSpec,
+    DivideSpec, MarginSpec, PropEntry, RuntimeRule, SizeAxisValue, StyleEffectBundle, StyleIr,
+    TextSpec, TransitionSpec,
 };
 use crate::semantic::{
     analyze::analyze_class_token,
+    plugin::{ExpandedToken, expand_class_token, variants_runtime_condition},
     result::{AnalyzedClassToken, SemanticIssue},
     utility::{
         BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorFamilySpec, ColorResolution,
@@ -56,6 +57,7 @@ use crate::semantic::{
         resolve_visibility_value, resolve_whitespace_value, resolve_z_index_value,
         spacing_value_to_offset, split_color_opacity,
     },
+    variant::{ParsedVariant, split_variant_prefixes},
 };
 
 /// `element_tag` is `None` for a component, whose Roblox host element is not
@@ -74,39 +76,104 @@ where
     let mut pending = PendingAxes::default();
 
     for token in tokens {
-        let analysis = analyze_class_token(token.as_ref());
-        debug_assert_eq!(analysis.static_only, !analysis.runtime_aware);
+        for expanded in expand_class_token(token.as_ref(), config) {
+            let (token, origin) = match expanded {
+                ExpandedToken::Props {
+                    origin,
+                    variants,
+                    props,
+                } => {
+                    apply_plugin_props(&origin, &variants, props, diagnostics, &mut style);
+                    continue;
+                }
+                ExpandedToken::Class { token, origin } => (token, origin),
+            };
 
-        if analysis.runtime_aware {
-            let condition = analysis
-                .runtime_condition
-                .clone()
-                .expect("runtime-aware analysis must carry a runtime condition");
-            let runtime_style =
-                resolve_single_analyzed_token(&analysis, config, element_tag, diagnostics);
-            if !runtime_style.base.props.is_empty() || !runtime_style.base.helpers.is_empty() {
-                style.runtime_rules.push(RuntimeRule {
-                    condition,
-                    effects: runtime_style.base,
-                });
+            let analysis = analyze_class_token(&token);
+            debug_assert_eq!(analysis.static_only, !analysis.runtime_aware);
+            let diagnostics_before = diagnostics.len();
+
+            if analysis.runtime_aware {
+                let condition = analysis
+                    .runtime_condition
+                    .clone()
+                    .expect("runtime-aware analysis must carry a runtime condition");
+                let runtime_style =
+                    resolve_single_analyzed_token(&analysis, config, element_tag, diagnostics);
+                if !runtime_style.base.props.is_empty() || !runtime_style.base.helpers.is_empty() {
+                    style.runtime_rules.push(RuntimeRule {
+                        condition,
+                        effects: runtime_style.base,
+                    });
+                }
+            } else {
+                apply_analyzed_token(
+                    &analysis,
+                    config,
+                    element_tag,
+                    diagnostics,
+                    &mut style,
+                    &mut pending,
+                );
             }
-            continue;
-        }
 
-        apply_analyzed_token(
-            &analysis,
-            config,
-            element_tag,
-            diagnostics,
-            &mut style,
-            &mut pending,
-        );
+            if let Some(origin) = origin {
+                repoint_plugin_diagnostics(&mut diagnostics[diagnostics_before..], &origin, &token);
+            }
+        }
     }
 
     pending.flush(&mut style, SizeEmission::Combined);
     default_list_layout_sort_order(&mut style);
     reset_variant_color_opacity(&mut style);
     style
+}
+
+/// A plugin utility that names Roblox properties bypasses the utility tables,
+/// so it lands on the base bundle or, under a variant, on a runtime rule.
+fn apply_plugin_props(
+    origin: &str,
+    variants: &[ParsedVariant],
+    props: Vec<(String, String)>,
+    diagnostics: &mut Vec<Diagnostic>,
+    style: &mut StyleIr,
+) {
+    match variants_runtime_condition(variants) {
+        Err(unknown) => diagnostics.push(unknown_variant_diagnostic(&unknown, origin)),
+        Ok(None) => {
+            for (name, value) in props {
+                style.set_prop(name, value);
+            }
+        }
+        Ok(Some(condition)) => style.runtime_rules.push(RuntimeRule {
+            condition,
+            effects: StyleEffectBundle {
+                props: props
+                    .into_iter()
+                    .map(|(name, value)| PropEntry {
+                        name: name.into(),
+                        value,
+                    })
+                    .collect(),
+                helpers: Vec::new(),
+            },
+        }),
+    }
+}
+
+/// An expanded token is not in the source, so its diagnostics are re-pointed at
+/// the plugin utility the reader actually wrote.
+fn repoint_plugin_diagnostics(diagnostics: &mut [Diagnostic], origin: &str, expanded: &str) {
+    let (_, name) = split_variant_prefixes(origin);
+
+    for diagnostic in diagnostics {
+        diagnostic.message = format!(
+            "Plugin utility \"{name}\" expands to \"{expanded}\": {}",
+            diagnostic.message
+        );
+        diagnostic.token = Some(origin.to_owned());
+        diagnostic.range = None;
+    }
 }
 
 /// `UIListLayout.SortOrder` defaults to `Name`, which would sort children by
@@ -126,7 +193,7 @@ fn default_list_layout_sort_order(style: &mut StyleIr) {
     }
 
     helper.props.push(PropEntry {
-        name: "SortOrder",
+        name: "SortOrder".into(),
         value: "Enum.SortOrder.LayoutOrder".to_owned(),
     });
 }
@@ -197,7 +264,7 @@ fn reset_variant_color_opacity(style: &mut StyleIr) {
                 .any(|prop| prop.name == spec.color_prop);
             if sets_color && !sets_transparency(&rule.effects.props) {
                 rule.effects.props.push(PropEntry {
-                    name: transparency_prop,
+                    name: transparency_prop.into(),
                     value: "0".to_owned(),
                 });
             }

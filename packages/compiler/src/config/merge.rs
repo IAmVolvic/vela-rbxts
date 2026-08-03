@@ -1,4 +1,21 @@
-use crate::config::model::{ColorInputMap, ColorValue, TailwindConfig, ThemeColors, ThemeScale};
+use crate::config::model::{
+    ColorInputMap, ColorValue, PluginConfig, TailwindConfig, ThemeColors, ThemeScale,
+};
+
+fn merge_plugin_config(base: &PluginConfig, input: Option<PluginConfig>) -> PluginConfig {
+    let Some(input) = input else {
+        return base.clone();
+    };
+
+    let mut merged = base.clone();
+    merged.utilities.extend(input.utilities);
+
+    if input.motion.is_some() {
+        merged.motion = input.motion;
+    }
+
+    merged
+}
 
 pub(crate) fn merge_color_registry(
     base: &ThemeColors,
@@ -96,10 +113,12 @@ pub(crate) fn resolve_config_input(
     base: &TailwindConfig,
 ) -> TailwindConfig {
     let preflight = input.preflight.unwrap_or(base.preflight);
+    let plugins = merge_plugin_config(&base.plugins, input.plugins);
 
     let Some(theme) = input.theme else {
         return TailwindConfig {
             preflight,
+            plugins,
             ..base.clone()
         };
     };
@@ -108,6 +127,7 @@ pub(crate) fn resolve_config_input(
 
     TailwindConfig {
         preflight,
+        plugins,
         theme: crate::config::model::ThemeConfig {
             colors: resolve_color_input(
                 &base.theme.colors,

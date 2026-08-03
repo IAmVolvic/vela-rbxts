@@ -109,6 +109,21 @@ const requiredFragments = [
 	"TextSize = 13",
 	"LineHeight = 1.6",
 	"ZIndex = 15",
+	// Plugin utilities: the class list expands statically and the property map
+	// lands verbatim.
+	"BackgroundColor3 = (Color3.fromRGB(29, 41, 61))",
+	"BackgroundColor3 = Color3.fromRGB(69, 85, 108)",
+	"LayoutOrder = 7",
+	// The configured motion driver is imported and drives transitions; the
+	// preset animations it does not implement stay on the built-in path.
+	"harnessMotionDriver",
+	'TS.import(script, script.Parent, "motion").harnessMotionDriver',
+	"__VelaMotionDriver = __VelaMotionDriverSource",
+	"local driven = __VelaMotionDriver.transition",
+	"local driven = __VelaMotionDriver.animate",
+	// The runtime resolver reads the same plugin table for a dynamic className.
+	"pluginUtilities",
+	'["harness-card"] = "bg-slate-800 rounded-lg p-2 hover:bg-slate-700"',
 	"__createVelaRuntimeHost",
 	"React.createElement(VelaRuntimeHost",
 	"__velaRules",

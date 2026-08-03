@@ -73,6 +73,19 @@ fn describe_token(
     let analysis = analyze_class_token(token);
     let variant_prefix = variant_prefix(&analysis);
 
+    if let Some(utility) = crate::semantic::plugin::lookup_plugin_utility(
+        config,
+        crate::semantic::variant::split_variant_prefixes(token).1,
+    ) {
+        return Some(HoverContent {
+            display: format!("`{token}`"),
+            documentation: format!(
+                "{variant_prefix}{}",
+                crate::editor::completions::describe_plugin_utility(utility)
+            ),
+        });
+    }
+
     if !is_utility_allowed_on_host(element_tag, &analysis.utility) {
         let element_tag = element_tag.unwrap_or_default();
         return Some(HoverContent {

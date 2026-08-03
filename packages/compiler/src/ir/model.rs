@@ -1,8 +1,13 @@
 use serde::Serialize;
+use std::borrow::Cow;
+
+/// Owned rather than `&'static str` because a plugin utility names its props in
+/// the project's own config.
+pub(crate) type PropName = Cow<'static, str>;
 
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct PropEntry {
-    pub(crate) name: &'static str,
+    pub(crate) name: PropName,
     pub(crate) value: String,
 }
 
@@ -129,16 +134,24 @@ impl SizeAxisValue {
 }
 
 impl StyleIr {
-    pub(crate) fn set_prop(&mut self, name: &'static str, value: String) {
+    pub(crate) fn set_prop(&mut self, name: impl Into<PropName>, value: String) {
+        let name = name.into();
         self.base.props.retain(|prop| prop.name != name);
         self.base.props.push(PropEntry { name, value });
     }
 
-    pub(crate) fn remove_prop(&mut self, name: &'static str) {
+    pub(crate) fn remove_prop(&mut self, name: &str) {
         self.base.props.retain(|prop| prop.name != name);
     }
 
-    pub(crate) fn set_helper_prop(&mut self, tag: &'static str, name: &'static str, value: String) {
+    pub(crate) fn set_helper_prop(
+        &mut self,
+        tag: &'static str,
+        name: impl Into<PropName>,
+        value: String,
+    ) {
+        let name = name.into();
+
         if let Some(helper) = self
             .base
             .helpers

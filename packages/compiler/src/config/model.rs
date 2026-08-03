@@ -7,6 +7,8 @@ pub(crate) struct TailwindConfig {
     pub(crate) preflight: bool,
     #[serde(default)]
     pub(crate) theme: ThemeConfig,
+    #[serde(default)]
+    pub(crate) plugins: PluginConfig,
 }
 
 impl Default for TailwindConfig {
@@ -14,8 +16,35 @@ impl Default for TailwindConfig {
         Self {
             preflight: preflight_default(),
             theme: ThemeConfig::default(),
+            plugins: PluginConfig::default(),
         }
     }
+}
+
+/// What the config's plugins contributed, already resolved by the JS loader.
+/// Sections are namespaced so a later extension point lands beside `utilities`.
+#[derive(Clone, Deserialize, Serialize, Default)]
+pub(crate) struct PluginConfig {
+    #[serde(default)]
+    pub(crate) utilities: BTreeMap<String, PluginUtility>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) motion: Option<MotionDriverConfig>,
+}
+
+/// The module the inlined runtime host imports its motion driver from, in place
+/// of the built-in `TweenService` one.
+#[derive(Clone, Deserialize, Serialize)]
+pub(crate) struct MotionDriverConfig {
+    pub(crate) module: String,
+    #[serde(rename = "export", default, skip_serializing_if = "Option::is_none")]
+    pub(crate) export_name: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub(crate) enum PluginUtility {
+    Classes(String),
+    Props(BTreeMap<String, String>),
 }
 
 fn preflight_default() -> bool {
@@ -50,6 +79,7 @@ pub(crate) type ColorScale = BTreeMap<String, String>;
 pub(crate) struct TailwindConfigInput {
     pub(crate) preflight: Option<bool>,
     pub(crate) theme: Option<ThemeConfigInput>,
+    pub(crate) plugins: Option<PluginConfig>,
 }
 
 #[derive(Clone, Deserialize, Default)]

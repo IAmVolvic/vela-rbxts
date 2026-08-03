@@ -1,4 +1,24 @@
 import defaultConfigSource from "./defaults.json" with { type: "json" };
+import {
+	emptyResolvedPlugins,
+	type PluginsInput,
+	type ResolvedPlugins,
+	runPlugins,
+} from "./plugin.js";
+
+export {
+	type MotionDriver,
+	type PluginApi,
+	type PluginHandler,
+	type PluginPropMap,
+	type PluginsInput,
+	type PluginUtilities,
+	type PluginUtilityValue,
+	plugin,
+	type ResolvedPlugins,
+	type ThemeAccessor,
+	type VelaPlugin,
+} from "./plugin.js";
 
 export const SHADES = [
 	50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950,
@@ -33,6 +53,7 @@ export type ThemeConfig = {
 export type TailwindConfig = {
 	preflight: boolean;
 	theme: ThemeConfig;
+	plugins: ResolvedPlugins;
 };
 
 export type ThemeConfigInput = {
@@ -51,6 +72,7 @@ export type ThemeConfigInput = {
 export type TailwindConfigInput = {
 	preflight?: boolean;
 	theme?: ThemeConfigInput;
+	plugins?: PluginsInput;
 };
 
 const defaultConfigInput = defaultConfigSource satisfies TailwindConfigInput;
@@ -63,6 +85,7 @@ const emptyConfig: TailwindConfig = {
 		spacing: {},
 		fontFamily: {},
 	},
+	plugins: emptyResolvedPlugins(),
 };
 
 export const defaultConfig: TailwindConfig = resolveConfig(
@@ -80,30 +103,35 @@ function resolveConfig(
 ): TailwindConfig {
 	const extend = input.theme?.extend;
 
+	const theme: ThemeConfig = {
+		colors: resolveThemeColors(
+			base.theme.colors,
+			extend?.colors,
+			input.theme?.colors,
+		),
+		radius: resolveThemeScale(
+			base.theme.radius,
+			extend?.radius,
+			input.theme?.radius,
+		),
+		spacing: resolveThemeScale(
+			base.theme.spacing,
+			extend?.spacing,
+			input.theme?.spacing,
+		),
+		fontFamily: resolveThemeScale(
+			base.theme.fontFamily,
+			extend?.fontFamily,
+			input.theme?.fontFamily,
+		),
+	};
+
 	return {
 		preflight: input.preflight ?? base.preflight,
-		theme: {
-			colors: resolveThemeColors(
-				base.theme.colors,
-				extend?.colors,
-				input.theme?.colors,
-			),
-			radius: resolveThemeScale(
-				base.theme.radius,
-				extend?.radius,
-				input.theme?.radius,
-			),
-			spacing: resolveThemeScale(
-				base.theme.spacing,
-				extend?.spacing,
-				input.theme?.spacing,
-			),
-			fontFamily: resolveThemeScale(
-				base.theme.fontFamily,
-				extend?.fontFamily,
-				input.theme?.fontFamily,
-			),
-		},
+		theme,
+		// Plugins run against the resolved theme so `theme()` reads the same
+		// scale the utilities do.
+		plugins: runPlugins(input.plugins, theme, base.plugins),
 	};
 }
 

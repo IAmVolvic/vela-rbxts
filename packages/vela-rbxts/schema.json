@@ -52,6 +52,53 @@
 					}
 				}
 			}
+		},
+		"plugins": {
+			"type": "object",
+			"additionalProperties": false,
+			"description": "What plugins contribute. A JSON config cannot hold a plugin function, so it states the already-resolved result instead.",
+			"properties": {
+				"utilities": {
+					"type": "object",
+					"description": "Extra class names. A string is a list of vela utilities the class expands to; an object names Roblox properties directly, as roblox-ts expression strings.",
+					"propertyNames": {
+						"pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+					},
+					"additionalProperties": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "object",
+								"additionalProperties": {
+									"type": "string"
+								},
+								"propertyNames": {
+									"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+								}
+							}
+						]
+					}
+				},
+				"motion": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["module"],
+					"description": "Replaces the built-in TweenService driver behind `transition` and `animate-*`. The runtime host is inlined into every transformed module, so the module has to resolve from any of them — a package name or a baseUrl-relative path, never a relative one.",
+					"properties": {
+						"module": {
+							"type": "string",
+							"pattern": "^[^.]"
+						},
+						"export": {
+							"type": "string",
+							"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "Named export to import. The default export when omitted."
+						}
+					}
+				}
+			}
 		}
 	},
 	"definitions": {
