@@ -1,6 +1,6 @@
 import { implementationKind, transform } from "@vela-rbxts/compiler";
 import { expect, expectTypeOf, test } from "vitest";
-import { defaultConfig, defineConfig } from "../../config/src/index";
+import { defaultConfig, defineConfig, plugin } from "../../config/src/index";
 
 function buildColorPalette(entries: Record<string, string>) {
 	return entries;
@@ -62,6 +62,7 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 				mono: "rbxasset://fonts/families/RobotoMono.json",
 			},
 		},
+		plugins: { utilities: {} },
 	});
 
 	const source =
@@ -1270,6 +1271,34 @@ test("rewrites dynamic array className through the inline runtime helper", () =>
 	expect(result.code).not.toContain("../__vela__/runtime-host");
 });
 
+// The runtime host once implemented a strict subset of the static lowering:
+// layout direction, alignment and automatic sizing were dropped, so a component
+// whose classes come from a recipe silently lost its layout. These assert the
+// dynamic path knows the families at all.
+test("resolves layout direction and alignment through the inline runtime helper", () => {
+	const result = transform(
+		'<frame className={["flex-row items-center justify-between", wide && "gap-2"]} />',
+	);
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("Enum.FillDirection.Horizontal");
+	expect(result.code).toContain("Enum.FillDirection.Vertical");
+	expect(result.code).toContain("Enum.HorizontalAlignment.Center");
+	expect(result.code).toContain("Enum.VerticalAlignment.Center");
+	expect(result.code).toContain("Enum.UIFlexAlignment.SpaceBetween");
+});
+
+test("resolves automatic sizing through the inline runtime helper", () => {
+	const result = transform(
+		'<frame className={["h-9 w-fit", tall && "size-auto"]} />',
+	);
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("Enum.AutomaticSize.X");
+	expect(result.code).toContain("Enum.AutomaticSize.Y");
+	expect(result.code).toContain("Enum.AutomaticSize.XY");
+});
+
 test("rewrites dynamic object-map className through the inline runtime helper", () => {
 	const result = transform(
 		'<frame className={{ "px-4": roomy, "px-2": !roomy }} />',
@@ -1314,14 +1343,18 @@ test("resolves text colors on the runtime path", () => {
 	expect(result.code).toContain("TextTransparency");
 });
 
-test("leaves non-color text utilities unresolved on the runtime path", () => {
-	const result = transform('<textlabel className={[size, "text-left"]} />');
+test("resolves size and alignment text utilities on the runtime path", () => {
+	const result = transform(
+		'<textlabel className={[size, "text-left text-lg"]} />',
+	);
 
 	expect(result.needsRuntimeHost).toBe(true);
-	// `text-lg`/`text-left` share the prefix with colors but are not theme
-	// colors, so the branch must fall through rather than invent a value.
-	expect(result.code).not.toContain('name: "TextXAlignment"');
-	expect(result.code).not.toContain('name: "TextSize"');
+	// These share the `text-` prefix with colors and are classified ahead of
+	// them, exactly as the static path does. Leaving them unresolved put every
+	// label on Roblox's 8px default.
+	expect(result.code).toContain('name: "TextSize"');
+	expect(result.code).toContain('name: "TextXAlignment"');
+	expect(result.code).toContain("Enum.TextXAlignment.Left");
 });
 
 test("rewrites dynamic border object maps through the inline runtime helper", () => {
@@ -3238,4 +3271,184 @@ test("preflight lets a runtime-resolved background reopen the neutralized base",
 	expect(result.needsRuntimeHost).toBe(true);
 	expect(result.code).toContain("withPreflightBackground");
 	expect(result.code).toMatch(/"preflight":\s*true/);
+});
+
+const withPluginUtilities = {
+	configJson: JSON.stringify(
+		defineConfig({
+			preflight: false,
+			plugins: [
+				plugin(({ addUtilities, theme }) => {
+					addUtilities({
+						btn: "bg-blue-600 rounded-lg px-4 hover:bg-blue-700",
+						panel: {
+							BackgroundColor3: theme("colors.slate.800"),
+							BorderSizePixel: "0",
+						},
+						stack: "flex-col btn",
+					});
+				}),
+			],
+		}),
+	),
+};
+
+test("expands a plugin utility into the utilities it stands for", () => {
+	const result = transform('<frame className="btn" />', withPluginUtilities);
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/BackgroundColor3=\{\(Color3\.fromRGB\(21, 93, 252\) as never\)\}/,
+	);
+	expect(result.code).toMatch(/PaddingLeft=\{\(new UDim\(0, 16\) as never\)\}/);
+	expect(result.code).toMatch(/<uicorner\b/i);
+
+	const style = JSON.parse(result.ir[0]);
+	expect(style.runtimeRules[0].condition).toEqual({ kind: "hover" });
+	expect(style.runtimeRules[0].effects.props).toContainEqual({
+		name: "BackgroundColor3",
+		value: "Color3.fromRGB(20, 71, 230)",
+	});
+});
+
+test("a plugin utility carries the variant it was written with", () => {
+	const result = transform(
+		'<frame className="md:btn hover:panel" />',
+		withPluginUtilities,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+
+	const style = JSON.parse(result.ir[0]);
+	const conditions = style.runtimeRules.map(
+		(rule: { condition: unknown }) => rule.condition,
+	);
+	expect(conditions).toContainEqual(
+		expect.objectContaining({ kind: "width", alias: "md" }),
+	);
+	// `hover:` inside the plugin body composes with the `md:` at the use site.
+	expect(conditions).toContainEqual({
+		kind: "all",
+		conditions: [
+			expect.objectContaining({ kind: "width", alias: "md" }),
+			{ kind: "hover" },
+		],
+	});
+	expect(
+		style.runtimeRules.find(
+			(rule: { condition: { kind: string } }) =>
+				rule.condition.kind === "hover",
+		).effects.props,
+	).toEqual([
+		{ name: "BackgroundColor3", value: "Color3.fromRGB(29, 41, 61)" },
+		{ name: "BorderSizePixel", value: "0" },
+	]);
+});
+
+test("a plugin utility names Roblox properties directly", () => {
+	const result = transform('<frame className="panel" />', withPluginUtilities);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).toMatch(
+		/BackgroundColor3=\{Color3\.fromRGB\(29, 41, 61\)\}/,
+	);
+	expect(result.code).toMatch(/BorderSizePixel=\{0\}/);
+});
+
+test("a plugin utility reaches through another plugin utility", () => {
+	const result = transform('<frame className="stack" />', withPluginUtilities);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/<uilistlayout\b/i);
+	expect(result.code).toMatch(
+		/BackgroundColor3=\{\(Color3\.fromRGB\(21, 93, 252\) as never\)\}/,
+	);
+});
+
+test("a class the plugin body cannot resolve is reported on the class the author wrote", () => {
+	const result = transform('<frame className="btn" />', {
+		configJson: JSON.stringify(
+			defineConfig({
+				plugins: [
+					plugin(({ addUtilities }) => addUtilities({ btn: "bg-nope-500" })),
+				],
+			}),
+		),
+	});
+
+	expect(result.diagnostics).toHaveLength(1);
+	expect(result.diagnostics[0].token).toBe("btn");
+	expect(result.diagnostics[0].message).toContain('Plugin utility "btn"');
+	expect(result.diagnostics[0].message).toContain('expands to "bg-nope-500"');
+});
+
+test("resolves plugin utilities on the runtime path too", () => {
+	const result = transform(
+		"<frame className={active ? `btn` : `panel`} />",
+		withPluginUtilities,
+	);
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("pluginUtilities");
+	expect(result.code).toContain(
+		'"bg-blue-600 rounded-lg px-4 hover:bg-blue-700"',
+	);
+	expect(result.code).toContain("MAX_PLUGIN_EXPANSION_DEPTH");
+});
+
+test("imports the configured motion driver instead of tweening itself", () => {
+	const result = transform(
+		'<frame className="bg-slate-700 transition hover:bg-blue-600" />',
+		{
+			configJson: JSON.stringify(
+				defineConfig({
+					plugins: [
+						plugin(({ setMotionDriver }) =>
+							setMotionDriver({
+								module: "@rbxts/vela-spring",
+								export: "springDriver",
+							}),
+						),
+					],
+				}),
+			),
+		},
+	);
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain(
+		'import { springDriver as __VelaMotionDriverSource } from "@rbxts/vela-spring";',
+	);
+	expect(result.code).toContain(
+		"const __VelaMotionDriver: VelaMotionDriver = __VelaMotionDriverSource;",
+	);
+	// The built-in path stays in the module: a driver that only implements one
+	// method leaves the other to TweenService.
+	expect(result.code).toContain("__VelaTweenService.Create(instance, info");
+});
+
+test("a motion driver with no export name is imported as the default", () => {
+	const result = transform('<frame className="animate-spin" />', {
+		configJson: JSON.stringify(
+			defineConfig({
+				plugins: { motion: { module: "client/motion" }, utilities: {} },
+			}),
+		),
+	});
+
+	expect(result.code).toContain(
+		'import __VelaMotionDriverSource from "client/motion";',
+	);
+});
+
+test("falls back to the built-in driver when no plugin sets one", () => {
+	const result = transform('<frame className="animate-spin" />');
+
+	expect(result.code).toContain(
+		"const __VelaMotionDriver: VelaMotionDriver = {};",
+	);
+	expect(result.code).not.toContain("__VelaMotionDriverSource");
 });

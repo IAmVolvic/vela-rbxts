@@ -1,4 +1,4 @@
-use crate::config::model::TailwindConfig;
+use crate::config::model::{MotionDriverConfig, TailwindConfig};
 use crate::swc::parse::parse_module_items;
 use swc_core::ecma::ast::ModuleItem;
 
@@ -22,6 +22,9 @@ type VelaRuntimeConfig = {
 		colors: Record<string, string | Record<string, string>>;
 		radius: Record<string, string>;
 		spacing: Record<string, string>;
+	};
+	plugins?: {
+		utilities?: Record<string, string | Record<string, string>>;
 	};
 };
 
@@ -119,7 +122,10 @@ type RuntimeTheme = {
 	colors: Record<string, RuntimeColorEntry>;
 	radius: Record<string, UDim>;
 	spacing: Record<string, UDim>;
+	pluginUtilities: Record<string, RuntimePluginUtility>;
 };
+
+type RuntimePluginUtility = string | Record<string, string>;
 
 type RuntimeColorEntry = string | RuntimeColorScale;
 
@@ -187,6 +193,31 @@ type RuntimeTransitionState = {
 	property?: string;
 };
 
+/** What a transition asks the motion driver to move the instance through. */
+type VelaMotionSpec = RuntimeTransition;
+
+/**
+ * The seam `plugins.motion` replaces. A driver takes over the method it
+ * implements and leaves the rest to the built-in TweenService one, so a driver
+ * that only springs transitions keeps the stock `animate-*` presets.
+ *
+ * `transition` receives only the properties that changed, and owns writing
+ * them: with a transition in play the element holds its rendered value, so a
+ * driver that never assigns leaves the instance where it was.
+ * `animate` returns its own cleanup, called when the animation is taken away.
+ */
+type VelaMotionDriver = {
+	transition?: (
+		instance: Instance,
+		goal: Record<string, RuntimePropValue>,
+		spec: VelaMotionSpec,
+	) => void;
+	animate?: (
+		instance: Instance,
+		animation: string,
+	) => (() => void) | undefined;
+};
+
 type RuntimeTextSpec = {
 	transform?: string;
 	decoration?: string;
@@ -229,6 +260,9 @@ type RuntimeResolution = {
 	divide?: RuntimeDivideState;
 	sizeWidth?: UDim;
 	sizeHeight?: UDim;
+	autoWidth?: boolean;
+	autoHeight?: boolean;
+	fontWeight?: Enum.FontWeight;
 	usesHover?: boolean;
 	usesActive?: boolean;
 	usesFocus?: boolean;
@@ -419,15 +453,7 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 				return;
 			}
 
-			const info = new TweenInfo(
-				transition.time,
-				parseEasingStyle(transition.style),
-				parseEasingDirection(transition.direction),
-				0,
-				false,
-				transition.delay,
-			);
-			__VelaTweenService.Create(instance, info, changed as never).Play();
+			playTransition(instance, changed, transition);
 		});
 		applyHelperDefaults(resolution.helpers);
 		const runtimeChildren = resolution.helpers.map((helper) =>
@@ -940,6 +966,7 @@ function normalizeTheme(config: VelaRuntimeConfig): RuntimeTheme {
 		colors: normalizeColorRegistry(config.theme.colors),
 		radius: normalizeRadiusScale(config.theme.radius),
 		spacing: normalizeSpacingScale(config.theme.spacing),
+		pluginUtilities: config.plugins?.utilities ?? {},
 	};
 }
 
@@ -1022,11 +1049,15 @@ function resolveRuntimeResolution(
 	}
 
 	for (const token of normalizeClassValue(className)) {
-		applyToken(theme, environment, token, resolution, preflight);
+		applyToken(theme, environment, token, resolution, preflight, 0);
 	}
 
 	return resolution;
 }
+
+/// A plugin utility that reaches itself would expand forever; the class is
+/// dropped instead, matching what the static path does.
+const MAX_PLUGIN_EXPANSION_DEPTH = 8;
 
 function applyToken(
 	theme: RuntimeTheme,
@@ -1034,6 +1065,7 @@ function applyToken(
 	token: string,
 	resolution: RuntimeResolution,
 	preflight: boolean,
+	depth: number,
 ) {
 	if (!token) {
 		return;
@@ -1056,6 +1088,38 @@ function applyToken(
 	}
 
 	if (!segments.every((segment) => matchesVariant(segment, environment))) {
+		return;
+	}
+
+	const pluginUtility = theme.pluginUtilities[utility];
+	if (pluginUtility !== undefined) {
+		if (depth >= MAX_PLUGIN_EXPANSION_DEPTH) {
+			return;
+		}
+
+		if (typeIs(pluginUtility, "string")) {
+			const separator = lastIndexOf(token, ":");
+			const prefix = separator >= 0 ? substring(token, 0, separator + 1) : "";
+			for (const part of splitWhitespace(pluginUtility)) {
+				applyToken(
+					theme,
+					environment,
+					`${prefix}${part}`,
+					resolution,
+					preflight,
+					depth + 1,
+				);
+			}
+			return;
+		}
+
+		for (const [name, value] of pairs(pluginUtility)) {
+			setProp(
+				resolution.props,
+				name as string,
+				parseRuntimePropValue(value as string),
+			);
+		}
 		return;
 	}
 
@@ -1314,10 +1378,37 @@ function parseEasingDirection(name: string): Enum.EasingDirection {
 
 /// Starts a preset loop animation and returns the cleanup that cancels it and
 /// restores the animated property.
+function playTransition(
+	instance: Instance,
+	goal: Record<string, RuntimePropValue>,
+	spec: VelaMotionSpec,
+) {
+	const driven = __VelaMotionDriver.transition;
+	if (driven !== undefined) {
+		driven(instance, goal, spec);
+		return;
+	}
+
+	const info = new TweenInfo(
+		spec.time,
+		parseEasingStyle(spec.style),
+		parseEasingDirection(spec.direction),
+		0,
+		false,
+		spec.delay,
+	);
+	__VelaTweenService.Create(instance, info, goal as never).Play();
+}
+
 function startPresetAnimation(
 	instance: Instance,
 	animation: string,
 ): (() => void) | undefined {
+	const driven = __VelaMotionDriver.animate;
+	if (driven !== undefined) {
+		return driven(instance, animation);
+	}
+
 	const gui = instance as GuiObject;
 
 	if (animation === "spin") {
@@ -1530,6 +1621,97 @@ function matchesRuntimeCondition(
 	}
 }
 
+/// `fit` and `auto` do not produce a size; they hand the axis to Roblox.
+function isAutomaticSizeKey(key: string): boolean {
+	return key === "fit" || key === "auto";
+}
+
+/// Mirrors TEXT_SIZE_VALUES on the static path.
+function resolveTextSizeValue(key: string): number | undefined {
+	if (key === "xs") return 12;
+	if (key === "sm") return 14;
+	if (key === "base") return 16;
+	if (key === "lg") return 18;
+	if (key === "xl") return 20;
+	if (key === "2xl") return 24;
+	if (key === "3xl") return 30;
+	if (key === "4xl") return 36;
+	if (key === "5xl") return 48;
+	if (key === "6xl") return 60;
+	if (key === "7xl") return 72;
+	if (key === "8xl") return 96;
+	if (key === "9xl") return 128;
+	return undefined;
+}
+
+/// `text-left|center|right` on the static path; `justify` has no Roblox
+/// equivalent and is left unresolved there too.
+function resolveTextXAlignmentValue(key: string): Enum.TextXAlignment | undefined {
+	if (key === "left") return Enum.TextXAlignment.Left;
+	if (key === "center") return Enum.TextXAlignment.Center;
+	if (key === "right") return Enum.TextXAlignment.Right;
+	return undefined;
+}
+
+/// Mirrors FONT_WEIGHT_VALUES. Font *families* are not resolvable here: the
+/// runtime theme carries colors, radius and spacing only, so `font-sans` and
+/// friends stay a static-path feature until that config is plumbed through.
+function resolveFontWeightValue(key: string): Enum.FontWeight | undefined {
+	if (key === "thin") return Enum.FontWeight.Thin;
+	if (key === "extralight") return Enum.FontWeight.ExtraLight;
+	if (key === "light") return Enum.FontWeight.Light;
+	if (key === "normal") return Enum.FontWeight.Regular;
+	if (key === "medium") return Enum.FontWeight.Medium;
+	if (key === "semibold") return Enum.FontWeight.SemiBold;
+	if (key === "bold") return Enum.FontWeight.Bold;
+	if (key === "extrabold") return Enum.FontWeight.ExtraBold;
+	if (key === "black") return Enum.FontWeight.Heavy;
+	return undefined;
+}
+
+/// `justify-*` runs along the main axis, which `UIListLayout` exposes as its
+/// horizontal properties. `between`/`around`/`evenly` need `UIFlexAlignment`
+/// rather than a plain alignment, so they land on a different property.
+function resolveJustifyProp(key: string): RuntimeResolvedPropEntry | undefined {
+	if (key === "start") {
+		return { name: "HorizontalAlignment", value: Enum.HorizontalAlignment.Left };
+	}
+	if (key === "center") {
+		return { name: "HorizontalAlignment", value: Enum.HorizontalAlignment.Center };
+	}
+	if (key === "end") {
+		return { name: "HorizontalAlignment", value: Enum.HorizontalAlignment.Right };
+	}
+	if (key === "between") {
+		return { name: "HorizontalFlex", value: Enum.UIFlexAlignment.SpaceBetween };
+	}
+	if (key === "around") {
+		return { name: "HorizontalFlex", value: Enum.UIFlexAlignment.SpaceAround };
+	}
+	if (key === "evenly") {
+		return { name: "HorizontalFlex", value: Enum.UIFlexAlignment.SpaceEvenly };
+	}
+	return undefined;
+}
+
+/// `items-*` runs along the cross axis, which `UIListLayout` exposes as its
+/// vertical properties.
+function resolveAlignItemsProp(key: string): RuntimeResolvedPropEntry | undefined {
+	if (key === "start") {
+		return { name: "VerticalAlignment", value: Enum.VerticalAlignment.Top };
+	}
+	if (key === "center") {
+		return { name: "VerticalAlignment", value: Enum.VerticalAlignment.Center };
+	}
+	if (key === "end") {
+		return { name: "VerticalAlignment", value: Enum.VerticalAlignment.Bottom };
+	}
+	if (key === "stretch") {
+		return { name: "VerticalFlex", value: Enum.UIFlexAlignment.Fill };
+	}
+	return undefined;
+}
+
 function resolveUtilityToken(
 	theme: RuntimeTheme,
 	token: string,
@@ -1687,6 +1869,22 @@ function resolveUtilityToken(
 	// something wrong.
 	if (startsWith(token, "text-")) {
 		const key = substring(token, stringLength("text-"));
+		const textSize = resolveTextSizeValue(key);
+		if (textSize !== undefined) {
+			return {
+				props: [{ name: "TextSize", value: textSize }],
+				helpers: [],
+			};
+		}
+
+		const alignment = resolveTextXAlignmentValue(key);
+		if (alignment !== undefined) {
+			return {
+				props: [{ name: "TextXAlignment", value: alignment }],
+				helpers: [],
+			};
+		}
+
 		if (key === "transparent") {
 			return {
 				props: [{ name: "TextTransparency", value: 1 }],
@@ -1900,8 +2098,74 @@ function resolveUtilityToken(
 		};
 	}
 
+	if (startsWith(token, "font-")) {
+		const weight = resolveFontWeightValue(substring(token, stringLength("font-")));
+		if (weight === undefined) {
+			return undefined;
+		}
+
+		return {
+			props: [{ name: "FontWeight", value: weight }],
+			helpers: [],
+		};
+	}
+
+	if (token === "flex" || token === "flex-row") {
+		return {
+			props: [],
+			helpers: [
+				{
+					tag: "uilistlayout",
+					props: [{ name: "FillDirection", value: Enum.FillDirection.Horizontal }],
+				},
+			],
+		};
+	}
+
+	if (token === "flex-col") {
+		return {
+			props: [],
+			helpers: [
+				{
+					tag: "uilistlayout",
+					props: [{ name: "FillDirection", value: Enum.FillDirection.Vertical }],
+				},
+			],
+		};
+	}
+
+	if (startsWith(token, "justify-")) {
+		const key = substring(token, stringLength("justify-"));
+		const prop = resolveJustifyProp(key);
+		if (prop === undefined) {
+			return undefined;
+		}
+
+		return {
+			props: [],
+			helpers: [{ tag: "uilistlayout", props: [prop] }],
+		};
+	}
+
+	if (startsWith(token, "items-")) {
+		const key = substring(token, stringLength("items-"));
+		const prop = resolveAlignItemsProp(key);
+		if (prop === undefined) {
+			return undefined;
+		}
+
+		return {
+			props: [],
+			helpers: [{ tag: "uilistlayout", props: [prop] }],
+		};
+	}
+
 	if (startsWith(token, "w-")) {
 		const key = substring(token, 2);
+		if (isAutomaticSizeKey(key)) {
+			return { props: [{ name: "AutoX", value: true }], helpers: [] };
+		}
+
 		const value = resolveSizeAxisValue(theme, key);
 		if (value === undefined) {
 			return undefined;
@@ -1915,6 +2179,10 @@ function resolveUtilityToken(
 
 	if (startsWith(token, "h-")) {
 		const key = substring(token, 2);
+		if (isAutomaticSizeKey(key)) {
+			return { props: [{ name: "AutoY", value: true }], helpers: [] };
+		}
+
 		const value = resolveSizeAxisValue(theme, key);
 		if (value === undefined) {
 			return undefined;
@@ -1928,6 +2196,16 @@ function resolveUtilityToken(
 
 	if (startsWith(token, "size-")) {
 		const key = substring(token, stringLength("size-"));
+		if (isAutomaticSizeKey(key)) {
+			return {
+				props: [
+					{ name: "AutoX", value: true },
+					{ name: "AutoY", value: true },
+				],
+				helpers: [],
+			};
+		}
+
 		const value = resolveSizeAxisValue(theme, key);
 		if (value === undefined) {
 			return undefined;
@@ -2376,6 +2654,34 @@ function applyResolutionProp(
 		return;
 	}
 
+	// An axis can be given a size or handed to Roblox, never both — whichever
+	// token comes last wins, matching the rule for every other utility.
+	if (name === "AutoX") {
+		resolution.autoWidth = value === true;
+		if (value === true) {
+			resolution.sizeWidth = undefined;
+		}
+		return;
+	}
+
+	if (name === "AutoY") {
+		resolution.autoHeight = value === true;
+		if (value === true) {
+			resolution.sizeHeight = undefined;
+		}
+		return;
+	}
+
+	// Roblox folds family, weight and style into one `FontFace`, so a weight
+	// cannot be written straight onto the instance — it waits here and is
+	// composed once, after every rule has had its say.
+	if (name === "FontWeight") {
+		if (typeIs(value, "EnumItem")) {
+			resolution.fontWeight = value as Enum.FontWeight;
+		}
+		return;
+	}
+
 	setProp(resolution.props, name, value);
 }
 
@@ -2383,6 +2689,28 @@ function applyResolvedSize(
 	hostProps: Record<string, unknown>,
 	resolution: RuntimeResolution,
 ) {
+	const fontWeight = resolution.fontWeight;
+	if (fontWeight !== undefined) {
+		const declared = hostProps["FontFace"];
+		const family = typeIs(declared, "Font")
+			? declared.Family
+			: "rbxasset://fonts/families/SourceSansPro.json";
+		const style = typeIs(declared, "Font") ? declared.Style : Enum.FontStyle.Normal;
+		hostProps["FontFace"] = new Font(family, fontWeight, style);
+	}
+
+	const autoWidth = resolution.autoWidth === true;
+	const autoHeight = resolution.autoHeight === true;
+	if (autoWidth || autoHeight) {
+		if (autoWidth && autoHeight) {
+			hostProps["AutomaticSize"] = Enum.AutomaticSize.XY;
+		} else if (autoWidth) {
+			hostProps["AutomaticSize"] = Enum.AutomaticSize.X;
+		} else {
+			hostProps["AutomaticSize"] = Enum.AutomaticSize.Y;
+		}
+	}
+
 	const width = resolution.sizeWidth;
 	const height = resolution.sizeHeight;
 	if (width === undefined && height === undefined) {
@@ -2729,12 +3057,52 @@ function arraySize<T>(value: T[]): number {
 
 pub(crate) fn create_runtime_host_module_items(config: &TailwindConfig) -> Vec<ModuleItem> {
     let config_json = serde_json::to_string(config).expect("runtime config must serialize to JSON");
+    let (motion_import, motion_binding) = motion_driver_source(config.plugins.motion.as_ref());
     let source = format!(
-        "{RUNTIME_HOST_TEMPLATE}\nconst __VelaRuntimeConfig = {config_json};\nconst VelaRuntimeHost = __createVelaRuntimeHost(__VelaRuntimeConfig) as unknown as VelaRuntimeHostComponent;"
+        "{motion_import}{RUNTIME_HOST_TEMPLATE}\n{motion_binding}\nconst __VelaRuntimeConfig = {config_json};\nconst VelaRuntimeHost = __createVelaRuntimeHost(__VelaRuntimeConfig) as unknown as VelaRuntimeHostComponent;"
     );
     let items = parse_module_items(&source);
 
     assert!(!items.is_empty(), "inline runtime helper source must parse");
 
     items
+}
+
+/// The import that brings a configured motion driver in, and the binding the
+/// helper calls. Without one the binding is empty, so every method falls back
+/// to the built-in TweenService path.
+fn motion_driver_source(motion: Option<&MotionDriverConfig>) -> (String, String) {
+    let Some(motion) = motion else {
+        return (
+            String::new(),
+            "const __VelaMotionDriver: VelaMotionDriver = {};".to_owned(),
+        );
+    };
+
+    let module = escape_module_specifier(&motion.module);
+    let import = match &motion.export_name {
+        Some(name) => {
+            format!("import {{ {name} as __VelaMotionDriverSource }} from \"{module}\";\n")
+        }
+        None => format!("import __VelaMotionDriverSource from \"{module}\";\n"),
+    };
+
+    (
+        import,
+        "const __VelaMotionDriver: VelaMotionDriver = __VelaMotionDriverSource;".to_owned(),
+    )
+}
+
+/// The specifier reaches the emitted module inside a string literal, so a quote
+/// or a newline in it would otherwise end the literal early.
+fn escape_module_specifier(module: &str) -> String {
+    module
+        .chars()
+        .filter(|value| !value.is_control())
+        .map(|value| match value {
+            '"' => "\\\"".to_owned(),
+            '\\' => "\\\\".to_owned(),
+            other => other.to_string(),
+        })
+        .collect()
 }
