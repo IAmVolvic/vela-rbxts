@@ -1,7 +1,8 @@
 use super::result::{AnalyzedClassToken, SemanticIssue};
 use super::token::parse_class_token;
 use super::utility::{
-    UtilityKind, is_known_unsupported_border_payload, resolve_border_thickness_value,
+    UtilityKind, is_known_unsupported_border_payload, parse_arbitrary_number,
+    parse_arbitrary_value, resolve_border_thickness_value,
 };
 
 pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
@@ -57,8 +58,18 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
                 false
             } else if matches!(parsed.utility.payload.as_deref(), Some(value) if value.starts_with('[') && value.ends_with(']'))
             {
-                issues.push(SemanticIssue::UnsupportedArbitraryZIndex);
-                false
+                // `ZIndex` is an integer; a fractional arbitrary would round
+                // silently instead of doing what the class says.
+                let whole = parsed
+                    .utility
+                    .payload
+                    .as_deref()
+                    .and_then(|value| parse_arbitrary_number(value, ""))
+                    .is_some_and(|value| value.fract() == 0.0);
+                if !whole {
+                    issues.push(SemanticIssue::UnsupportedArbitraryZIndex);
+                }
+                whole
             } else if let Some(value) = parsed.utility.payload.as_deref() {
                 if value.parse::<i32>().is_ok()
                     && !matches!(value, "0" | "10" | "20" | "30" | "40" | "50")
@@ -134,6 +145,7 @@ fn payload_shape_issue(utility: &UtilityKind, payload: Option<&str>) -> Option<S
         && utility.needs_config_lookup()
         && !matches!(utility, UtilityKind::Border)
         && !is_color_utility(utility)
+        && !(supports_arbitrary_value(utility) && parse_arbitrary_value(payload).is_some())
     {
         return Some(SemanticIssue::UnsupportedArbitraryValue {
             value: payload.to_owned(),
@@ -164,6 +176,38 @@ fn supports_opacity_modifier(utility: &UtilityKind) -> bool {
             | UtilityKind::ShadowColor
             | UtilityKind::Ring
             | UtilityKind::Outline
+    )
+}
+
+/// Families whose resolver reads a `[…]` payload as a length. Everything else
+/// keeps reporting the payload as unsupported rather than guessing a unit.
+fn supports_arbitrary_value(utility: &UtilityKind) -> bool {
+    matches!(
+        utility,
+        UtilityKind::Padding(_)
+            | UtilityKind::Margin(_)
+            | UtilityKind::Gap
+            | UtilityKind::SpaceX
+            | UtilityKind::SpaceY
+            | UtilityKind::ScrollbarThickness
+            | UtilityKind::GridAutoRows
+            | UtilityKind::GridAutoColumns
+            | UtilityKind::Width
+            | UtilityKind::Height
+            | UtilityKind::Size
+            | UtilityKind::MinWidth
+            | UtilityKind::MaxWidth
+            | UtilityKind::MinHeight
+            | UtilityKind::MaxHeight
+            | UtilityKind::Basis
+            | UtilityKind::PositionX
+            | UtilityKind::PositionY
+            | UtilityKind::PositionRight
+            | UtilityKind::PositionBottom
+            | UtilityKind::Inset
+            | UtilityKind::TranslateX
+            | UtilityKind::TranslateY
+            | UtilityKind::Radius
     )
 }
 

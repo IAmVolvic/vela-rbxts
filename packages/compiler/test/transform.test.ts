@@ -257,7 +257,7 @@ test("lowers border utilities to UIStroke helpers", () => {
 
 test("reports unsupported border forms with a targeted diagnostic", () => {
 	const result = transform(
-		'<frame className="border-dashed border-x border-8 border-[3px] border-opacity-50" />',
+		'<frame className="border-dashed border-x border-8 border-[3rem] border-opacity-50" />',
 	);
 
 	expect(result.changed).toBe(true);
@@ -282,7 +282,7 @@ test("reports unsupported border forms with a targeted diagnostic", () => {
 			expect.objectContaining({
 				level: "warning",
 				code: "unsupported-arbitrary-value",
-				token: "border-[3px]",
+				token: "border-[3rem]",
 			}),
 			expect.objectContaining({
 				level: "warning",
@@ -309,7 +309,7 @@ test("border static and runtime classifiers stay in parity", () => {
 		"l",
 		"x-2",
 		"opacity-50",
-		"[3px]",
+		"[3rem]",
 		"500/50",
 		"8",
 	] as const;
@@ -549,7 +549,7 @@ test("carries z-index utilities through the runtime variant path", () => {
 });
 
 test("warns on unsupported z-index forms", () => {
-	const result = transform('<frame className="z-auto -z-10 z-[123] z-999" />');
+	const result = transform('<frame className="z-auto -z-10 z-[1.5] z-999" />');
 
 	expect(result.changed).toBe(true);
 	expect(result.code).not.toContain("className=");
@@ -569,7 +569,7 @@ test("warns on unsupported z-index forms", () => {
 			expect.objectContaining({
 				level: "warning",
 				code: "unsupported-arbitrary-z-index",
-				token: "z-[123]",
+				token: "z-[1.5]",
 			}),
 			expect.objectContaining({
 				level: "warning",
@@ -3091,6 +3091,40 @@ test("lowers the dark variant into a color scheme rule", () => {
 	// Roblox exposes no color scheme, so the app owns it through an attribute.
 	expect(result.code).toContain("VelaColorScheme");
 	expect(result.code).toContain("GetAttributeChangedSignal");
+});
+
+test("resolves arbitrary length values", () => {
+	const result = transform(
+		`export const A = () => <frame className="w-[120px] h-[50%] p-[7px] rounded-[10px] top-[60%] left-[-8px] gap-[3px] border-[3px]" />;`,
+		withoutPreflight,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/Size=\{new UDim2\(0, 120, 0\.5, 0\)\}/);
+	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 7\)\}/);
+	expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 10\)\}/);
+	expect(result.code).toMatch(/Position=\{new UDim2\(0, -8, 0\.6, 0\)\}/);
+	expect(result.code).toMatch(/Padding=\{new UDim\(0, 3\)\}/);
+	expect(result.code).toMatch(/Thickness=\{3\}/);
+
+	const typography = transform(
+		`export const B = () => <textlabel className="text-[13px] leading-[1.6] rotate-[17deg] z-[15]" />;`,
+		withoutPreflight,
+	);
+	expect(typography.diagnostics).toEqual([]);
+	expect(typography.code).toMatch(/TextSize=\{13\}/);
+	expect(typography.code).toMatch(/LineHeight=\{1\.6\}/);
+	expect(typography.code).toMatch(/Rotation=\{17\}/);
+	expect(typography.code).toMatch(/ZIndex=\{15\}/);
+
+	// A unit the family cannot read is still reported instead of guessed at.
+	const invalid = transform(
+		`export const C = () => <frame className="w-[3rem]" />;`,
+		withoutPreflight,
+	);
+	expect(invalid.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-arbitrary-value" }),
+	]);
 });
 
 test("resolves arbitrary hex colors", () => {

@@ -500,7 +500,7 @@ test("reports editor diagnostics for unknown keys but not supported utilities", 
 });
 
 test("reports editor diagnostics for unsupported z-index forms", () => {
-	const source = '<frame className="z-auto -z-10 z-[123] z-999" />';
+	const source = '<frame className="z-auto -z-10 z-[1.5] z-999" />';
 	const result = getDiagnostics({ source });
 
 	expect(result.diagnostics).toEqual(
@@ -515,7 +515,7 @@ test("reports editor diagnostics for unsupported z-index forms", () => {
 			}),
 			expect.objectContaining({
 				code: "unsupported-arbitrary-z-index",
-				token: "z-[123]",
+				token: "z-[1.5]",
 			}),
 			expect.objectContaining({
 				code: "unsupported-z-index-value",
@@ -527,7 +527,7 @@ test("reports editor diagnostics for unsupported z-index forms", () => {
 
 test("reports editor diagnostics for unsupported border forms", () => {
 	const source =
-		'<frame className="border-dashed border-x border-8 border-[3px] border-opacity-50" />';
+		'<frame className="border-dashed border-x border-8 border-[3rem] border-opacity-50" />';
 	const result = getDiagnostics({ source });
 
 	expect(result.diagnostics).toEqual(
@@ -546,7 +546,7 @@ test("reports editor diagnostics for unsupported border forms", () => {
 			}),
 			expect.objectContaining({
 				code: "unsupported-arbitrary-value",
-				token: "border-[3px]",
+				token: "border-[3rem]",
 			}),
 			expect.objectContaining({
 				code: "unsupported-border-value",

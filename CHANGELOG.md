@@ -11,6 +11,7 @@ Versions are released in lockstep across every workspace package.
 
 ### Added
 
+- Arbitrary length values: `[16px]`, `[16]`, `[50%]` and their negatives resolve on the spacing, size, position, radius, and scrollbar-width families, on both the static and the runtime path. `text-[13px]`, `leading-[1.6]`, `rotate-[17deg]`, `z-[15]`, and `border-[3px]`/`ring-[3px]`/`outline-[3px]` read the number in their own unit. A payload the family cannot read still reports `unsupported-arbitrary-value`.
 - `dark:` runtime variant. Roblox exposes no color scheme to a running game, so the app owns it: `dark:` matches when `Players.LocalPlayer` carries `VelaColorScheme = "dark"`, and the runtime host follows the attribute's change signal. An instance attribute is the only shared source that works here, since the runtime helper is inlined per module.
 - `active:` and `focus:` runtime variants. `active:` follows mouse and touch presses through `InputBegan`/`InputEnded` (clearing on `MouseLeave`, since a release outside the element never reaches it), and `focus:` follows `Focused`/`FocusLost` on a `textbox` and `SelectionGained`/`SelectionLost` on every other element. Both compose with the consumer's own `Event` handlers and tween when the element carries `transition`.
 - `theme.fontFamily` and the `font-{family}` utilities. The scale ships `sans` (Source Sans Pro), `serif` (Merriweather), and `mono` (Roboto Mono), and takes any Roblox font family asset — including uploaded `rbxassetid://` fonts. `font-*` resolves the fixed weight names first and reads anything else as a font family key, so family, weight, and style merge into a single `FontFace`.
@@ -18,6 +19,7 @@ Versions are released in lockstep across every workspace package.
 
 ### Changed
 
+- `z-[N]` and `border-[Npx]` resolve instead of reporting `unsupported-arbitrary-z-index`/`unsupported-arbitrary-value`. A fractional `z-[1.5]` keeps the diagnostic, since `ZIndex` is an integer.
 - `opacity-*` on a `canvasgroup` now lowers to `GroupTransparency` instead of `BackgroundTransparency`, so it fades the whole subtree the way CSS `opacity` does. Every other host keeps the previous behavior.
 - Tailwind's own `scroll-*` utilities (`scroll-smooth`, `scroll-m-*`) report `unsupported-scroll-value` with the supported values instead of `no-roblox-equivalent`, now that the family carries a Roblox meaning.
 

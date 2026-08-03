@@ -1527,6 +1527,19 @@ function resolveUtilityToken(
 			};
 		}
 
+		const arbitraryThickness = parseArbitraryNumber(key, "px");
+		if (arbitraryThickness !== undefined) {
+			return {
+				props: [],
+				helpers: [
+					{
+						tag: "uistroke",
+						props: [{ name: "Thickness", value: arbitraryThickness }],
+					},
+				],
+			};
+		}
+
 		if (isUnsupportedBorderKey(key)) {
 			return undefined;
 		}
@@ -2009,23 +2022,18 @@ function resolveSizeAxisValue(
 }
 
 function resolveArbitraryUDim(key: string): UDim | undefined {
-	const numeric = parseBracketNumericValue(key);
-	if (numeric === undefined) {
+	const value = parseArbitraryValue(key);
+	if (value === undefined) {
 		return undefined;
 	}
 
-	return new UDim(0, numeric);
+	return new UDim(value.scale, value.offset);
 }
 
 function resolveArbitrarySizeValue(
 	key: string,
 ): RuntimeSizeAxisValue | undefined {
-	const numeric = parseBracketNumericValue(key);
-	if (numeric === undefined) {
-		return undefined;
-	}
-
-	return { scale: 0, offset: numeric };
+	return parseArbitraryValue(key);
 }
 
 function resolveNumericSpacingValue(key: string): UDim | undefined {
@@ -2089,18 +2097,39 @@ function formatSizeAxis(value: RuntimeSizeAxisValue): UDim {
 	return new UDim(value.scale, value.offset);
 }
 
-function parseBracketNumericValue(key: string): number | undefined {
+/// Mirrors the compiler's `parse_arbitrary_value`: a percentage is a scale, and
+/// a pixel or unitless number is an offset. The two must agree, or a class
+/// resolves differently depending on whether it was static or dynamic.
+function parseArbitraryValue(key: string): RuntimeSizeAxisValue | undefined {
 	if (!startsWith(key, "[") || !endsWith(key, "]")) {
 		return undefined;
 	}
 
-	const value = substring(key, 1, -1);
-	const numeric = toNumber(value);
-	if (numeric === undefined || numeric < 0) {
+	const inner = substring(key, 1, -1);
+	if (endsWith(inner, "%")) {
+		const percent = toNumber(substring(inner, 0, -1));
+		return percent === undefined ? undefined : { scale: percent / 100, offset: 0 };
+	}
+
+	const numeric = toNumber(
+		endsWith(inner, "px") ? substring(inner, 0, -2) : inner,
+	);
+	return numeric === undefined ? undefined : { scale: 0, offset: numeric };
+}
+
+/// The plain number behind a `[...]` payload, for families that count in
+/// something other than pixels.
+function parseArbitraryNumber(key: string, unit: string): number | undefined {
+	if (!startsWith(key, "[") || !endsWith(key, "]")) {
 		return undefined;
 	}
 
-	return numeric;
+	const inner = substring(key, 1, -1);
+	return toNumber(
+		unit !== "" && endsWith(inner, unit)
+			? substring(inner, 0, -stringLength(unit))
+			: inner,
+	);
 }
 
 function parseColor3(value: string): Color3 | undefined {

@@ -883,16 +883,23 @@ fn classify_text_utility(payload: &str) -> UtilityKind {
         UtilityKind::TextXAlignment
     } else if TEXT_WRAP_VALUES.contains(&payload) {
         UtilityKind::TextWrap
+    } else if parse_arbitrary_number(payload, "px").is_some() {
+        // `text-[#f00]` stays a color; only a number reads as a size.
+        UtilityKind::TextSize
     } else {
         UtilityKind::TextColor
     }
 }
 
-pub(crate) fn resolve_text_size_value(key: &str) -> Option<&'static str> {
+pub(crate) fn resolve_text_size_value(key: &str) -> Option<String> {
+    if let Some(size) = parse_arbitrary_number(key, "px") {
+        return Some(format_number(size));
+    }
+
     TEXT_SIZE_VALUES
         .iter()
         .find(|(name, _)| *name == key)
-        .map(|(_, value)| *value)
+        .map(|(_, value)| (*value).to_owned())
 }
 
 pub(crate) fn resolve_font_weight_enum(key: &str) -> Option<&'static str> {
@@ -983,14 +990,14 @@ pub(crate) fn resolve_flex_wrap_value(key: &str) -> Option<&'static str> {
     }
 }
 
-pub(crate) fn resolve_border_thickness_value(payload: Option<&str>) -> Option<&'static str> {
+pub(crate) fn resolve_border_thickness_value(payload: Option<&str>) -> Option<String> {
     match payload {
-        None => Some("1"),
-        Some("0") => Some("0"),
-        Some("1") => Some("1"),
-        Some("2") => Some("2"),
-        Some("4") => Some("4"),
-        _ => None,
+        None => Some("1".to_owned()),
+        Some("0") => Some("0".to_owned()),
+        Some("1") => Some("1".to_owned()),
+        Some("2") => Some("2".to_owned()),
+        Some("4") => Some("4".to_owned()),
+        Some(value) => parse_arbitrary_number(value, "px").map(format_number),
     }
 }
 
@@ -1153,11 +1160,82 @@ pub(crate) fn resolve_color_value(
     }
 }
 
+/// A `[...]` payload, already split into the two shapes a Roblox `UDim` axis
+/// can take. A unitless number reads as pixels, matching Tailwind's own
+/// `w-[120]`-style shorthand.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum ArbitraryValue {
+    Offset(f64),
+    Scale(f64),
+}
+
+pub(crate) fn parse_arbitrary_value(payload: &str) -> Option<ArbitraryValue> {
+    let inner = payload.strip_prefix('[')?.strip_suffix(']')?.trim();
+    if inner.is_empty() {
+        return None;
+    }
+
+    if let Some(percent) = inner.strip_suffix('%') {
+        return parse_finite(percent).map(|value| ArbitraryValue::Scale(value / 100.0));
+    }
+
+    let number = inner.strip_suffix("px").unwrap_or(inner);
+    parse_finite(number).map(ArbitraryValue::Offset)
+}
+
+/// The plain number behind a `[...]` payload, for families that count in
+/// something other than pixels — degrees, line height multiples, `ZIndex`.
+pub(crate) fn parse_arbitrary_number(payload: &str, unit: &str) -> Option<f64> {
+    let inner = payload.strip_prefix('[')?.strip_suffix(']')?.trim();
+    parse_finite(inner.strip_suffix(unit).unwrap_or(inner))
+}
+
+fn parse_finite(value: &str) -> Option<f64> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+
+    let parsed = value.parse::<f64>().ok()?;
+    parsed.is_finite().then_some(parsed)
+}
+
+pub(crate) fn format_number(value: f64) -> String {
+    let rounded = value.round();
+    if (value - rounded).abs() < 1e-9 {
+        return format!("{rounded:.0}");
+    }
+
+    value.to_string()
+}
+
+fn arbitrary_udim(value: ArbitraryValue) -> String {
+    match value {
+        ArbitraryValue::Offset(offset) => format!("new UDim(0, {})", format_number(offset)),
+        ArbitraryValue::Scale(scale) => format!("new UDim({}, 0)", format_number(scale)),
+    }
+}
+
+fn arbitrary_size_axis(value: ArbitraryValue) -> SizeAxisValue {
+    match value {
+        ArbitraryValue::Offset(offset) => SizeAxisValue::offset(format_number(offset)),
+        ArbitraryValue::Scale(scale) => SizeAxisValue::scale(format_number(scale)),
+    }
+}
+
 pub(crate) fn resolve_radius_value(config: &TailwindConfig, key: &str) -> Option<String> {
+    if let Some(value) = parse_arbitrary_value(key) {
+        return Some(arbitrary_udim(value));
+    }
+
     config.theme.radius.get(key).cloned()
 }
 
 pub(crate) fn resolve_spacing_value(config: &TailwindConfig, key: &str) -> Option<String> {
+    if let Some(value) = parse_arbitrary_value(key) {
+        return Some(arbitrary_udim(value));
+    }
+
     config
         .theme
         .spacing
@@ -1172,6 +1250,10 @@ pub(crate) fn resolve_size_axis_value(
     size_key: &str,
     token: &str,
 ) -> Option<SizeAxisValue> {
+    if let Some(value) = parse_arbitrary_value(size_key) {
+        return Some(arbitrary_size_axis(value));
+    }
+
     if size_key == "px" {
         return Some(SizeAxisValue::offset("1"));
     }
@@ -1194,7 +1276,9 @@ pub(crate) fn resolve_position_axis_value(
     token: &str,
     negative: bool,
 ) -> Option<SizeAxisValue> {
-    let base = if position_key == "px" {
+    let base = if let Some(value) = parse_arbitrary_value(position_key) {
+        arbitrary_size_axis(value)
+    } else if position_key == "px" {
         SizeAxisValue::offset("1")
     } else if position_key == "full" {
         SizeAxisValue::scale("1")
@@ -1302,8 +1386,15 @@ pub(crate) fn resolve_z_index_value(
     }
 
     if z_key.starts_with('[') && z_key.ends_with(']') {
-        diagnostics.push(unsupported_arbitrary_z_index_diagnostic(token));
-        return None;
+        // `ZIndex` is an integer, so a fractional arbitrary value would round
+        // silently instead of doing what the class says.
+        match parse_arbitrary_number(z_key, "").filter(|value| value.fract() == 0.0) {
+            Some(value) => return Some(format_number(value)),
+            None => {
+                diagnostics.push(unsupported_arbitrary_z_index_diagnostic(token));
+                return None;
+            }
+        }
     }
 
     if Z_INDEX_VALUES.contains(&z_key) {
@@ -1345,6 +1436,11 @@ pub(crate) fn resolve_line_join_value(key: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn resolve_rotation_value(degrees: &str, negative: bool) -> Option<String> {
+    if let Some(value) = parse_arbitrary_number(degrees, "deg") {
+        let value = if negative { -value } else { value };
+        return Some(format_number(value));
+    }
+
     if !ROTATION_VALUES.contains(&degrees) {
         return None;
     }
@@ -1448,7 +1544,15 @@ pub(crate) fn resolve_align_self_value(key: &str) -> Option<&'static str> {
         .map(|(_, alignment)| *alignment)
 }
 
-pub(crate) fn resolve_line_height_value(key: &str) -> Option<&'static str> {
+pub(crate) fn resolve_line_height_value(key: &str) -> Option<String> {
+    if let Some(height) = parse_arbitrary_number(key, "") {
+        return Some(format_number(height));
+    }
+
+    resolve_line_height_preset(key).map(|value| value.to_owned())
+}
+
+fn resolve_line_height_preset(key: &str) -> Option<&'static str> {
     LINE_HEIGHT_VALUES
         .iter()
         .find(|(name, _)| *name == key)
@@ -1563,7 +1667,7 @@ pub(crate) fn resolve_canvas_size_value(key: &str) -> Option<&'static str> {
 /// `ring`/`outline` payloads with a stroke meaning; anything else falls
 /// through to color resolution.
 pub(crate) enum StrokePayload {
-    Thickness(&'static str),
+    Thickness(String),
     Unsupported,
     Color,
 }
@@ -1573,11 +1677,15 @@ pub(crate) fn classify_stroke_payload(kind: &UtilityKind, payload: &str) -> Stro
         .iter()
         .find(|value| **value == payload)
     {
-        return StrokePayload::Thickness(thickness);
+        return StrokePayload::Thickness((*thickness).to_owned());
     }
 
     if matches!(kind, UtilityKind::Outline) && matches!(payload, "none" | "hidden") {
-        return StrokePayload::Thickness("0");
+        return StrokePayload::Thickness("0".to_owned());
+    }
+
+    if let Some(thickness) = parse_arbitrary_number(payload, "px") {
+        return StrokePayload::Thickness(format_number(thickness));
     }
 
     if matches!(payload, "inset" | "solid" | "dashed" | "dotted" | "double")
@@ -1955,7 +2063,7 @@ mod tests {
             UtilityKind::TextTruncate
         ));
 
-        assert_eq!(resolve_text_size_value("2xl"), Some("24"));
+        assert_eq!(resolve_text_size_value("2xl").as_deref(), Some("24"));
         assert_eq!(resolve_text_size_value("huge"), None);
         assert_eq!(
             resolve_font_weight_value("bold"),

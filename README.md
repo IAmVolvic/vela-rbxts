@@ -344,6 +344,20 @@ Two value forms work across every color family (`bg-`, `text-`, `image-`, `place
 - Arbitrary hex colors: `bg-[#ff0000]` and the short `bg-[#f00]` resolve to `Color3.fromRGB`. Non-hex bracket payloads keep the `unsupported-arbitrary-value` diagnostic.
 - Opacity modifiers: a trailing `/N` (0–100) lowers to the family's transparency prop — `bg-blue-600/50` sets `BackgroundTransparency = 0.5`. Families without a transparency prop (`placeholder-`, gradient stops, `divide-`) report `unsupported-opacity-modifier` instead.
 
+### Arbitrary Values
+
+Length families read a `[...]` payload directly, so a one-off value does not need a theme key:
+
+| Payload | Reads as |
+| --- | --- |
+| `[16px]` or `[16]` | 16 pixels of offset |
+| `[50%]` | scale `0.5` |
+| `[-8px]` | negative offset |
+
+It works on `p-*`/`m-*`/`gap-*`/`space-*`, `w-*`/`h-*`/`size-*`/`min-*`/`max-*`/`basis-*`, `top-*`/`left-*`/`right-*`/`bottom-*`/`inset-*`/`translate-*`, `rounded-*`, and `scrollbar-w-*`. A few families read the number in their own unit instead: `text-[13px]` (`TextSize`), `leading-[1.6]` (`LineHeight`), `rotate-[17deg]` (`Rotation`), `z-[15]` (`ZIndex`, integers only), and `border-[3px]`/`ring-[3px]`/`outline-[3px]` (`UIStroke.Thickness`).
+
+A payload the family cannot read — `w-[3rem]`, `z-[1.5]` — still reports `unsupported-arbitrary-value` rather than being guessed at. CSS units other than `px` and `%` have no Roblox meaning.
+
 ### Not Implemented
 
 Tailwind families with no Roblox counterpart emit `no-roblox-equivalent` and are dropped: CSS positioning and display keywords (`static`, `fixed`, `absolute`, `relative`, `sticky`, `block`, `inline`, `table`, `contents`, `float`, `clear`, `columns-*`), text control Roblox's engine lacks (`tracking-*`, `indent-*`, `break-*`, `hyphens-*`, `list-*`, `decoration-*`, `overline`), element-level filters (`blur-*`, `backdrop-*`, `grayscale`, `invert`, `sepia`, `contrast-*`, `saturate-*`, `brightness-*`), 3D transforms (`skew-*`, `perspective-*`, `transform`), and browser interaction utilities (`cursor-*`, `select-*`, `resize-*`, `snap-*`, `caret-*`, `accent-*`, `appearance-*`). Roblox has no positioning model to map them onto — everything is already absolutely placed relative to its parent.
@@ -362,7 +376,7 @@ The two paths produce very different results, and the difference is worth knowin
 
 A `className` that collapses to static tokens is lowered at compile time, and the full utility set above applies. A `className` the compiler cannot collapse takes the runtime path, where the element is swapped for the inlined runtime helper and the class list is resolved in-game.
 
-**The runtime resolver handles only these prefixes:** `bg-*`, `text-{color}` (colors only — `text-lg` and `text-left` stay static-only), `border` and `border-*`, `rounded-*` (bare `rounded` is static-only), `p-*` through `pl-*`, `gap-*`, `w-*`, `h-*`, `size-*`, the positive margin forms `m-*` through `ml-*`, `divide-*`, the text transforms (`uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` and their resets), and motion (`transition*`, `duration-*`, `delay-*`, `ease-*`, `animate-*`). Anything else in a dynamic `className` is dropped with no diagnostic. The runtime path also accepts numeric bracket values the static path rejects (`p-[10]`, `w-[240]`) — while arbitrary hex colors, supported statically, do not resolve dynamically. It drops `fit` and `auto`, and lets a later `w-`/`h-` overwrite an earlier one instead of merging both into one `Size`.
+**The runtime resolver handles only these prefixes:** `bg-*`, `text-{color}` (colors only — `text-lg` and `text-left` stay static-only), `border` and `border-*`, `rounded-*` (bare `rounded` is static-only), `p-*` through `pl-*`, `gap-*`, `w-*`, `h-*`, `size-*`, the positive margin forms `m-*` through `ml-*`, `divide-*`, the text transforms (`uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` and their resets), and motion (`transition*`, `duration-*`, `delay-*`, `ease-*`, `animate-*`). Anything else in a dynamic `className` is dropped with no diagnostic. Arbitrary length values resolve on both paths and agree; arbitrary hex colors, supported statically, do not resolve dynamically. It drops `fit` and `auto`, and lets a later `w-`/`h-` overwrite an earlier one instead of merging both into one `Size`.
 
 Where it matters, branch between two fully static string literals so both branches stay on the static path.
 

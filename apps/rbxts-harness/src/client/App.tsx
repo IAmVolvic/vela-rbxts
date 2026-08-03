@@ -110,6 +110,12 @@ export const App = () => {
 					className="bg-slate-700 active:bg-blue-600 transition size-6"
 				/>
 				<frame className="bg-white dark:bg-slate-900 size-6" />
+				<frame className="w-[120px] h-[50%] p-[7px] rounded-[10px] bg-slate-500" />
+				<textlabel
+					BackgroundTransparency={1}
+					Text="arbitrary probe"
+					className="text-[13px] leading-[1.6] z-[15]"
+				/>
 				<textbox
 					PlaceholderText="type here"
 					className="border border-slate-500 focus:border-blue-600 size-6"
