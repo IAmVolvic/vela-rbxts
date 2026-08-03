@@ -3091,7 +3091,7 @@ test("renders the runtime host through forwardRef for slotting compatibility", (
 		null,
 	);
 
-	expect(runtimeSource).toContain("forwardRef((props: VelaRuntimeHostProps");
+	expect(runtimeSource).toMatch(/forwardRef\(\s*\(props: VelaRuntimeHostProps/);
 	expect(runtimeSource).toContain("assignForwardedRef");
 });
 

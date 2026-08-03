@@ -1,5 +1,10 @@
 import __VelaReact from "@rbxts/react";
-import { Players as __VelaPlayers, TweenService as __VelaTweenService, UserInputService as __VelaUserInputService, Workspace as __VelaWorkspace } from "@rbxts/services";
+import {
+	Players as __VelaPlayers,
+	TweenService as __VelaTweenService,
+	UserInputService as __VelaUserInputService,
+	Workspace as __VelaWorkspace,
+} from "@rbxts/services";
 
 let __VelaMotionDriver: VelaMotionDriver = {};
 
@@ -213,10 +218,7 @@ type VelaMotionDriver = {
 		goal: Record<string, RuntimePropValue>,
 		spec: VelaMotionSpec,
 	) => void;
-	animate?: (
-		instance: Instance,
-		animation: string,
-	) => (() => void) | undefined;
+	animate?: (instance: Instance, animation: string) => (() => void) | undefined;
 };
 
 type RuntimeTextSpec = {
@@ -329,213 +331,221 @@ export function createVelaRuntimeHost(
 	// forwardRef so slotting libraries (asChild-style cloneElement) and plain
 	// consumer refs reach the rendered instance instead of dying on a function
 	// component.
-	return __VelaReact.forwardRef((props: VelaRuntimeHostProps, forwardedRef: unknown) => {
-		const globalEnvironment = useRuntimeEnvironment();
-		const [hovered, setHovered] = __VelaReact.useState(false);
-		const [pressed, setPressed] = __VelaReact.useState(false);
-		const [focused, setFocused] = __VelaReact.useState(false);
-		const environment: RuntimeEnvironment = {
-			width: globalEnvironment.width,
-			orientation: globalEnvironment.orientation,
-			input: globalEnvironment.input,
-			colorScheme: globalEnvironment.colorScheme,
-			hovered,
-			pressed,
-			focused,
-		};
-		const __velaTag = props.__velaTag;
-		const __velaRules = props.__velaRules ?? [];
-		const className = props.className;
-		const children = props.children;
+	return __VelaReact.forwardRef(
+		(props: VelaRuntimeHostProps, forwardedRef: unknown) => {
+			const globalEnvironment = useRuntimeEnvironment();
+			const [hovered, setHovered] = __VelaReact.useState(false);
+			const [pressed, setPressed] = __VelaReact.useState(false);
+			const [focused, setFocused] = __VelaReact.useState(false);
+			const environment: RuntimeEnvironment = {
+				width: globalEnvironment.width,
+				orientation: globalEnvironment.orientation,
+				input: globalEnvironment.input,
+				colorScheme: globalEnvironment.colorScheme,
+				hovered,
+				pressed,
+				focused,
+			};
+			const __velaTag = props.__velaTag;
+			const __velaRules = props.__velaRules ?? [];
+			const className = props.className;
+			const children = props.children;
 
-		// A component tag decides its own rendering, so there is no instance to
-		// tween; motion utilities only engage on real host tags.
-		const instanceCapable = typeIs(__velaTag, "string");
-		// Host-specific lowering needs the tag, and a component hides it — the
-		// static path takes the same `None` branch there.
-		const hostTag = instanceCapable ? (__velaTag as string) : undefined;
+			// A component tag decides its own rendering, so there is no instance to
+			// tween; motion utilities only engage on real host tags.
+			const instanceCapable = typeIs(__velaTag, "string");
+			// Host-specific lowering needs the tag, and a component hides it — the
+			// static path takes the same `None` branch there.
+			const hostTag = instanceCapable ? (__velaTag as string) : undefined;
 
-		const resolution = resolveRuntimeResolution(
-			theme,
-			environment,
-			__velaRules as RuntimeRule[],
-			className,
-			preflight,
-			hostTag,
-		);
-		const inheritedOpacity = props.__velaOpacity;
-		if (inheritedOpacity !== undefined && inheritedOpacity < 1) {
-			composeInheritedOpacity(resolution, hostTag, inheritedOpacity);
-		}
-		const resolvedTransition = resolveTransitionConfig(
-			props.__velaTransition,
-			resolution.transition,
-		);
-		const transition = instanceCapable ? resolvedTransition : undefined;
-		const animation = resolution.animation ?? props.__velaAnimation;
-		const animationActive =
-			instanceCapable && animation !== undefined && animation !== "none";
-		const margin = resolveMarginConfig(props.__velaMargin, resolution.margin);
-		const divide = resolveDivideConfig(props.__velaDivide, resolution.divide);
+			const resolution = resolveRuntimeResolution(
+				theme,
+				environment,
+				__velaRules as RuntimeRule[],
+				className,
+				preflight,
+				hostTag,
+			);
+			const inheritedOpacity = props.__velaOpacity;
+			if (inheritedOpacity !== undefined && inheritedOpacity < 1) {
+				composeInheritedOpacity(resolution, hostTag, inheritedOpacity);
+			}
+			const resolvedTransition = resolveTransitionConfig(
+				props.__velaTransition,
+				resolution.transition,
+			);
+			const transition = instanceCapable ? resolvedTransition : undefined;
+			const animation = resolution.animation ?? props.__velaAnimation;
+			const animationActive =
+				instanceCapable && animation !== undefined && animation !== "none";
+			const margin = resolveMarginConfig(props.__velaMargin, resolution.margin);
+			const divide = resolveDivideConfig(props.__velaDivide, resolution.divide);
 
-		const instanceRef = __VelaReact.useRef<Instance | undefined>(undefined);
-		const heldProps = __VelaReact.useRef<RuntimePropMap | undefined>(undefined);
-		const lastGoal = __VelaReact.useRef<RuntimePropMap | undefined>(undefined);
+			const instanceRef = __VelaReact.useRef<Instance | undefined>(undefined);
+			const heldProps = __VelaReact.useRef<RuntimePropMap | undefined>(
+				undefined,
+			);
+			const lastGoal = __VelaReact.useRef<RuntimePropMap | undefined>(
+				undefined,
+			);
 
-		const hostProps: Record<string, unknown> = {};
-		for (const [name, value] of pairs(props as Record<string, unknown>)) {
-			if (
-				name !== "__velaTag" &&
-				name !== "__velaRules" &&
-				name !== "__velaTransition" &&
-				name !== "__velaAnimation" &&
-				name !== "__velaText" &&
-				name !== "__velaMargin" &&
-				name !== "__velaDivide" &&
-				name !== "__velaOpacity" &&
-				name !== "className" &&
-				name !== "children"
-			) {
+			const hostProps: Record<string, unknown> = {};
+			for (const [name, value] of pairs(props as Record<string, unknown>)) {
+				if (
+					name !== "__velaTag" &&
+					name !== "__velaRules" &&
+					name !== "__velaTransition" &&
+					name !== "__velaAnimation" &&
+					name !== "__velaText" &&
+					name !== "__velaMargin" &&
+					name !== "__velaDivide" &&
+					name !== "__velaOpacity" &&
+					name !== "className" &&
+					name !== "children"
+				) {
+					hostProps[name] = value;
+				}
+			}
+			for (const [name, value] of pairs(resolution.props)) {
 				hostProps[name] = value;
 			}
-		}
-		for (const [name, value] of pairs(resolution.props)) {
-			hostProps[name] = value;
-		}
 
-		applyComposedResolution(hostProps, resolution, preflight);
+			applyComposedResolution(hostProps, resolution, preflight);
 
-		if (resolution.usesHover === true) {
-			attachHoverTracking(hostProps, setHovered);
-		}
-
-		if (resolution.usesActive === true) {
-			attachActiveTracking(hostProps, setPressed);
-		}
-
-		if (resolution.usesFocus === true) {
-			attachFocusTracking(hostProps, __velaTag, setFocused);
-		}
-
-		applyTextConfig(hostProps, props.__velaText, resolution);
-
-		// With a transition, React keeps rendering the first-seen value for
-		// every tweenable prop so it never rewrites the instance; the effect
-		// below moves the real property with TweenService instead.
-		//
-		// This walks the merged props rather than `resolution.props`, because a
-		// base utility like `bg-slate-700` lowers statically and only ever
-		// arrives as a plain prop. Seeding from the resolution alone first sees
-		// the prop on the render a variant introduces it, holds that new value,
-		// and leaves the tween nothing to travel from.
-		const tweenGoal: RuntimePropMap = {};
-		if (transition !== undefined) {
-			if (heldProps.current === undefined) {
-				heldProps.current = {};
+			if (resolution.usesHover === true) {
+				attachHoverTracking(hostProps, setHovered);
 			}
-			const held = heldProps.current;
-			for (const [name, value] of pairs(hostProps)) {
-				if (!isTweenableValue(value)) {
-					continue;
+
+			if (resolution.usesActive === true) {
+				attachActiveTracking(hostProps, setPressed);
+			}
+
+			if (resolution.usesFocus === true) {
+				attachFocusTracking(hostProps, __velaTag, setFocused);
+			}
+
+			applyTextConfig(hostProps, props.__velaText, resolution);
+
+			// With a transition, React keeps rendering the first-seen value for
+			// every tweenable prop so it never rewrites the instance; the effect
+			// below moves the real property with TweenService instead.
+			//
+			// This walks the merged props rather than `resolution.props`, because a
+			// base utility like `bg-slate-700` lowers statically and only ever
+			// arrives as a plain prop. Seeding from the resolution alone first sees
+			// the prop on the render a variant introduces it, holds that new value,
+			// and leaves the tween nothing to travel from.
+			const tweenGoal: RuntimePropMap = {};
+			if (transition !== undefined) {
+				if (heldProps.current === undefined) {
+					heldProps.current = {};
 				}
-				// Layout props move to the margin wrapper, which the inner
-				// instance ref cannot tween; they apply instantly instead.
-				if (margin !== undefined && isMarginWrapperProp(name as string)) {
-					continue;
-				}
-				if (!transitionCoversProp(transition.property, name as string)) {
-					continue;
-				}
-				tweenGoal[name as string] = value;
-				if (held[name as string] === undefined) {
-					held[name as string] = value;
-				}
-				hostProps[name as string] = held[name as string];
-			}
-		}
-		if (transition !== undefined || animationActive) {
-			hostProps["ref"] = (instance: Instance | undefined) => {
-				instanceRef.current = instance;
-				assignForwardedRef(forwardedRef, instance);
-			};
-		} else if (forwardedRef !== undefined) {
-			hostProps["ref"] = forwardedRef;
-		}
-
-		__VelaReact.useEffect(() => {
-			const instance = instanceRef.current;
-			if (instance === undefined || !animationActive) {
-				return undefined;
-			}
-			return startPresetAnimation(instance, animation as string);
-		}, [animation]);
-
-		__VelaReact.useEffect(() => {
-			if (transition === undefined) {
-				lastGoal.current = undefined;
-				return;
-			}
-
-			const instance = instanceRef.current;
-			const previous = lastGoal.current;
-			lastGoal.current = tweenGoal;
-			if (instance === undefined || previous === undefined) {
-				return;
-			}
-
-			const changed: Record<string, RuntimePropValue> = {};
-			let hasChanged = false;
-			for (const [name, value] of pairs(tweenGoal)) {
-				if (previous[name as string] !== value) {
-					changed[name as string] = value;
-					hasChanged = true;
+				const held = heldProps.current;
+				for (const [name, value] of pairs(hostProps)) {
+					if (!isTweenableValue(value)) {
+						continue;
+					}
+					// Layout props move to the margin wrapper, which the inner
+					// instance ref cannot tween; they apply instantly instead.
+					if (margin !== undefined && isMarginWrapperProp(name as string)) {
+						continue;
+					}
+					if (!transitionCoversProp(transition.property, name as string)) {
+						continue;
+					}
+					tweenGoal[name as string] = value;
+					if (held[name as string] === undefined) {
+						held[name as string] = value;
+					}
+					hostProps[name as string] = held[name as string];
 				}
 			}
-			if (!hasChanged) {
-				return;
+			if (transition !== undefined || animationActive) {
+				hostProps["ref"] = (instance: Instance | undefined) => {
+					instanceRef.current = instance;
+					assignForwardedRef(forwardedRef, instance);
+				};
+			} else if (forwardedRef !== undefined) {
+				hostProps["ref"] = forwardedRef;
 			}
 
-			playTransition(instance, changed, transition);
-		});
-		applyHelperDefaults(resolution.helpers);
-		const runtimeChildren = resolution.helpers.map((helper) =>
-			__VelaReact.createElement(
-				hostClassName(helper.tag),
-				helperToProps(helper.props),
-			),
-		);
-		const allChildren: defined[] = [];
-		for (const child of runtimeChildren) {
-			if (child !== undefined) {
-				allChildren.push(child);
+			__VelaReact.useEffect(() => {
+				const instance = instanceRef.current;
+				if (instance === undefined || !animationActive) {
+					return undefined;
+				}
+				return startPresetAnimation(instance, animation as string);
+			}, [animation]);
+
+			__VelaReact.useEffect(() => {
+				if (transition === undefined) {
+					lastGoal.current = undefined;
+					return;
+				}
+
+				const instance = instanceRef.current;
+				const previous = lastGoal.current;
+				lastGoal.current = tweenGoal;
+				if (instance === undefined || previous === undefined) {
+					return;
+				}
+
+				const changed: Record<string, RuntimePropValue> = {};
+				let hasChanged = false;
+				for (const [name, value] of pairs(tweenGoal)) {
+					if (previous[name as string] !== value) {
+						changed[name as string] = value;
+						hasChanged = true;
+					}
+				}
+				if (!hasChanged) {
+					return;
+				}
+
+				playTransition(instance, changed, transition);
+			});
+			applyHelperDefaults(resolution.helpers);
+			const runtimeChildren = resolution.helpers.map((helper) =>
+				__VelaReact.createElement(
+					hostClassName(helper.tag),
+					helperToProps(helper.props),
+				),
+			);
+			const allChildren: defined[] = [];
+			for (const child of runtimeChildren) {
+				if (child !== undefined) {
+					allChildren.push(child);
+				}
 			}
-		}
-		let userChildren = normalizeChildren(children);
-		if (divide !== undefined) {
-			userChildren = interleaveDivideSeparators(divide, userChildren);
-		}
-		for (const child of userChildren) {
-			if (child !== undefined) {
-				allChildren.push(child);
+			let userChildren = normalizeChildren(children);
+			if (divide !== undefined) {
+				userChildren = interleaveDivideSeparators(divide, userChildren);
 			}
-		}
+			for (const child of userChildren) {
+				if (child !== undefined) {
+					allChildren.push(child);
+				}
+			}
 
-		const wrapperProps =
-			margin !== undefined ? prepareMarginWrapper(margin, hostProps) : undefined;
+			const wrapperProps =
+				margin !== undefined
+					? prepareMarginWrapper(margin, hostProps)
+					: undefined;
 
-		// React renders a component reference the same way it renders a host tag.
-		const element = __VelaReact.createElement(
-			__velaTag as SupportedHostElementTag,
-			hostProps,
-			...allChildren,
-		);
+			// React renders a component reference the same way it renders a host tag.
+			const element = __VelaReact.createElement(
+				__velaTag as SupportedHostElementTag,
+				hostProps,
+				...allChildren,
+			);
 
-		if (margin !== undefined && wrapperProps !== undefined) {
-			return renderMarginWrapper(margin, wrapperProps, element) as never;
-		}
+			if (margin !== undefined && wrapperProps !== undefined) {
+				return renderMarginWrapper(margin, wrapperProps, element) as never;
+			}
 
-		return element;
-	});
+			return element;
+		},
+	);
 }
 
 function divideState(resolution: RuntimeResolution): RuntimeDivideState {
@@ -589,7 +599,10 @@ function applyDivideToken(
 
 /// The divide config travels as an expression string, because the compile-time
 /// half of it arrives that way on `__velaDivide`.
-function resolveDivideColor(theme: RuntimeTheme, key: string): string | undefined {
+function resolveDivideColor(
+	theme: RuntimeTheme,
+	key: string,
+): string | undefined {
 	const color = resolveThemeColor(theme, key)?.color;
 	if (color === undefined) {
 		return undefined;
@@ -679,15 +692,16 @@ function applyMarginToken(
 	token: string,
 	resolution: RuntimeResolution,
 ): boolean {
-	const prefixes: Array<[string, Array<"top" | "right" | "bottom" | "left">]> = [
-		["mx-", ["left", "right"]],
-		["my-", ["top", "bottom"]],
-		["mt-", ["top"]],
-		["mr-", ["right"]],
-		["mb-", ["bottom"]],
-		["ml-", ["left"]],
-		["m-", ["top", "right", "bottom", "left"]],
-	];
+	const prefixes: Array<[string, Array<"top" | "right" | "bottom" | "left">]> =
+		[
+			["mx-", ["left", "right"]],
+			["my-", ["top", "bottom"]],
+			["mt-", ["top"]],
+			["mr-", ["right"]],
+			["mb-", ["bottom"]],
+			["ml-", ["left"]],
+			["m-", ["top", "right", "bottom", "left"]],
+		];
 
 	for (const [prefix, sides] of prefixes) {
 		const negative = startsWith(token, `-${prefix}`);
@@ -695,10 +709,7 @@ function applyMarginToken(
 			continue;
 		}
 
-		const key = substring(
-			token,
-			stringLength(prefix) + (negative ? 1 : 0),
-		);
+		const key = substring(token, stringLength(prefix) + (negative ? 1 : 0));
 		if (key === "auto") {
 			if (!negative && prefix === "mx-") {
 				resolution.centerX = true;
@@ -829,7 +840,12 @@ function renderMarginWrapper(
 		PaddingLeft: new UDim(0, margin.left),
 	} as never);
 
-	return __VelaReact.createElement("frame", wrapperProps as never, padding, element);
+	return __VelaReact.createElement(
+		"frame",
+		wrapperProps as never,
+		padding,
+		element,
+	);
 }
 
 function escapeRichText(value: string): string {
@@ -898,7 +914,9 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 	const [camera, setCamera] = __VelaReact.useState(
 		() => __VelaWorkspace.CurrentCamera as RuntimeCamera | undefined,
 	);
-	const [player, setPlayer] = __VelaReact.useState(() => __VelaPlayers.LocalPlayer);
+	const [player, setPlayer] = __VelaReact.useState(
+		() => __VelaPlayers.LocalPlayer,
+	);
 	const [environment, setEnvironment] = __VelaReact.useState(() =>
 		readRuntimeEnvironment(camera),
 	);
@@ -906,9 +924,9 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 	// The local player arrives after the first render on some load paths, and
 	// its attribute is where the color scheme lives.
 	__VelaReact.useEffect(() => {
-		const connection = __VelaPlayers.GetPropertyChangedSignal(
-			"LocalPlayer",
-		).Connect(() => setPlayer(__VelaPlayers.LocalPlayer));
+		const connection = __VelaPlayers
+			.GetPropertyChangedSignal("LocalPlayer")
+			.Connect(() => setPlayer(__VelaPlayers.LocalPlayer));
 
 		return () => {
 			connection.Disconnect();
@@ -918,9 +936,9 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 	__VelaReact.useEffect(() => {
 		const updateCamera = () =>
 			setCamera(__VelaWorkspace.CurrentCamera as RuntimeCamera | undefined);
-		const connection = __VelaWorkspace.GetPropertyChangedSignal(
-			"CurrentCamera",
-		).Connect(updateCamera);
+		const connection = __VelaWorkspace
+			.GetPropertyChangedSignal("CurrentCamera")
+			.Connect(updateCamera);
 
 		return () => {
 			connection.Disconnect();
@@ -942,15 +960,15 @@ function useRuntimeEnvironment(): RuntimeEnvironment {
 		updateEnvironment();
 
 		const connections = [
-			__VelaUserInputService.GetPropertyChangedSignal("TouchEnabled").Connect(
-				updateEnvironment,
-			),
-			__VelaUserInputService.GetPropertyChangedSignal("MouseEnabled").Connect(
-				updateEnvironment,
-			),
-			__VelaUserInputService.GetPropertyChangedSignal("GamepadEnabled").Connect(
-				updateEnvironment,
-			),
+			__VelaUserInputService
+				.GetPropertyChangedSignal("TouchEnabled")
+				.Connect(updateEnvironment),
+			__VelaUserInputService
+				.GetPropertyChangedSignal("MouseEnabled")
+				.Connect(updateEnvironment),
+			__VelaUserInputService
+				.GetPropertyChangedSignal("GamepadEnabled")
+				.Connect(updateEnvironment),
 		];
 
 		if (player !== undefined) {
@@ -1403,7 +1421,9 @@ function withPreflightBackground(
 	return { props, helpers: effect.helpers };
 }
 
-function transitionState(resolution: RuntimeResolution): RuntimeTransitionState {
+function transitionState(
+	resolution: RuntimeResolution,
+): RuntimeTransitionState {
 	let state = resolution.transition;
 	if (state === undefined) {
 		state = {};
@@ -1615,7 +1635,13 @@ function startPresetAnimation(
 		const base = gui.BackgroundTransparency;
 		const tween = __VelaTweenService.Create(
 			gui,
-			new TweenInfo(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, true),
+			new TweenInfo(
+				1,
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.InOut,
+				-1,
+				true,
+			),
 			{ BackgroundTransparency: 0.5 } as never,
 		);
 		tween.Play();
@@ -1631,7 +1657,13 @@ function startPresetAnimation(
 		const bounceOffset = height > 0 ? math.floor(height / 4) : 8;
 		const tween = __VelaTweenService.Create(
 			gui,
-			new TweenInfo(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, true),
+			new TweenInfo(
+				0.5,
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.Out,
+				-1,
+				true,
+			),
 			{ Position: base.sub(UDim2.fromOffset(0, bounceOffset)) } as never,
 		);
 		tween.Play();
@@ -1686,7 +1718,9 @@ function conditionUsesState(
 		return true;
 	}
 	if (condition.kind === "all") {
-		return condition.conditions.some((entry) => conditionUsesState(entry, kind));
+		return condition.conditions.some((entry) =>
+			conditionUsesState(entry, kind),
+		);
 	}
 	return false;
 }
@@ -1835,7 +1869,9 @@ function resolveTextSizeValue(key: string): number | undefined {
 
 /// `text-left|center|right` on the static path; `justify` has no Roblox
 /// equivalent and is left unresolved there too.
-function resolveTextXAlignmentValue(key: string): Enum.TextXAlignment | undefined {
+function resolveTextXAlignmentValue(
+	key: string,
+): Enum.TextXAlignment | undefined {
 	if (key === "left") return Enum.TextXAlignment.Left;
 	if (key === "center") return Enum.TextXAlignment.Center;
 	if (key === "right") return Enum.TextXAlignment.Right;
@@ -1862,13 +1898,22 @@ function resolveFontWeightValue(key: string): Enum.FontWeight | undefined {
 /// rather than a plain alignment, so they land on a different property.
 function resolveJustifyProp(key: string): RuntimeResolvedPropEntry | undefined {
 	if (key === "start") {
-		return { name: "HorizontalAlignment", value: Enum.HorizontalAlignment.Left };
+		return {
+			name: "HorizontalAlignment",
+			value: Enum.HorizontalAlignment.Left,
+		};
 	}
 	if (key === "center") {
-		return { name: "HorizontalAlignment", value: Enum.HorizontalAlignment.Center };
+		return {
+			name: "HorizontalAlignment",
+			value: Enum.HorizontalAlignment.Center,
+		};
 	}
 	if (key === "end") {
-		return { name: "HorizontalAlignment", value: Enum.HorizontalAlignment.Right };
+		return {
+			name: "HorizontalAlignment",
+			value: Enum.HorizontalAlignment.Right,
+		};
 	}
 	if (key === "between") {
 		return { name: "HorizontalFlex", value: Enum.UIFlexAlignment.SpaceBetween };
@@ -1884,7 +1929,9 @@ function resolveJustifyProp(key: string): RuntimeResolvedPropEntry | undefined {
 
 /// `items-*` runs along the cross axis, which `UIListLayout` exposes as its
 /// vertical properties.
-function resolveAlignItemsProp(key: string): RuntimeResolvedPropEntry | undefined {
+function resolveAlignItemsProp(
+	key: string,
+): RuntimeResolvedPropEntry | undefined {
 	if (key === "start") {
 		return { name: "VerticalAlignment", value: Enum.VerticalAlignment.Top };
 	}
@@ -2096,9 +2143,7 @@ function resolveUtilityToken(
 		}
 
 		const family = theme.fontFamily[key];
-		return family === undefined
-			? undefined
-			: propEffect("FontFamily", family);
+		return family === undefined ? undefined : propEffect("FontFamily", family);
 	}
 
 	if (startsWith(token, "bg-")) {
@@ -2193,7 +2238,8 @@ function resolveUtilityToken(
 		// The offset travels alongside so a grid can subtract each cell's share
 		// of the gap from its track, exactly as the static path does.
 		return {
-			props: value.Scale === 0 ? [{ name: "GapOffset", value: value.Offset }] : [],
+			props:
+				value.Scale === 0 ? [{ name: "GapOffset", value: value.Offset }] : [],
 			helpers: [{ tag: "uilistlayout", props: [{ name: "Padding", value }] }],
 		};
 	}
@@ -2319,7 +2365,9 @@ function resolveUtilityToken(
 
 		return listLayoutEffect(
 			"FillDirection",
-			key === "row" ? Enum.FillDirection.Horizontal : Enum.FillDirection.Vertical,
+			key === "row"
+				? Enum.FillDirection.Horizontal
+				: Enum.FillDirection.Vertical,
 		);
 	}
 
@@ -2331,7 +2379,9 @@ function resolveUtilityToken(
 	}
 
 	if (startsWith(token, "items-")) {
-		const prop = resolveAlignItemsProp(substring(token, stringLength("items-")));
+		const prop = resolveAlignItemsProp(
+			substring(token, stringLength("items-")),
+		);
 		return prop === undefined
 			? undefined
 			: helperEffect("uilistlayout", [prop]);
@@ -2405,12 +2455,12 @@ function resolveUtilityToken(
 	}
 
 	if (startsWith(token, "self-")) {
-		const value = resolveAlignSelfValue(substring(token, stringLength("self-")));
+		const value = resolveAlignSelfValue(
+			substring(token, stringLength("self-")),
+		);
 		return value === undefined
 			? undefined
-			: helperEffect("uiflexitem", [
-					{ name: "ItemLineAlignment", value },
-				]);
+			: helperEffect("uiflexitem", [{ name: "ItemLineAlignment", value }]);
 	}
 
 	if (startsWith(token, "leading-")) {
@@ -2425,9 +2475,7 @@ function resolveUtilityToken(
 			continue;
 		}
 
-		const count = resolveGridCellCount(
-			substring(token, stringLength(prefix)),
-		);
+		const count = resolveGridCellCount(substring(token, stringLength(prefix)));
 		if (count === undefined) {
 			return undefined;
 		}
@@ -2675,7 +2723,9 @@ function resolveBorderToken(
 
 	const lineJoin = resolveLineJoinValue(key);
 	if (lineJoin !== undefined) {
-		return helperEffect("uistroke", [{ name: "LineJoinMode", value: lineJoin }]);
+		return helperEffect("uistroke", [
+			{ name: "LineJoinMode", value: lineJoin },
+		]);
 	}
 
 	if (isUnsupportedBorderKey(key)) {
@@ -2685,9 +2735,7 @@ function resolveBorderToken(
 	return strokeColorEffect(theme, key);
 }
 
-function strokeThicknessEffect(
-	thickness: number,
-): RuntimeResolvedEffectBundle {
+function strokeThicknessEffect(thickness: number): RuntimeResolvedEffectBundle {
 	return helperEffect("uistroke", [
 		{ name: "Thickness", value: thickness },
 		{ name: "ApplyStrokeMode", value: Enum.ApplyStrokeMode.Border },
@@ -2699,13 +2747,7 @@ function resolveStrokeThickness(
 	isOutline: boolean,
 	key: string,
 ): number | undefined {
-	if (
-		key === "0" ||
-		key === "1" ||
-		key === "2" ||
-		key === "4" ||
-		key === "8"
-	) {
+	if (key === "0" || key === "1" || key === "2" || key === "4" || key === "8") {
 		return toNumber(key);
 	}
 
@@ -3134,7 +3176,12 @@ function resolveAspectRatioValue(key: string): number | undefined {
 
 	const width = toNumber(trim(widthText));
 	const height = toNumber(trim(heightText));
-	if (width === undefined || height === undefined || width <= 0 || height <= 0) {
+	if (
+		width === undefined ||
+		height === undefined ||
+		width <= 0 ||
+		height <= 0
+	) {
 		return undefined;
 	}
 
@@ -3154,7 +3201,9 @@ function resolveAnchorPointValue(key: string): Vector2 | undefined {
 	return undefined;
 }
 
-function resolveAlignSelfValue(key: string): Enum.ItemLineAlignment | undefined {
+function resolveAlignSelfValue(
+	key: string,
+): Enum.ItemLineAlignment | undefined {
 	if (key === "auto") return Enum.ItemLineAlignment.Automatic;
 	if (key === "start") return Enum.ItemLineAlignment.Start;
 	if (key === "center") return Enum.ItemLineAlignment.Center;
@@ -3324,11 +3373,23 @@ function resolveTextYAlignmentValue(
 }
 
 function isUnsupportedBorderKey(key: string): boolean {
-	if (key === "dashed" || key === "solid" || key === "dotted" || key === "double") {
+	if (
+		key === "dashed" ||
+		key === "solid" ||
+		key === "dotted" ||
+		key === "double"
+	) {
 		return true;
 	}
 
-	if (key === "x" || key === "y" || key === "t" || key === "r" || key === "b" || key === "l") {
+	if (
+		key === "x" ||
+		key === "y" ||
+		key === "t" ||
+		key === "r" ||
+		key === "b" ||
+		key === "l"
+	) {
 		return true;
 	}
 
@@ -3531,7 +3592,9 @@ function parseArbitraryValue(key: string): RuntimeSizeAxisValue | undefined {
 	const inner = substring(key, 1, -1);
 	if (endsWith(inner, "%")) {
 		const percent = toNumber(substring(inner, 0, -1));
-		return percent === undefined ? undefined : { scale: percent / 100, offset: 0 };
+		return percent === undefined
+			? undefined
+			: { scale: percent / 100, offset: 0 };
 	}
 
 	const numeric = toNumber(
@@ -3802,7 +3865,12 @@ function applyResolutionProp(
 		return;
 	}
 
-	if (name === "MinWidth" || name === "MinHeight" || name === "MaxWidth" || name === "MaxHeight") {
+	if (
+		name === "MinWidth" ||
+		name === "MinHeight" ||
+		name === "MaxWidth" ||
+		name === "MaxHeight"
+	) {
 		if (typeIs(value, "number")) {
 			if (name === "MinWidth") {
 				resolution.minWidth = value;
@@ -3873,7 +3941,11 @@ function applyResolutionProp(
 		return;
 	}
 
-	if (name === "GradientFrom" || name === "GradientVia" || name === "GradientTo") {
+	if (
+		name === "GradientFrom" ||
+		name === "GradientVia" ||
+		name === "GradientTo"
+	) {
 		if (typeIs(value, "Color3")) {
 			if (name === "GradientFrom") {
 				resolution.gradientFrom = value;
@@ -4027,10 +4099,7 @@ function applyComposedSizeConstraints(resolution: RuntimeResolution) {
 		setResolvedHelperProp(resolution.helpers, "uisizeconstraint", [
 			{
 				name: "MinSize",
-				value: new Vector2(
-					resolution.minWidth ?? 0,
-					resolution.minHeight ?? 0,
-				),
+				value: new Vector2(resolution.minWidth ?? 0, resolution.minHeight ?? 0),
 			},
 		]);
 	}
@@ -4057,7 +4126,9 @@ const GRID_CROSS_AXIS_DEFAULT = 100;
 /// the child set for itself, so a grid that never names a cell size collapses
 /// the whole track to Roblox's 100x100 default.
 function applyComposedGrid(resolution: RuntimeResolution) {
-	const grid = resolution.helpers.find((helper) => helper.tag === "uigridlayout");
+	const grid = resolution.helpers.find(
+		(helper) => helper.tag === "uigridlayout",
+	);
 	if (grid === undefined) {
 		return;
 	}
@@ -4474,4 +4545,5 @@ function isNaNNumber(value: number): boolean {
 function arraySize<T>(value: T[]): number {
 	return value.size();
 }
+
 export type { VelaMotionDriver, VelaRuntimeConfig, VelaRuntimeHostComponent };
