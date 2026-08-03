@@ -29,6 +29,10 @@
 					"$ref": "#/definitions/themeScale",
 					"description": "Replaces the whole default spacing scale."
 				},
+				"fontFamily": {
+					"$ref": "#/definitions/themeScale",
+					"description": "Replaces the whole default font family scale. Values are Roblox font family assets such as \"rbxasset://fonts/families/GothamSSm.json\"."
+				},
 				"extend": {
 					"type": "object",
 					"additionalProperties": false,
@@ -40,6 +44,9 @@
 							"$ref": "#/definitions/themeScale"
 						},
 						"spacing": {
+							"$ref": "#/definitions/themeScale"
+						},
+						"fontFamily": {
 							"$ref": "#/definitions/themeScale"
 						}
 					}

@@ -210,6 +210,7 @@ async function main() {
 		["duration-fast", "unsupported-transition-value"],
 		["animate-ping", "unsupported-animation-value"],
 		["scroll-smooth", "unsupported-scroll-value"],
+		["font-handwriting", "unknown-theme-key"],
 	];
 	for (const [token, code] of expectedCodes) {
 		const diagnostic = diagnosticFor(diagnostics, token);
@@ -268,6 +269,8 @@ async function main() {
 		"scrollbar-w-2",
 		"scrollbar-slate-500",
 		"canvas-auto",
+		"font-mono",
+		"font-bold",
 	]) {
 		check(
 			!diagnosticFor(diagnostics, token),

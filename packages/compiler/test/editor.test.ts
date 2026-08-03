@@ -1118,6 +1118,40 @@ test("hovers scrolling frame utilities with their Roblox targets", () => {
 	).toContain("Enum.AutomaticSize.Y");
 });
 
+test("completes and hovers font families alongside font weights", () => {
+	const source = '<textlabel className="font-" />';
+	const labels = getCompletions({
+		source,
+		position: positionAfter(source, "font-"),
+	}).items.map((item: { label: string }) => item.label);
+	expect(labels).toEqual(
+		expect.arrayContaining([
+			"font-sans",
+			"font-serif",
+			"font-mono",
+			"font-bold",
+		]),
+	);
+
+	const hovered = '<textlabel className="font-mono" />';
+	expect(
+		getHover({ source: hovered, position: positionAfter(hovered, "font-mon") })
+			.contents?.documentation,
+	).toContain("RobotoMono.json");
+
+	// A font family is a theme key, so an unknown one is reported as such
+	// instead of as a bad weight.
+	expect(
+		getDiagnostics({ source: '<textlabel className="font-handwriting" />' })
+			.diagnostics,
+	).toEqual([
+		expect.objectContaining({
+			code: "unknown-theme-key",
+			token: "font-handwriting",
+		}),
+	]);
+});
+
 test("hovers Phase 1 utilities with their Roblox targets", () => {
 	const source =
 		'<scrollingframe className="pointer-events-none space-x-4 overscroll-contain ring-2 mx-auto" />';

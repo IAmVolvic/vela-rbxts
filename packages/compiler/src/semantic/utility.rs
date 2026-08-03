@@ -86,6 +86,7 @@ pub(crate) enum UtilityKind {
     CenterY,
     TextSize,
     FontWeight,
+    FontFamily,
     TextXAlignment,
     TextYAlignment,
     TextWrap,
@@ -436,6 +437,7 @@ impl UtilityKind {
                 | UtilityKind::ShadowColor
                 | UtilityKind::ScrollbarThickness
                 | UtilityKind::ScrollbarColor
+                | UtilityKind::FontFamily
                 | UtilityKind::GradientFrom
                 | UtilityKind::GradientVia
                 | UtilityKind::GradientTo
@@ -458,6 +460,7 @@ pub(crate) fn is_utility_allowed_on_host(element_tag: Option<&str>, kind: &Utili
         UtilityKind::TextColor
         | UtilityKind::TextSize
         | UtilityKind::FontWeight
+        | UtilityKind::FontFamily
         | UtilityKind::FontStyle
         | UtilityKind::TextXAlignment
         | UtilityKind::TextYAlignment
@@ -707,9 +710,24 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         };
     }
 
+    // `font-*` carries both the weight scale and the theme's font families, the
+    // way Tailwind does; the fixed weight names win and anything else is read as
+    // a theme key.
+    if let Some(payload) = token.strip_prefix("font-") {
+        return ParsedUtility {
+            raw: token.to_owned(),
+            family: "font".to_owned(),
+            payload: Some(payload.to_owned()),
+            kind: if resolve_font_weight_enum(payload).is_some() {
+                UtilityKind::FontWeight
+            } else {
+                UtilityKind::FontFamily
+            },
+        };
+    }
+
     for (prefix, kind) in [
         ("bg-", UtilityKind::BackgroundColor),
-        ("font-", UtilityKind::FontWeight),
         ("align-", UtilityKind::TextYAlignment),
         ("image-", UtilityKind::ImageColor),
         ("placeholder-", UtilityKind::PlaceholderColor),
@@ -885,16 +903,29 @@ pub(crate) fn resolve_font_weight_enum(key: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn resolve_font_weight_value(key: &str) -> Option<String> {
-    resolve_font_weight_enum(key).map(|weight| font_face_expression(Some(weight), None))
+    resolve_font_weight_enum(key).map(|weight| font_face_expression(None, Some(weight), None))
 }
 
-pub(crate) fn font_face_expression(weight: Option<&str>, style: Option<&str>) -> String {
+pub(crate) fn resolve_font_family_value(config: &TailwindConfig, key: &str) -> Option<String> {
+    config.theme.font_family.get(key).cloned()
+}
+
+pub(crate) fn font_family_completion_keys(config: &TailwindConfig) -> Vec<String> {
+    config.theme.font_family.keys().cloned().collect()
+}
+
+pub(crate) fn font_face_expression(
+    family: Option<&str>,
+    weight: Option<&str>,
+    style: Option<&str>,
+) -> String {
+    let family = family.unwrap_or(DEFAULT_FONT_FAMILY);
     let weight = weight.unwrap_or("Regular");
     match style.filter(|style| *style != "Normal") {
-        Some(style) => format!(
-            "new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight}, Enum.FontStyle.{style})"
-        ),
-        None => format!("new Font(\"{DEFAULT_FONT_FAMILY}\", Enum.FontWeight.{weight})"),
+        Some(style) => {
+            format!("new Font(\"{family}\", Enum.FontWeight.{weight}, Enum.FontStyle.{style})")
+        }
+        None => format!("new Font(\"{family}\", Enum.FontWeight.{weight})"),
     }
 }
 

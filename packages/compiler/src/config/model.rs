@@ -30,6 +30,8 @@ pub(crate) struct ThemeConfig {
     pub(crate) radius: ThemeScale,
     #[serde(default)]
     pub(crate) spacing: ThemeScale,
+    #[serde(default, rename = "fontFamily")]
+    pub(crate) font_family: ThemeScale,
 }
 
 pub(crate) type ThemeScale = BTreeMap<String, String>;
@@ -55,6 +57,8 @@ pub(crate) struct ThemeConfigInput {
     pub(crate) colors: Option<ColorInputMap>,
     pub(crate) radius: Option<ThemeScale>,
     pub(crate) spacing: Option<ThemeScale>,
+    #[serde(rename = "fontFamily")]
+    pub(crate) font_family: Option<ThemeScale>,
     pub(crate) extend: Option<ThemeConfigExtendInput>,
 }
 
@@ -63,6 +67,8 @@ pub(crate) struct ThemeConfigExtendInput {
     pub(crate) colors: Option<ColorInputMap>,
     pub(crate) radius: Option<ThemeScale>,
     pub(crate) spacing: Option<ThemeScale>,
+    #[serde(rename = "fontFamily")]
+    pub(crate) font_family: Option<ThemeScale>,
 }
 
 pub(crate) type ColorInputMap = BTreeMap<String, ColorValue>;

@@ -42,19 +42,19 @@ use crate::semantic::{
         resolve_animation_value, resolve_aspect_ratio_value, resolve_border_thickness_value,
         resolve_canvas_size_value, resolve_color_value, resolve_duration_seconds,
         resolve_ease_value, resolve_flex_direction_value, resolve_flex_item_mode,
-        resolve_flex_wrap_value, resolve_font_style_value, resolve_font_weight_enum,
-        resolve_gradient_rotation, resolve_grid_cell_count, resolve_items_flex_value,
-        resolve_justify_flex_value, resolve_justify_value, resolve_layout_order_value,
-        resolve_line_height_value, resolve_line_join_value, resolve_object_fit_value,
-        resolve_opacity_value, resolve_overflow_value, resolve_overscroll_value,
-        resolve_pointer_events_value, resolve_position_axis_value, resolve_radius_value,
-        resolve_rotation_value, resolve_scale_value, resolve_scroll_direction_value,
-        resolve_shadow_preset, resolve_size_axis_value, resolve_size_spacing_offset,
-        resolve_spacing_value, resolve_text_decoration_value, resolve_text_size_value,
-        resolve_text_transform_value, resolve_text_wrap_value, resolve_text_x_alignment_value,
-        resolve_text_y_alignment_value, resolve_transition_toggle, resolve_visibility_value,
-        resolve_whitespace_value, resolve_z_index_value, spacing_value_to_offset,
-        split_color_opacity,
+        resolve_flex_wrap_value, resolve_font_family_value, resolve_font_style_value,
+        resolve_font_weight_enum, resolve_gradient_rotation, resolve_grid_cell_count,
+        resolve_items_flex_value, resolve_justify_flex_value, resolve_justify_value,
+        resolve_layout_order_value, resolve_line_height_value, resolve_line_join_value,
+        resolve_object_fit_value, resolve_opacity_value, resolve_overflow_value,
+        resolve_overscroll_value, resolve_pointer_events_value, resolve_position_axis_value,
+        resolve_radius_value, resolve_rotation_value, resolve_scale_value,
+        resolve_scroll_direction_value, resolve_shadow_preset, resolve_size_axis_value,
+        resolve_size_spacing_offset, resolve_spacing_value, resolve_text_decoration_value,
+        resolve_text_size_value, resolve_text_transform_value, resolve_text_wrap_value,
+        resolve_text_x_alignment_value, resolve_text_y_alignment_value, resolve_transition_toggle,
+        resolve_visibility_value, resolve_whitespace_value, resolve_z_index_value,
+        spacing_value_to_offset, split_color_opacity,
     },
 };
 
@@ -229,6 +229,7 @@ struct PendingAxes {
     gradient_from: Option<String>,
     gradient_via: Option<String>,
     gradient_to: Option<String>,
+    font_family: Option<String>,
     font_weight: Option<&'static str>,
     font_style: Option<&'static str>,
     translate_x: Option<SizeAxisValue>,
@@ -327,10 +328,14 @@ impl PendingAxes {
             );
         }
 
-        if self.font_weight.is_some() || self.font_style.is_some() {
+        if self.font_family.is_some() || self.font_weight.is_some() || self.font_style.is_some() {
             style.set_prop(
                 "FontFace",
-                font_face_expression(self.font_weight, self.font_style),
+                font_face_expression(
+                    self.font_family.as_deref(),
+                    self.font_weight,
+                    self.font_style,
+                ),
             );
         }
 
@@ -1386,6 +1391,19 @@ fn apply_analyzed_token(
                 } else {
                     diagnostics.push(unsupported_font_weight_diagnostic(
                         weight_key,
+                        &analysis.parsed.raw,
+                    ));
+                }
+            }
+        }
+        UtilityKind::FontFamily => {
+            if let Some(family_key) = analysis.payload() {
+                if let Some(family) = resolve_font_family_value(config, family_key) {
+                    pending.font_family = Some(family);
+                } else {
+                    diagnostics.push(unknown_theme_key_diagnostic(
+                        "font family",
+                        family_key,
                         &analysis.parsed.raw,
                     ));
                 }

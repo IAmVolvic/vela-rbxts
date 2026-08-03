@@ -17,8 +17,8 @@ use crate::semantic::{
         RING_THICKNESS_VALUES, ROTATION_VALUES, SCALE_VALUES, SCROLL_DIRECTION_VALUES,
         SHADOW_SIZE_VALUES, TEXT_SIZE_VALUES, TEXT_WRAP_VALUES, TEXT_X_ALIGN_VALUES,
         TEXT_Y_ALIGN_VALUES, UtilityKind, WHITESPACE_VALUES, Z_INDEX_VALUES, color_completion_keys,
-        is_utility_allowed_on_host, position_completion_keys, radius_completion_keys,
-        resolve_color_value, size_completion_keys, spacing_completion_keys,
+        font_family_completion_keys, is_utility_allowed_on_host, position_completion_keys,
+        radius_completion_keys, resolve_color_value, size_completion_keys, spacing_completion_keys,
     },
     variant::RUNTIME_VARIANTS,
 };
@@ -1122,6 +1122,22 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 sort_text: None,
             },
             utility_kind: UtilityKind::TextSize,
+        });
+    }
+
+    for key in font_family_completion_keys(config) {
+        items.push(CompletionSpec {
+            item: CompletionItem {
+                label: format!("font-{key}"),
+                insert_text: format!("font-{key}"),
+                kind: "utility".to_owned(),
+                category: "typography".to_owned(),
+                documentation: format!("Set the Roblox FontFace family from font family `{key}`."),
+                replacement: None,
+                color: None,
+                sort_text: None,
+            },
+            utility_kind: UtilityKind::FontFamily,
         });
     }
 

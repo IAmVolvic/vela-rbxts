@@ -18,6 +18,9 @@ export const Diagnostics = () => (
 	>
 		<frame className={{ "px-4": roomy, "focus:px-2": !roomy }} />
 		<scrollingframe className="scroll-y scrollbar-w-2 scrollbar-slate-500 canvas-auto scroll-smooth" />
-		<textlabel Text="hello" className="uppercase underline leading-tight" />
+		<textlabel
+			Text="hello"
+			className="uppercase underline leading-tight font-mono font-bold font-handwriting"
+		/>
 	</frame>
 );

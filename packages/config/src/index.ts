@@ -27,6 +27,7 @@ export type ThemeConfig = {
 	colors: ThemeColors;
 	radius: ThemeScale;
 	spacing: ThemeScale;
+	fontFamily: ThemeScale;
 };
 
 export type TailwindConfig = {
@@ -38,10 +39,12 @@ export type ThemeConfigInput = {
 	colors?: ColorInputMap;
 	radius?: ThemeScale;
 	spacing?: ThemeScale;
+	fontFamily?: ThemeScale;
 	extend?: {
 		colors?: ColorInputMap;
 		radius?: ThemeScale;
 		spacing?: ThemeScale;
+		fontFamily?: ThemeScale;
 	};
 };
 
@@ -58,6 +61,7 @@ const emptyConfig: TailwindConfig = {
 		colors: {},
 		radius: {},
 		spacing: {},
+		fontFamily: {},
 	},
 };
 
@@ -93,6 +97,11 @@ function resolveConfig(
 				base.theme.spacing,
 				extend?.spacing,
 				input.theme?.spacing,
+			),
+			fontFamily: resolveThemeScale(
+				base.theme.fontFamily,
+				extend?.fontFamily,
+				input.theme?.fontFamily,
 			),
 		},
 	};

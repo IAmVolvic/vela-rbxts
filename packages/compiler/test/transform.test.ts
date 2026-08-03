@@ -56,6 +56,11 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 				"4": "new UDim(0, 16)",
 				"6": "new UDim(0, 16)",
 			},
+			fontFamily: {
+				sans: "rbxasset://fonts/families/SourceSansPro.json",
+				serif: "rbxasset://fonts/families/Merriweather.json",
+				mono: "rbxasset://fonts/families/RobotoMono.json",
+			},
 		},
 	});
 
@@ -2187,6 +2192,58 @@ test("merges italic with font weight into a single FontFace", () => {
 	expect(weightOnly.code).toMatch(
 		/FontFace=\{new Font\("rbxasset:\/\/fonts\/families\/SourceSansPro\.json", Enum\.FontWeight\.Bold\)\}/,
 	);
+});
+
+test("merges the font family with weight and style into a single FontFace", () => {
+	const mono = transform(
+		`export const A = () => <textlabel className="font-mono" />;`,
+		null,
+	);
+	expect(mono.diagnostics).toEqual([]);
+	expect(mono.code).toMatch(
+		/FontFace=\{new Font\("rbxasset:\/\/fonts\/families\/RobotoMono\.json", Enum\.FontWeight\.Regular\)\}/,
+	);
+
+	const merged = transform(
+		`export const B = () => <textlabel className="font-serif font-bold italic" />;`,
+		null,
+	);
+	expect(merged.diagnostics).toEqual([]);
+	expect(merged.code).toMatch(
+		/FontFace=\{new Font\("rbxasset:\/\/fonts\/families\/Merriweather\.json", Enum\.FontWeight\.Bold, Enum\.FontStyle\.Italic\)\}/,
+	);
+
+	const custom = transform(
+		`export const C = () => <textlabel className="font-display" />;`,
+		{
+			configJson: JSON.stringify(
+				defineConfig({
+					theme: {
+						extend: {
+							fontFamily: {
+								display: "rbxasset://fonts/families/GothamSSm.json",
+							},
+						},
+					},
+				}),
+			),
+		},
+	);
+	expect(custom.diagnostics).toEqual([]);
+	expect(custom.code).toMatch(
+		/FontFace=\{new Font\("rbxasset:\/\/fonts\/families\/GothamSSm\.json", Enum\.FontWeight\.Regular\)\}/,
+	);
+
+	const unknown = transform(
+		`export const D = () => <textlabel className="font-handwriting" />;`,
+		null,
+	);
+	expect(unknown.diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unknown-theme-key",
+			token: "font-handwriting",
+		}),
+	]);
 });
 
 test("reports unlowered grid subtokens as known Tailwind without an equivalent", () => {

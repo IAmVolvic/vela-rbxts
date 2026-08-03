@@ -4,8 +4,9 @@ use crate::diagnostics::editor::{compiler_to_editor_diagnostic, host_utility_dia
 use crate::editor::{collect_class_name_contexts, tokenize_class_name_with_ranges};
 use crate::semantic::analyze::analyze_class_token;
 use crate::semantic::utility::{
-    PaddingKind, UtilityKind, color_completion_keys, position_completion_keys,
-    radius_completion_keys, size_completion_keys, spacing_completion_keys,
+    PaddingKind, UtilityKind, color_completion_keys, font_family_completion_keys,
+    position_completion_keys, radius_completion_keys, size_completion_keys,
+    spacing_completion_keys,
 };
 
 pub(crate) fn get_diagnostics_impl(request: DiagnosticsRequest) -> DiagnosticsResponse {
@@ -89,6 +90,7 @@ fn candidate_keys(config: &TailwindConfig, utility: &UtilityKind) -> Option<Vec<
         | UtilityKind::Ring
         | UtilityKind::Outline
         | UtilityKind::ScrollbarColor => Some(color_completion_keys(config)),
+        UtilityKind::FontFamily => Some(font_family_completion_keys(config)),
         UtilityKind::Radius => Some(radius_completion_keys(config)),
         UtilityKind::Padding(PaddingKind::All | PaddingKind::X | PaddingKind::Y)
         | UtilityKind::Padding(PaddingKind::Top | PaddingKind::Right)

@@ -124,6 +124,11 @@ pub(crate) fn resolve_config_input(
                 extend.spacing.as_ref(),
                 theme.spacing.as_ref(),
             ),
+            font_family: resolve_theme_scale(
+                &base.theme.font_family,
+                extend.font_family.as_ref(),
+                theme.font_family.as_ref(),
+            ),
         },
     }
 }

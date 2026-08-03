@@ -384,6 +384,11 @@
     },
     "spacing": {
       "4": "new UDim(0, 16)"
+    },
+    "fontFamily": {
+      "sans": "rbxasset://fonts/families/SourceSansPro.json",
+      "serif": "rbxasset://fonts/families/Merriweather.json",
+      "mono": "rbxasset://fonts/families/RobotoMono.json"
     }
   }
 }
