@@ -226,6 +226,21 @@ Tailwind 파리티가 아니라 Roblox 인스턴스에만 있는 프로퍼티를
   `unsupported-scroll-value`로 보고된다 — 대체 토큰을 메시지에 담을 수 있다.
 - `scrollbar-*` / `canvas-*`는 Tailwind에 없는 vela 확장 (`object-tile` 선례).
 
+### `font-{family}` — 테마 축 추가
+
+`FontFace`의 family가 Source Sans Pro로 고정돼 있어 weight/style만 고를 수
+있었다. `theme.fontFamily`를 새 테마 축으로 추가하고 `font-*`가 두 스케일을
+겸하게 했다 — Tailwind와 같은 규칙으로, 고정된 weight 이름이 먼저 이기고
+나머지 payload는 font family 키로 조회한다(`parse_utility`는 config를 받지
+않으므로 weight 테이블만으로 분기 가능).
+
+- 기본값: `sans`(SourceSansPro) / `serif`(Merriweather) / `mono`(RobotoMono).
+  값은 Roblox 폰트 패밀리 에셋 문자열이라 업로드한 `rbxassetid://` 폰트도 된다.
+- family/weight/style은 `PendingAxes`에서 합쳐져 하나의 `FontFace`로 나간다.
+- 배선: `config/defaults.json`, `packages/config/src/index.ts`,
+  `packages/vela-rbxts/schema.json`, `config/model.rs`(serde `fontFamily`),
+  `config/merge.rs`.
+
 ### `opacity-*`의 호스트 인지
 
 `opacity-*`는 `BackgroundTransparency`로만 내려갔는데, CanvasGroup은 서브트리를

@@ -11,6 +11,7 @@ Versions are released in lockstep across every workspace package.
 
 ### Added
 
+- `theme.fontFamily` and the `font-{family}` utilities. The scale ships `sans` (Source Sans Pro), `serif` (Merriweather), and `mono` (Roboto Mono), and takes any Roblox font family asset — including uploaded `rbxassetid://` fonts. `font-*` resolves the fixed weight names first and reads anything else as a font family key, so family, weight, and style merge into a single `FontFace`.
 - Scrolling frame utilities: `scroll-{x,y,xy}` and `scroll-none` map to `ScrollingDirection`/`ScrollingEnabled`, `scrollbar-w-*` and `scrollbar-none` set `ScrollBarThickness` from the spacing scale, `scrollbar-{color}` (opacity modifier included) sets `ScrollBarImageColor3`, and `canvas-{auto,auto-x,auto-y,none}` sets `AutomaticCanvasSize`. All four families are restricted to `scrollingframe`, with completions, hover, and document colors wired up.
 
 ### Changed

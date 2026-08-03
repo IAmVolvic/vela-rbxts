@@ -90,7 +90,7 @@ export default defineConfig({
 
 Theme values are expression strings, not colors or numbers. They are spliced into the TSX before roblox-ts compiles it, so they are written in the roblox-ts dialect — `new UDim(0, 6)` and `Color3.fromRGB(59, 130, 246)`, not their Luau equivalents.
 
-Put additions under `theme.extend`. A top-level `theme.colors` **replaces** the whole color scale, and when it is present `theme.extend.colors` is discarded rather than merged on top of it — unlike real Tailwind. The same replace-versus-merge rule applies to `radius` and `spacing`.
+Put additions under `theme.extend`. A top-level `theme.colors` **replaces** the whole color scale, and when it is present `theme.extend.colors` is discarded rather than merged on top of it — unlike real Tailwind. The same replace-versus-merge rule applies to `radius`, `spacing`, and `fontFamily`.
 
 If you do not need custom theme values, `export default defineConfig();` is enough.
 
@@ -185,6 +185,7 @@ The current config model supports these theme families:
 - `colors`
 - `radius`
 - `spacing`
+- `fontFamily`
 
 `spacing` feeds padding, gap, and sizing utilities in the current compiler slice.
 
@@ -218,6 +219,22 @@ A palette with no `DEFAULT` still reports `color-missing-shade` when you referen
 `radius` ships `none`, `xs`, `sm`, `md`, `lg`, `xl`, `2xl`, `3xl`, `4xl`, and `full`, plus a `DEFAULT` of 4px — so a bare `rounded` works with no key, like Tailwind.
 
 `spacing` ships exactly one key, `4`. Every other spacing token resolves through a numeric fallback: a non-negative multiple of `0.5` becomes an offset of `key * 4` pixels, so `p-1.5` is 6px and `p-40` is 160px. Define `theme.extend.spacing` when you want named keys instead.
+
+`fontFamily` ships `sans` (Source Sans Pro, the Roblox default), `serif` (Merriweather), and `mono` (Roboto Mono). Values are Roblox font family assets, so any built-in family or an uploaded `rbxassetid://` font works:
+
+```ts
+export default defineConfig({
+  theme: {
+    extend: {
+      fontFamily: {
+        display: "rbxasset://fonts/families/GothamSSm.json",
+      },
+    },
+  },
+});
+```
+
+`font-*` then covers both scales the way Tailwind does: the weight names (`font-bold`, `font-medium`, …) win, and every other payload is looked up as a font family key — `font-display` above, or `unknown-theme-key` when there is no such key.
 
 ### Supported Host Elements
 
@@ -302,7 +319,7 @@ The exhaustive table of accepted values lives in the [utility reference](https:/
 | Aspect ratio | `aspect-square`, `aspect-video`, `aspect-[W/H]`, `aspect-[N]` | `UIAspectRatioConstraint` |
 | Transform | `rotate-*`, `-rotate-*`, `scale-*` | `Rotation`, `UIScale` |
 | Effects | `opacity-*` | `BackgroundTransparency`, integers 0 to 100. On `canvasgroup` it lowers to `GroupTransparency`, which fades the whole subtree the way CSS `opacity` does. |
-| Typography | `text-{xs..9xl}`, `font-*`, `italic`, `not-italic`, `text-{left,center,right}`, `align-*`, `leading-*`, `text-wrap`, `text-nowrap`, `whitespace-{normal,nowrap}`, `truncate`, `uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` | `TextSize`, `FontFace` (weight and style), `TextXAlignment`, `TextYAlignment`, `LineHeight`, `TextWrapped`, `TextTruncate`; case transforms rewrite `Text` (at compile time for literals, at runtime otherwise) and decorations render through `RichText`. The font family is fixed to Source Sans Pro; only the weight is selectable. |
+| Typography | `text-{xs..9xl}`, `font-*`, `italic`, `not-italic`, `text-{left,center,right}`, `align-*`, `leading-*`, `text-wrap`, `text-nowrap`, `whitespace-{normal,nowrap}`, `truncate`, `uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` | `TextSize`, `FontFace` (family, weight, and style), `TextXAlignment`, `TextYAlignment`, `LineHeight`, `TextWrapped`, `TextTruncate`; case transforms rewrite `Text` (at compile time for literals, at runtime otherwise) and decorations render through `RichText`. `font-{family}` selects the family from `theme.fontFamily`, and family, weight, and style merge into one `FontFace`. |
 | Motion | `transition`, `transition-{all,colors,opacity,shadow,transform,none}`, `duration-*`, `ease-{linear,in,out,in-out}`, `delay-*`, `animate-{spin,pulse,bounce,none}` | Runtime style changes tween through `TweenService` instead of snapping; `animate-*` runs looping presets. Warns `motion-on-component` on component elements. |
 | Interaction | `pointer-events-{none,auto}` | `Interactable` |
 | Image fit | `object-{cover,contain,fill,tile}` | `ScaleType` on image hosts (`object-tile` is a Roblox-only extension) |
@@ -351,7 +368,7 @@ Where it matters, branch between two fully static string literals so both branch
 
 The project config file is named `vela.config.ts` or `vela.config.json` — those exact filenames, with no `.js`, `.mjs`, or `.cjs` variant. The host resolves it by walking upward from each source file and loading the nearest one it finds, preferring `.ts` within a directory and falling back to the built-in defaults when there is none. See [step 3](#3-add-velaconfigts) for the shape and [Theme Axes](#theme-axes) for the merge rules.
 
-The schema is only `preflight`, `theme.colors`, `theme.radius`, `theme.spacing`, and their `theme.extend` counterparts. There is no `content`, `plugins`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
+The schema is only `preflight`, `theme.colors`, `theme.radius`, `theme.spacing`, `theme.fontFamily`, and their `theme.extend` counterparts. There is no `content`, `plugins`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
 
 ### `preflight`
 
