@@ -282,8 +282,12 @@ Supported variants:
 - `portrait:` and `landscape:`
 - `touch:`, `mouse:`, and `gamepad:`
 - `hover:`, tracked per element through `MouseEnter`/`MouseLeave`
+- `active:`, tracked through `InputBegan`/`InputEnded` for mouse and touch presses
+- `focus:`, tracked through `Focused`/`FocusLost` on a `textbox` and through `SelectionGained`/`SelectionLost` everywhere else
 
-Prefixes chain, and every condition has to match. Orientation is derived from the viewport as `width >= height ? landscape : portrait`. Input mode resolves gamepad first, then touch, then mouse. When the element also carries `transition`, a `hover:` change tweens instead of snapping.
+Prefixes chain, and every condition has to match. Orientation is derived from the viewport as `width >= height ? landscape : portrait`. Input mode resolves gamepad first, then touch, then mouse. When the element also carries `transition`, a state change tweens instead of snapping.
+
+The three interaction variants attach their listeners only when a rule actually uses them, and compose with whatever handlers you declared in `Event` — yours still run. A press that ends outside the element never reaches its `InputEnded`, so `active:` also clears on `MouseLeave`. There is no `disabled:`: Roblox has no disabled state to observe. Model it with your own prop and `pointer-events-none`.
 
 A variant on a utility that actually resolves forces the runtime path for that element, including inside a plain string literal — `className="sm:w-full"` inlines the whole runtime helper into the module. (A variant on an unsupported utility resolves to nothing and stays static, which is not a feature to rely on.) Use variants where they earn it rather than by reflex.
 
