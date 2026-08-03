@@ -31,6 +31,7 @@ use crate::semantic::{
         spacing_value_to_offset,
     },
 };
+use crate::transform::opacity::opacity_transparency_props;
 
 pub(crate) fn get_hover_impl(request: HoverRequest) -> HoverResponse {
     let config = crate::editor::parse_editor_config(request.options.as_ref());
@@ -240,10 +241,11 @@ fn describe_token(
         UtilityKind::Opacity => {
             let percent = analysis.payload()?;
             let value = resolve_opacity_value(percent)?;
+            let props = opacity_transparency_props(element_tag).join(", ");
             Some(HoverContent {
-                display: format!("`{token}` -> BackgroundTransparency"),
+                display: format!("`{token}` -> {props}"),
                 documentation: format!(
-                    "{variant_prefix}Sets `BackgroundTransparency` to `{value}`."
+                    "{variant_prefix}Fades this element to `{value}` transparency, and composes into the children written under it."
                 ),
             })
         }

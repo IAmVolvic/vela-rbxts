@@ -224,7 +224,7 @@ fn class_name_value_range(attr: &JSXAttr) -> Option<EditorRange> {
     }
 }
 
-fn element_display_name(name: &JSXElementName) -> String {
+pub(crate) fn element_display_name(name: &JSXElementName) -> String {
     match name {
         JSXElementName::Ident(ident) => ident.sym.to_string(),
         JSXElementName::JSXMemberExpr(member) => member.prop.sym.to_string(),

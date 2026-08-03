@@ -65,6 +65,21 @@ pub(crate) fn unsupported_opacity_modifier_diagnostic(modifier: &str, token: &st
     }
 }
 
+/// `opacity-*` composes into every descendant the transformer can read out of
+/// the JSX. Children that arrive as a value are not among them, and a utility
+/// that fades half a subtree in silence is worse than one that says so.
+pub(crate) fn opacity_unreachable_child_diagnostic(child: &str) -> Diagnostic {
+    Diagnostic {
+        level: "warning".to_owned(),
+        code: "opacity-unreachable-child".to_owned(),
+        message: format!(
+            "`opacity-*` does not reach {child}: Roblox has no inherited transparency, so only the children written here are faded. State the opacity on it as well."
+        ),
+        token: None,
+        range: None,
+    }
+}
+
 pub(crate) fn unsupported_object_fit_value_diagnostic(value: &str, token: &str) -> Diagnostic {
     Diagnostic {
         level: "warning".to_owned(),

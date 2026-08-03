@@ -504,7 +504,7 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 kind: "utility".to_owned(),
                 category: "effects".to_owned(),
                 documentation: format!(
-                    "Set Roblox BackgroundTransparency from opacity `{percent}`."
+                    "Fade this element to `{percent}%` opacity, children included."
                 ),
                 replacement: None,
                 color: None,

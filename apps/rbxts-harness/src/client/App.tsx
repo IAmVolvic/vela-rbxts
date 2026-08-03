@@ -106,6 +106,10 @@ export const App = () => {
 					className="font-mono"
 				/>
 				<canvasgroup className="opacity-50 size-6 bg-slate-700" />
+				<frame className="opacity-50 size-6 bg-slate-700">
+					<textlabel Text="faded with its parent" />
+					<frame className="opacity-50 bg-white size-6" />
+				</frame>
 				<textbutton
 					Text="press me"
 					className="bg-slate-700 active:bg-blue-600 transition size-6"

@@ -2,6 +2,7 @@ pub(crate) mod context;
 pub(crate) mod emit;
 pub(crate) mod jsx;
 pub(crate) mod module;
+pub(crate) mod opacity;
 pub(crate) mod runtime;
 pub(crate) mod runtime_host;
 
@@ -96,6 +97,7 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
         ir: Vec::new(),
         runtime_host_needed: false,
         class_value_scopes: crate::class_value::scope::ClassValueScopeStack::default(),
+        opacity_alpha: 1.0,
     };
     module.visit_mut_with(&mut transformer);
 

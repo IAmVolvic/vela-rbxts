@@ -59,6 +59,7 @@ use crate::semantic::{
     },
     variant::{ParsedVariant, split_variant_prefixes},
 };
+use crate::transform::opacity::compose_inherited_opacity;
 
 /// `element_tag` is `None` for a component, whose Roblox host element is not
 /// known here, so host-specific lowering keeps its generic form.
@@ -107,14 +108,7 @@ where
                     });
                 }
             } else {
-                apply_analyzed_token(
-                    &analysis,
-                    config,
-                    element_tag,
-                    diagnostics,
-                    &mut style,
-                    &mut pending,
-                );
+                apply_analyzed_token(&analysis, config, diagnostics, &mut style, &mut pending);
             }
 
             if let Some(origin) = origin {
@@ -123,9 +117,13 @@ where
         }
     }
 
+    let own_opacity = pending.opacity.take();
     pending.flush(&mut style, SizeEmission::Combined);
     default_list_layout_sort_order(&mut style);
     reset_variant_color_opacity(&mut style);
+    if let Some(alpha) = own_opacity {
+        compose_inherited_opacity(&mut style, element_tag, alpha, &[], true);
+    }
     style
 }
 
@@ -312,6 +310,9 @@ struct PendingAxes {
     grid_cross_extent: Option<String>,
     center_x: bool,
     center_y: bool,
+    /// Alpha from `opacity-*`, composed over the transparencies the colors left
+    /// behind once the whole class list has been read.
+    opacity: Option<f64>,
     transition_enabled: Option<bool>,
     transition_property: Option<&'static str>,
     transition_time: Option<f64>,
@@ -579,22 +580,18 @@ fn resolve_single_analyzed_token(
 ) -> StyleIr {
     let mut style = StyleIr::default();
     let mut pending = PendingAxes::default();
-    apply_analyzed_token(
-        analysis,
-        config,
-        element_tag,
-        diagnostics,
-        &mut style,
-        &mut pending,
-    );
+    apply_analyzed_token(analysis, config, diagnostics, &mut style, &mut pending);
+    let own_opacity = pending.opacity.take();
     pending.flush(&mut style, SizeEmission::PerAxis);
+    if let Some(alpha) = own_opacity {
+        compose_inherited_opacity(&mut style, element_tag, alpha, &[], true);
+    }
     style
 }
 
 fn apply_analyzed_token(
     analysis: &AnalyzedClassToken,
     config: &TailwindConfig,
-    element_tag: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
     style: &mut StyleIr,
     pending: &mut PendingAxes,
@@ -888,16 +885,14 @@ fn apply_analyzed_token(
         UtilityKind::Opacity => {
             if let Some(percent) = analysis.payload() {
                 if let Some(value) = resolve_opacity_value(percent) {
-                    // A CanvasGroup composites its whole subtree, so
-                    // `GroupTransparency` is the only property that means what
-                    // CSS `opacity` means; every other host only has its own
-                    // background to fade.
-                    let prop = if element_tag == Some("canvasgroup") {
-                        "GroupTransparency"
-                    } else {
-                        "BackgroundTransparency"
-                    };
-                    style.set_prop(prop, value);
+                    // Held until every color has had its say. Tailwind reads
+                    // `opacity-*` as independent of a color's own alpha, and
+                    // both land on the same Roblox property, so the two have to
+                    // multiply at the end rather than overwrite each other.
+                    pending.opacity = value
+                        .parse::<f64>()
+                        .ok()
+                        .map(|transparency| 1.0 - transparency);
                 } else {
                     diagnostics.push(unsupported_opacity_value_diagnostic(
                         percent,

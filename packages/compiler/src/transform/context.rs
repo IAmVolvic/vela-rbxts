@@ -1,26 +1,30 @@
 use crate::api::Diagnostic;
+use crate::class_value::collapse::collapse_class_value_expr;
 use crate::class_value::scope::ClassValueScopeStack;
 use crate::diagnostics::compiler::{
     decoration_on_richtext_diagnostic, motion_on_component_diagnostic,
+    opacity_unreachable_child_diagnostic,
 };
 use crate::ir::model::{PropEntry, StyleIr, TextSpec};
 use crate::swc::builders::{
     create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
 };
 use crate::transform::jsx::{
-    element_expression_source, is_component_element, lower_class_name,
+    element_display_name, element_expression_source, is_component_element, lower_class_name,
     unsupported_host_class_name_diagnostic,
 };
 use crate::transform::module::{
     create_runtime_host_module_items, element_tag_name, is_supported_host_element,
 };
+use crate::transform::opacity::{compose_inherited_opacity, static_opacity_alpha};
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        BlockStmt, Ident, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue, JSXClosingElement,
-        JSXElement, JSXElementName, Module, Pat, Str, VarDecl, VarDeclKind,
+        BlockStmt, Expr, Ident, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue,
+        JSXClosingElement, JSXElement, JSXElementChild, JSXElementName, JSXExpr, JSXFragment,
+        Module, Pat, Str, VarDecl, VarDeclKind,
     },
-    ecma::visit::{VisitMut, VisitMutWith},
+    ecma::visit::{Visit, VisitMut, VisitMutWith, VisitWith},
 };
 
 pub(crate) struct VelaTransformer {
@@ -30,6 +34,9 @@ pub(crate) struct VelaTransformer {
     pub(crate) ir: Vec<StyleIr>,
     pub(crate) runtime_host_needed: bool,
     pub(crate) class_value_scopes: ClassValueScopeStack,
+    /// The alpha every enclosing `opacity-*` has left for this element. 1 is
+    /// opaque, and the root starts there.
+    pub(crate) opacity_alpha: f64,
 }
 
 impl VisitMut for VelaTransformer {
@@ -79,11 +86,30 @@ impl VisitMut for VelaTransformer {
         }
     }
 
-    fn visit_mut_jsx_element(&mut self, element: &mut JSXElement) {
-        element.visit_mut_children_with(self);
+    // A fragment carries no instance and no class, but it does carry children,
+    // and the fade running through it still has to report the ones it misses.
+    fn visit_mut_jsx_fragment(&mut self, fragment: &mut JSXFragment) {
+        if self.opacity_alpha < 1.0 {
+            self.report_unreachable_opacity_children(&fragment.children);
+        }
+        fragment.visit_mut_children_with(self);
+    }
 
+    fn visit_mut_jsx_element(&mut self, element: &mut JSXElement) {
         let is_component = is_component_element(&element.opening.name);
-        if !is_supported_host_element(&element.opening.name) && !is_component {
+        let is_host = is_supported_host_element(&element.opening.name);
+        let element_tag =
+            (is_host && !is_component).then(|| element_tag_name(&element.opening.name));
+
+        let inherited_alpha = self.opacity_alpha;
+        self.opacity_alpha = self.subtree_opacity_alpha(element, element_tag.as_deref());
+        if self.opacity_alpha < 1.0 {
+            self.report_unreachable_opacity_children(&element.children);
+        }
+        element.visit_mut_children_with(self);
+        self.opacity_alpha = inherited_alpha;
+
+        if !is_host && !is_component {
             if let Some(diagnostic) = unsupported_host_class_name_diagnostic(
                 &element.opening.name,
                 &element.opening.attrs,
@@ -93,8 +119,6 @@ impl VisitMut for VelaTransformer {
             return;
         }
 
-        let element_tag = (!is_component).then(|| element_tag_name(&element.opening.name));
-
         let Some(mut lowered) = lower_class_name(
             &element.opening.attrs,
             &self.config,
@@ -102,6 +126,15 @@ impl VisitMut for VelaTransformer {
             &self.class_value_scopes,
             &mut self.diagnostics,
         ) else {
+            // An element with no `className` still sits inside the fade, and it
+            // is the common case: a plain `<textlabel Text="…" />`.
+            if inherited_alpha < 1.0 && element_tag.is_some() {
+                self.apply_inherited_opacity_attrs(
+                    element,
+                    element_tag.as_deref(),
+                    inherited_alpha,
+                );
+            }
             return;
         };
 
@@ -119,6 +152,22 @@ impl VisitMut for VelaTransformer {
             crate::transform::runtime::apply_preflight(
                 &mut lowered.style_ir,
                 &declared_prop_names(&lowered.preserved_attrs),
+            );
+        }
+
+        // A class value that only exists at render time resolves tokens this
+        // pass never sees, so the runtime host fades whatever it resolves —
+        // variant rules included. Everything statically known is faded here.
+        let inherited_opacity_at_runtime =
+            inherited_alpha < 1.0 && lowered.style_ir.runtime_class_value;
+        if inherited_alpha < 1.0 {
+            let declared = declared_prop_names(&lowered.preserved_attrs);
+            compose_inherited_opacity(
+                &mut lowered.style_ir,
+                element_tag.as_deref(),
+                inherited_alpha,
+                &declared,
+                !inherited_opacity_at_runtime,
             );
         }
 
@@ -237,6 +286,12 @@ impl VisitMut for VelaTransformer {
                         .expect("margin spec must serialize to JSON"),
                 }));
             }
+            if inherited_opacity_at_runtime {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaOpacity".into(),
+                    value: inherited_alpha.to_string(),
+                }));
+            }
             attrs.push(create_prop_attr(PropEntry {
                 name: "__velaTag".into(),
                 value: runtime_tag,
@@ -283,6 +338,125 @@ impl VisitMut for VelaTransformer {
             .chain(existing_children)
             .collect();
     }
+}
+
+impl VelaTransformer {
+    /// The alpha this element hands to everything nested inside it.
+    fn subtree_opacity_alpha(&self, element: &JSXElement, element_tag: Option<&str>) -> f64 {
+        // A CanvasGroup composites its subtree in one pass, so its own
+        // `GroupTransparency` already carries the fade for everything below and
+        // nothing under it repeats the multiplication.
+        if element_tag == Some("canvasgroup") {
+            return 1.0;
+        }
+
+        self.opacity_alpha
+            * self
+                .own_opacity_alpha(&element.opening.attrs)
+                .unwrap_or(1.0)
+    }
+
+    fn own_opacity_alpha(&self, attrs: &[JSXAttrOrSpread]) -> Option<f64> {
+        let value = attrs.iter().find_map(|attr| match attr {
+            JSXAttrOrSpread::JSXAttr(JSXAttr {
+                name: JSXAttrName::Ident(ident),
+                value,
+                ..
+            }) if ident.sym == "className" => value.as_ref(),
+            _ => None,
+        })?;
+
+        match value {
+            JSXAttrValue::Str(literal) => {
+                let class_name = literal.value.to_string_lossy();
+                static_opacity_alpha(class_name.split_whitespace(), &self.config)
+            }
+            JSXAttrValue::JSXExprContainer(container) => {
+                let JSXExpr::Expr(expr) = &container.expr else {
+                    return None;
+                };
+                let collapse = collapse_class_value_expr(expr, &self.class_value_scopes);
+                static_opacity_alpha(collapse.static_tokens, &self.config)
+            }
+            _ => None,
+        }
+    }
+
+    /// Children written as JSX are walked and faded with everything else.
+    /// Children that arrive as a value are not, and neither is anything a
+    /// component renders out of sight, so the fade names what it missed.
+    fn report_unreachable_opacity_children(&mut self, children: &[JSXElementChild]) {
+        for child in children {
+            let unreachable = match child {
+                JSXElementChild::JSXElement(child) if is_component_element(&child.opening.name) => {
+                    format!("`<{} />`", element_display_name(&child.opening.name))
+                }
+                JSXElementChild::JSXExprContainer(container) => {
+                    let JSXExpr::Expr(expr) = &container.expr else {
+                        continue;
+                    };
+                    if contains_jsx(expr) {
+                        continue;
+                    }
+                    "the children this expression evaluates to".to_owned()
+                }
+                JSXElementChild::JSXSpreadChild(_) => "the spread children".to_owned(),
+                _ => continue,
+            };
+
+            self.diagnostics
+                .push(opacity_unreachable_child_diagnostic(&unreachable));
+        }
+    }
+
+    /// Fades an element that carries no `className` of its own — a plain
+    /// `<textlabel Text="…" />` is still inside the subtree.
+    fn apply_inherited_opacity_attrs(
+        &mut self,
+        element: &mut JSXElement,
+        element_tag: Option<&str>,
+        alpha: f64,
+    ) {
+        let mut style = StyleIr::default();
+        compose_inherited_opacity(
+            &mut style,
+            element_tag,
+            alpha,
+            &declared_prop_names(&element.opening.attrs),
+            true,
+        );
+
+        if style.base.props.is_empty() {
+            return;
+        }
+
+        self.changed = true;
+        element
+            .opening
+            .attrs
+            .extend(style.base.props.into_iter().map(create_prop_attr));
+    }
+}
+
+#[derive(Default)]
+struct JsxPresence {
+    found: bool,
+}
+
+impl Visit for JsxPresence {
+    fn visit_jsx_element(&mut self, _: &JSXElement) {
+        self.found = true;
+    }
+
+    fn visit_jsx_fragment(&mut self, _: &JSXFragment) {
+        self.found = true;
+    }
+}
+
+fn contains_jsx(expr: &Expr) -> bool {
+    let mut presence = JsxPresence::default();
+    expr.visit_with(&mut presence);
+    presence.found
 }
 
 fn declared_prop_names(attrs: &[JSXAttrOrSpread]) -> Vec<String> {

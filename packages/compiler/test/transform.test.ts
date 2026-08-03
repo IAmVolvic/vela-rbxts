@@ -1,6 +1,14 @@
+import { readFileSync } from "node:fs";
 import { implementationKind, transform } from "@vela-rbxts/compiler";
 import { expect, expectTypeOf, test } from "vitest";
 import { defaultConfig, defineConfig, plugin } from "../../config/src/index";
+
+// The runtime host ships as its own package, so what it resolves is asserted
+// against its source rather than against a copy inlined into the emit.
+const runtimeSource = readFileSync(
+	new URL("../../runtime/src/index.ts", import.meta.url),
+	"utf8",
+);
 
 function buildColorPalette(entries: Record<string, string>) {
 	return entries;
@@ -252,8 +260,8 @@ test("lowers border utilities to UIStroke helpers", () => {
 	expect(result.code).toMatch(
 		/<uistroke\b[^>]*Thickness=\{4\}[^>]*Transparency=\{1\}[^>]*\/>/i,
 	);
-	expect(result.code).toContain("uicorner");
-	expect(result.code).toContain("uistroke");
+	expect(runtimeSource).toContain("uicorner");
+	expect(runtimeSource).toContain("uistroke");
 });
 
 test("reports unsupported border forms with a targeted diagnostic", () => {
@@ -339,13 +347,13 @@ test("border static and runtime classifiers stay in parity", () => {
 		'<frame className={["border", active && "border-blue-600"]} />',
 	);
 	expect(runtime.needsRuntimeHost).toBe(true);
-	expect(runtime.code).toContain(
+	expect(runtimeSource).toContain(
 		`key === "${THICKNESS_KEYS.join('" || key === "')}"`,
 	);
 	for (const keyword of ["dashed", "solid", "dotted", "double"]) {
-		expect(runtime.code).toContain(`key === "${keyword}"`);
+		expect(runtimeSource).toContain(`key === "${keyword}"`);
 	}
-	expect(runtime.code).toContain('startsWith(key, "opacity-")');
+	expect(runtimeSource).toContain('startsWith(key, "opacity-")');
 });
 
 test("warns on unknown background color keys unless config defines them", () => {
@@ -502,14 +510,14 @@ test("carries z-index utilities through the runtime variant path", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("VelaRuntimeHost");
-	expect(result.code).toContain("__velaRules");
-	expect(result.code).toContain("const __velaStringLen = string.len;");
-	expect(result.code).toContain("const __velaStringSub = string.sub;");
-	expect(result.code).toContain("__velaStringLen(value)");
-	expect(result.code).toContain("__velaStringSub(value");
-	expect(result.code).toContain("value.size()");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("__velaRules");
+	expect(runtimeSource).toContain("const __velaStringLen = string.len;");
+	expect(runtimeSource).toContain("const __velaStringSub = string.sub;");
+	expect(runtimeSource).toContain("__velaStringLen(value)");
+	expect(runtimeSource).toContain("__velaStringSub(value");
+	expect(runtimeSource).toContain("value.size()");
 	expect(result.code).not.toContain("string.len(value)");
 	expect(result.code).not.toContain("string.sub(value");
 	expect(result.code).not.toMatch(/string\.len\s*\(/);
@@ -1249,7 +1257,7 @@ test("keeps static-only className fully compile-time without runtime helper inje
 
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(false);
-	expect(result.code).not.toContain("__createVelaRuntimeHost");
+	expect(result.code).not.toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain("VelaRuntimeHost");
 	expect(result.code).not.toContain("@vela-rbxts/runtime");
 	expect(result.code).not.toContain("vela-rbxts/runtime");
@@ -1263,11 +1271,10 @@ test("rewrites dynamic array className through the inline runtime helper", () =>
 
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
 	expect(result.code).toContain('className={active && "rounded-md"}');
-	expect(result.code).not.toContain("@vela-rbxts/runtime");
-	expect(result.code).not.toContain("vela-rbxts/runtime");
+	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
 	expect(result.code).not.toContain("../__vela__/runtime-host");
 });
 
@@ -1281,11 +1288,11 @@ test("resolves layout direction and alignment through the inline runtime helper"
 	);
 
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("Enum.FillDirection.Horizontal");
-	expect(result.code).toContain("Enum.FillDirection.Vertical");
-	expect(result.code).toContain("Enum.HorizontalAlignment.Center");
-	expect(result.code).toContain("Enum.VerticalAlignment.Center");
-	expect(result.code).toContain("Enum.UIFlexAlignment.SpaceBetween");
+	expect(runtimeSource).toContain("Enum.FillDirection.Horizontal");
+	expect(runtimeSource).toContain("Enum.FillDirection.Vertical");
+	expect(runtimeSource).toContain("Enum.HorizontalAlignment.Center");
+	expect(runtimeSource).toContain("Enum.VerticalAlignment.Center");
+	expect(runtimeSource).toContain("Enum.UIFlexAlignment.SpaceBetween");
 });
 
 test("resolves automatic sizing through the inline runtime helper", () => {
@@ -1294,9 +1301,9 @@ test("resolves automatic sizing through the inline runtime helper", () => {
 	);
 
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("Enum.AutomaticSize.X");
-	expect(result.code).toContain("Enum.AutomaticSize.Y");
-	expect(result.code).toContain("Enum.AutomaticSize.XY");
+	expect(runtimeSource).toContain("Enum.AutomaticSize.X");
+	expect(runtimeSource).toContain("Enum.AutomaticSize.Y");
+	expect(runtimeSource).toContain("Enum.AutomaticSize.XY");
 });
 
 test("rewrites dynamic object-map className through the inline runtime helper", () => {
@@ -1306,8 +1313,8 @@ test("rewrites dynamic object-map className through the inline runtime helper", 
 
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
 	expect(result.code).toContain('"px-4": roomy');
 	expect(result.code).toContain('"px-2": !roomy');
 });
@@ -1319,13 +1326,12 @@ test("rewrites dynamic border className through the inline runtime helper", () =
 
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("VelaRuntimeHost");
-	expect(result.code).toContain("uistroke");
-	expect(result.code).toContain("Thickness");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("uistroke");
+	expect(runtimeSource).toContain("Thickness");
 	expect(result.code).toContain("Color3.fromRGB(21, 93, 252)");
-	expect(result.code).not.toContain("@vela-rbxts/runtime");
-	expect(result.code).not.toContain("vela-rbxts/runtime");
+	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
 });
 
 test("resolves text colors on the runtime path", () => {
@@ -1338,8 +1344,8 @@ test("resolves text colors on the runtime path", () => {
 	// The `text-` branch has to reach TextColor3, not fall through to nothing:
 	// a dropped text color leaves the label on Roblox's near-black default,
 	// which is invisible on any dark surface.
-	expect(result.code).toContain('startsWith(token, "text-")');
-	expect(result.code).toContain('"TextColor3", "TextTransparency"');
+	expect(runtimeSource).toContain('startsWith(token, "text-")');
+	expect(runtimeSource).toContain('"TextColor3", "TextTransparency"');
 });
 
 test("resolves size and alignment text utilities on the runtime path", () => {
@@ -1351,9 +1357,9 @@ test("resolves size and alignment text utilities on the runtime path", () => {
 	// These share the `text-` prefix with colors and are classified ahead of
 	// them, exactly as the static path does. Leaving them unresolved put every
 	// label on Roblox's 8px default.
-	expect(result.code).toContain('propEffect("TextSize"');
-	expect(result.code).toContain('propEffect("TextXAlignment"');
-	expect(result.code).toContain("Enum.TextXAlignment.Left");
+	expect(runtimeSource).toContain('propEffect("TextSize"');
+	expect(runtimeSource).toContain('propEffect("TextXAlignment"');
+	expect(runtimeSource).toContain("Enum.TextXAlignment.Left");
 });
 
 // The runtime host implemented a strict subset of the static lowering for a
@@ -1442,7 +1448,7 @@ test("the runtime host knows every utility family the static path lowers", () =>
 	] as const;
 
 	for (const prefix of FAMILY_PREFIXES) {
-		expect(result.code).toContain(`"${prefix}"`);
+		expect(runtimeSource).toContain(`"${prefix}"`);
 	}
 
 	const RESOLVED_PROPS = [
@@ -1468,7 +1474,7 @@ test("the runtime host knows every utility family the static path lowers", () =>
 	] as const;
 
 	for (const prop of RESOLVED_PROPS) {
-		expect(result.code).toContain(prop);
+		expect(runtimeSource).toContain(prop);
 	}
 
 	const RESOLVED_HELPERS = [
@@ -1486,7 +1492,7 @@ test("the runtime host knows every utility family the static path lowers", () =>
 	] as const;
 
 	for (const helper of RESOLVED_HELPERS) {
-		expect(result.code).toContain(`"${helper}"`);
+		expect(runtimeSource).toContain(`"${helper}"`);
 	}
 });
 
@@ -1496,16 +1502,16 @@ test("composes the runtime families that only meet at the end", () => {
 	// Position, AnchorPoint, the size constraints, a grid track and the gradient
 	// stops are all built from more than one token, so the dynamic path needs
 	// the same deferred composition the static `PendingAxes::flush` does.
-	expect(result.code).toContain("function applyComposedResolution(");
-	expect(result.code).toContain("function applyComposedTransform(");
-	expect(result.code).toContain("function applyComposedSizeConstraints(");
-	expect(result.code).toContain("function applyComposedGrid(");
-	expect(result.code).toContain("function applyComposedGradient(");
-	expect(result.code).toContain("MinSize");
-	expect(result.code).toContain("MaxSize");
-	expect(result.code).toContain("CellSize");
-	expect(result.code).toContain("CellPadding");
-	expect(result.code).toContain("ColorSequence");
+	expect(runtimeSource).toContain("function applyComposedResolution(");
+	expect(runtimeSource).toContain("function applyComposedTransform(");
+	expect(runtimeSource).toContain("function applyComposedSizeConstraints(");
+	expect(runtimeSource).toContain("function applyComposedGrid(");
+	expect(runtimeSource).toContain("function applyComposedGradient(");
+	expect(runtimeSource).toContain("MinSize");
+	expect(runtimeSource).toContain("MaxSize");
+	expect(runtimeSource).toContain("CellSize");
+	expect(runtimeSource).toContain("CellPadding");
+	expect(runtimeSource).toContain("ColorSequence");
 });
 
 test("drops runtime utilities the host element cannot carry", () => {
@@ -1513,19 +1519,19 @@ test("drops runtime utilities the host element cannot carry", () => {
 
 	// `TextColor3` on a Frame is a hard Roblox error rather than a no-op, so the
 	// dynamic path filters by host tag the way `is_utility_allowed_on_host` does.
-	expect(result.code).toContain("function isPropAllowedOnTag(");
-	expect(result.code).toContain('tag === "textlabel"');
-	expect(result.code).toContain('tag === "imagelabel"');
-	expect(result.code).toContain('tag === "scrollingframe"');
-	expect(result.code).toContain('tag === "textbox"');
+	expect(runtimeSource).toContain("function isPropAllowedOnTag(");
+	expect(runtimeSource).toContain('tag === "textlabel"');
+	expect(runtimeSource).toContain('tag === "imagelabel"');
+	expect(runtimeSource).toContain('tag === "scrollingframe"');
+	expect(runtimeSource).toContain('tag === "textbox"');
 });
 
 test("resolves color opacity modifiers and arbitrary hex on the runtime path", () => {
 	const result = transform("<frame className={recipe} />");
 
-	expect(result.code).toContain("function splitColorOpacity(");
-	expect(result.code).toContain("function opacityToTransparency(");
-	expect(result.code).toContain("function parseArbitraryColor(");
+	expect(runtimeSource).toContain("function splitColorOpacity(");
+	expect(runtimeSource).toContain("function opacityToTransparency(");
+	expect(runtimeSource).toContain("function parseArbitraryColor(");
 });
 
 test("rewrites dynamic border object maps through the inline runtime helper", () => {
@@ -1535,11 +1541,11 @@ test("rewrites dynamic border object maps through the inline runtime helper", ()
 
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("VelaRuntimeHost");
-	expect(result.code).toContain("uistroke");
-	expect(result.code).toContain("Thickness");
-	expect(result.code).toContain("Transparency");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("uistroke");
+	expect(runtimeSource).toContain("Thickness");
+	expect(runtimeSource).toContain("Transparency");
 	expect(result.code).toContain("className={{");
 	expect(result.code).toContain('"border-2": thick');
 	expect(result.code).toContain('"border-transparent": hidden');
@@ -1552,12 +1558,12 @@ test("rewrites runtime-aware variants through the inline runtime rule path", () 
 
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("__velaRules");
-	expect(result.code).toContain("__createVelaRuntimeHost");
+	expect(runtimeSource).toContain("__velaRules");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain(
 		'className="rounded-md md:border-2 portrait:w-80 touch:border-blue-600"',
 	);
-	expect(result.code).toContain("uistroke");
+	expect(runtimeSource).toContain("uistroke");
 });
 
 test("rewrites dynamic ClassValue expressions through the runtime wrapper", () => {
@@ -1568,15 +1574,14 @@ test("rewrites dynamic ClassValue expressions through the runtime wrapper", () =
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain('import __VelaReact from "@rbxts/react";');
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain('import __VelaReact from "@rbxts/react";');
 	expect(result.code).toContain("const VelaRuntimeHost =");
 	expect(result.code).toContain("<VelaRuntimeHost");
-	expect(result.code).toContain("__velaTag");
-	expect(result.code).toContain("__velaRules");
+	expect(runtimeSource).toContain("__velaTag");
+	expect(runtimeSource).toContain("__velaRules");
 	// Intentional regression checks for the removed runtime package import path.
-	expect(result.code).not.toContain("@vela-rbxts/runtime");
-	expect(result.code).not.toContain("vela-rbxts/runtime");
+	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
 	expect(result.code).not.toContain("../__vela__/runtime-host");
 	expect(result.code).not.toContain("RbxtsTailwindRuntimeHost");
 	expect(result.code).not.toContain("__rbxtsTailwindRules");
@@ -1588,7 +1593,7 @@ test("rewrites dynamic ClassValue expressions through the runtime wrapper", () =
 	expect(result.code).not.toContain("TailwindRuntimeHost");
 	expect(result.code).not.toContain("@vela-rbxts/types");
 	expect(result.code).not.toContain("@vela-rbxts/config");
-	expect(result.code).toContain("BackgroundColor3");
+	expect(runtimeSource).toContain("BackgroundColor3");
 	expect(result.code).toContain('className={active && "rounded-md"}');
 	expect(result.code).not.toContain("unsupported-classname-expression");
 	expect(result.ir).toHaveLength(1);
@@ -1615,11 +1620,11 @@ test("folds a fully static array className without injecting the runtime wrapper
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).not.toContain("__createVelaRuntimeHost");
+	expect(result.code).not.toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain("VelaRuntimeHost");
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toContain("BackgroundColor3");
-	expect(result.code).toContain("uicorner");
+	expect(runtimeSource).toContain("BackgroundColor3");
+	expect(runtimeSource).toContain("uicorner");
 	expect(result.ir).toHaveLength(1);
 	expect(JSON.parse(result.ir[0])).toEqual(
 		expect.objectContaining({
@@ -1648,11 +1653,11 @@ test("folds a locally constant identifier before lowering the className", () => 
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).not.toContain("__createVelaRuntimeHost");
+	expect(result.code).not.toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain("VelaRuntimeHost");
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toContain("BackgroundColor3");
-	expect(result.code).toContain("uicorner");
+	expect(runtimeSource).toContain("BackgroundColor3");
+	expect(runtimeSource).toContain("uicorner");
 });
 
 test("folds a constant object map down to the surviving static key", () => {
@@ -1662,7 +1667,7 @@ test("folds a constant object map down to the surviving static key", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).not.toContain("__createVelaRuntimeHost");
+	expect(result.code).not.toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain("VelaRuntimeHost");
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 8\)\}/);
@@ -1676,7 +1681,7 @@ test("folds a constant ternary to a static utility class", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).not.toContain("__createVelaRuntimeHost");
+	expect(result.code).not.toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain("VelaRuntimeHost");
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(160, 0\)\}/);
@@ -1689,11 +1694,11 @@ test("keeps the runtime wrapper when a dynamic remainder survives constant foldi
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
 	expect(result.code).toContain("className={dynamicToken}");
 	expect(result.code).not.toContain("active && dynamicToken");
-	expect(result.code).toContain("BackgroundColor3");
+	expect(runtimeSource).toContain("BackgroundColor3");
 });
 
 test("keeps dynamic object-map className values on the runtime wrapper", () => {
@@ -1703,9 +1708,9 @@ test("keeps dynamic object-map className values on the runtime wrapper", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("VelaRuntimeHost");
-	expect(result.code).toContain("BackgroundColor3");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("BackgroundColor3");
 	expect(result.code).toContain("className={{");
 	expect(result.code).toContain('"px-4": roomy');
 	expect(result.code).toContain('"px-2": !roomy');
@@ -1719,11 +1724,11 @@ test("keeps variant-prefixed literals on the runtime rule path when they survive
 
 	expect(enabledResult.changed).toBe(true);
 	expect(enabledResult.diagnostics).toEqual([]);
-	expect(enabledResult.code).toContain("__createVelaRuntimeHost");
-	expect(enabledResult.code).toContain("VelaRuntimeHost");
-	expect(enabledResult.code).toContain("__velaRules");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("VelaRuntimeHost");
+	expect(runtimeSource).toContain("__velaRules");
 	expect(enabledResult.code).not.toContain("className=");
-	expect(enabledResult.code).toContain("uicorner");
+	expect(runtimeSource).toContain("uicorner");
 
 	const disabledResult = transform(
 		'const enabled = false; <frame className={["rounded-md", enabled && "md:px-4"]} />',
@@ -1731,11 +1736,11 @@ test("keeps variant-prefixed literals on the runtime rule path when they survive
 
 	expect(disabledResult.changed).toBe(true);
 	expect(disabledResult.diagnostics).toEqual([]);
-	expect(disabledResult.code).not.toContain("__createVelaRuntimeHost");
+	expect(disabledResult.code).not.toContain("createVelaRuntimeHost");
 	expect(disabledResult.code).not.toContain("VelaRuntimeHost");
 	expect(disabledResult.code).not.toContain("__velaRules");
 	expect(disabledResult.code).not.toContain("className=");
-	expect(disabledResult.code).toContain("uicorner");
+	expect(runtimeSource).toContain("uicorner");
 });
 
 test("lifts variant-prefixed literal utilities into runtime rules", () => {
@@ -1746,15 +1751,14 @@ test("lifts variant-prefixed literal utilities into runtime rules", () => {
 	expect(result.changed).toBe(true);
 	expect(result.needsRuntimeHost).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain('import __VelaReact from "@rbxts/react";');
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain('import __VelaReact from "@rbxts/react";');
 	expect(result.code).toContain("const VelaRuntimeHost =");
 	expect(result.code).toContain("<VelaRuntimeHost");
 	// Intentional regression checks for the removed runtime package import path.
-	expect(result.code).not.toContain("@vela-rbxts/runtime");
-	expect(result.code).not.toContain("vela-rbxts/runtime");
+	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
 	expect(result.code).not.toContain("../__vela__/runtime-host");
-	expect(result.code).toContain("__velaRules");
+	expect(runtimeSource).toContain("__velaRules");
 	expect(result.code).not.toContain(
 		'className="rounded-md md:border-2 portrait:w-80 touch:border-blue-600"',
 	);
@@ -1869,8 +1873,106 @@ test("lowers opacity on a canvas group to GroupTransparency", () => {
 	expect(result.code).not.toMatch(/BackgroundTransparency=\{0\.75\}/);
 
 	const runtime = transform('<canvasgroup className="md:opacity-25" />');
-	expect(runtime.code).toContain("__velaRules");
-	expect(runtime.code).toContain("GroupTransparency");
+	expect(runtimeSource).toContain("__velaRules");
+	expect(runtimeSource).toContain("GroupTransparency");
+});
+
+test("fades the text an opacity utility sits on", () => {
+	const result = transform('<textlabel className="opacity-25" Text="hi" />');
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/TextTransparency=\{0\.75\}/);
+	expect(result.code).toMatch(/BackgroundTransparency=\{0\.75\}/);
+});
+
+test("composes an opacity into the children written under it", () => {
+	const result = transform(
+		'<frame className="opacity-50"><textlabel Text="hi" /><frame className="bg-slate-700" /></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// The label carries no class of its own and is still inside the fade.
+	expect(result.code).toMatch(/TextTransparency=\{0\.5\}/);
+	// Alpha multiplies, so a half-transparent background under a half-opacity
+	// parent lands at a quarter — not at the parent's own value.
+	expect(result.code).toMatch(/BackgroundTransparency=\{0\.5\}/);
+});
+
+test("multiplies a nested opacity instead of overwriting it", () => {
+	const result = transform(
+		'<frame className="opacity-50"><frame className="opacity-50 bg-slate-700" /></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/BackgroundTransparency=\{0\.75\}/);
+});
+
+test("stops composing under a canvas group, which composites its own subtree", () => {
+	const result = transform(
+		'<frame className="opacity-50"><canvasgroup><frame className="bg-slate-700" /></canvasgroup></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/GroupTransparency=\{0\.5\}/);
+	// The frame inside the group keeps its own painted background untouched.
+	expect(result.code).toMatch(
+		/<frame BackgroundColor3=\{Color3\.fromRGB\(49, 65, 88\)\} BorderSizePixel=\{0\}\/>/,
+	);
+});
+
+test("composes an opacity through a conditional and a map", () => {
+	const result = transform(
+		'<frame className="opacity-50">{items.map((item) => <textlabel Text={item} />)}</frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/TextTransparency=\{0\.5\}/);
+});
+
+test("carries an opacity into a variant that restates the transparency", () => {
+	const result = transform(
+		'<frame className="opacity-50"><frame className="bg-slate-700 hover:bg-blue-600/50" /></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// The variant overlays the base at render time, so it carries the product
+	// too — 0.5 alpha of its own under 0.5 from the parent.
+	expect(result.code).toContain('"value": "0.75"');
+});
+
+test("hands a dynamic class value the inherited opacity to compose itself", () => {
+	const result = transform(
+		'<frame className="opacity-50"><frame className={classes} /></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toContain("__velaOpacity={0.5}");
+});
+
+test("the runtime host composes the opacity handed to it", () => {
+	expect(runtimeSource).toContain("__velaOpacity");
+	expect(runtimeSource).toContain("function composeInheritedOpacity(");
+	expect(runtimeSource).toContain("function opacityTransparencyProps(");
+});
+
+test("reports the children an opacity cannot reach", () => {
+	const result = transform(
+		'<frame className="opacity-50">{props.children}<Button /></frame>',
+	);
+
+	expect(result.diagnostics).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				level: "warning",
+				code: "opacity-unreachable-child",
+			}),
+		]),
+	);
+	expect(
+		result.diagnostics.filter(
+			(diagnostic) => diagnostic.code === "opacity-unreachable-child",
+		),
+	).toHaveLength(2);
 });
 
 test("warns on out-of-range opacity values", () => {
@@ -2015,8 +2117,8 @@ test("carries flex utilities through the runtime variant path with enum parsing"
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain('startsWith(value, "Enum.")');
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain('startsWith(value, "Enum.")');
 
 	expect(JSON.parse(result.ir[0])).toEqual(
 		expect.objectContaining({
@@ -2158,8 +2260,8 @@ test("the runtime host re-reads the viewport so breakpoints stay live", () => {
 	expect(result.needsRuntimeHost).toBe(true);
 	// ViewportSize is 1x1 until the first frame renders, so a mount-time read
 	// alone pins every breakpoint to a width no rule can match.
-	expect(result.code).toContain(
-		'camera.GetPropertyChangedSignal("ViewportSize").Connect(updateEnvironment)',
+	expect(runtimeSource).toMatch(
+		/camera\s*\.GetPropertyChangedSignal\("ViewportSize"\)[\s\S]*?updateEnvironment/,
 	);
 });
 
@@ -2920,8 +3022,8 @@ test("keeps transitions on dynamic class values in the runtime host", () => {
 	);
 
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("__createVelaRuntimeHost");
-	expect(result.code).toContain("TweenService");
+	expect(runtimeSource).toContain("createVelaRuntimeHost");
+	expect(runtimeSource).toContain("TweenService");
 });
 
 test("rejects invalid transition values with diagnostics", () => {
@@ -2955,7 +3057,7 @@ test("promotes animate presets to the runtime host", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.needsRuntimeHost).toBe(true);
 	expect(result.code).toMatch(/__velaAnimation=\{"spin"\}/);
-	expect(result.code).toContain("startPresetAnimation");
+	expect(runtimeSource).toContain("startPresetAnimation");
 });
 
 test("animate-none cancels an earlier preset", () => {
@@ -2989,8 +3091,8 @@ test("renders the runtime host through forwardRef for slotting compatibility", (
 		null,
 	);
 
-	expect(result.code).toContain("forwardRef((props: VelaRuntimeHostProps");
-	expect(result.code).toContain("assignForwardedRef");
+	expect(runtimeSource).toContain("forwardRef((props: VelaRuntimeHostProps");
+	expect(runtimeSource).toContain("assignForwardedRef");
 });
 
 test("warns and strips motion utilities on component elements", () => {
@@ -3011,7 +3113,7 @@ test("warns and strips motion utilities on component elements", () => {
 		expect.objectContaining({ code: "motion-on-component" }),
 	]);
 	expect(transitioned.code).not.toContain("__velaTransition={");
-	expect(transitioned.code).toContain("__velaRules");
+	expect(runtimeSource).toContain("__velaRules");
 });
 
 test("transforms a literal Text at compile time without a runtime host", () => {
@@ -3075,7 +3177,7 @@ test("defers dynamic Text to the runtime pipeline", () => {
 	expect(result.code).toContain("__velaText={");
 	expect(result.code).toMatch(/"transform": "upper"/);
 	expect(result.code).toMatch(/"decoration": "underline"/);
-	expect(result.code).toContain("applyTextConfig");
+	expect(runtimeSource).toContain("applyTextConfig");
 });
 
 test("normal-case and no-underline cancel earlier text utilities", () => {
@@ -3101,8 +3203,8 @@ test("promotes margined elements to the runtime host with a margin spec", () => 
 	expect(result.code).toContain("__velaMargin={");
 	expect(result.code).toMatch(/"top": 16\.0/);
 	expect(result.code).toMatch(/"left": 16\.0/);
-	expect(result.code).toContain("prepareMarginWrapper");
-	expect(result.code).toContain("renderMarginWrapper");
+	expect(runtimeSource).toContain("prepareMarginWrapper");
+	expect(runtimeSource).toContain("renderMarginWrapper");
 });
 
 test("merges per-side margins with last-wins semantics", () => {
@@ -3184,7 +3286,7 @@ test("promotes divided containers to the runtime host with a divide spec", () =>
 	expect(result.code).toMatch(/"axis": "y"/);
 	expect(result.code).toMatch(/"thickness": 2\.0/);
 	expect(result.code).toMatch(/"color": "Color3\.fromRGB\(/);
-	expect(result.code).toContain("interleaveDivideSeparators");
+	expect(runtimeSource).toContain("interleaveDivideSeparators");
 });
 
 test("divide separators step over helper elements lowered as children", () => {
@@ -3202,9 +3304,9 @@ test("divide separators step over helper elements lowered as children", () => {
 	// flex-col lowers a uilistlayout into the same children list, so counting
 	// raw positions puts a separator above the first real child.
 	expect(result.code).toContain("<uilistlayout");
-	expect(result.code).toMatch(/if \(isModifierChild\(child\)\) \{/);
-	expect(result.code).toMatch(/if \(seenContentChild\) \{/);
-	expect(result.code).toMatch(
+	expect(runtimeSource).toMatch(/if \(isModifierChild\(child\)\) \{/);
+	expect(runtimeSource).toMatch(/if \(seenContentChild\) \{/);
+	expect(runtimeSource).toMatch(
 		/function isModifierChild[\s\S]*?startsWith\(elementType\.lower\(\), "ui"\)/,
 	);
 });
@@ -3255,8 +3357,8 @@ test("lowers hover variants into runtime rules", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.needsRuntimeHost).toBe(true);
 	expect(result.code).toMatch(/"kind": "hover"/);
-	expect(result.code).toContain("attachHoverTracking");
-	expect(result.code).toContain("MouseEnter");
+	expect(runtimeSource).toContain("attachHoverTracking");
+	expect(runtimeSource).toContain("MouseEnter");
 });
 
 test("narrows the tween to the transition property group", () => {
@@ -3266,7 +3368,7 @@ test("narrows the tween to the transition property group", () => {
 	);
 	expect(colors.diagnostics).toEqual([]);
 	expect(colors.code).toMatch(/"property": "colors"/);
-	expect(colors.code).toContain("transitionCoversProp");
+	expect(runtimeSource).toContain("transitionCoversProp");
 
 	const all = transform(
 		`export const B = () => <frame className="bg-slate-700 md:bg-blue-600 transition" />;`,
@@ -3293,8 +3395,8 @@ test("lowers active and focus variants into runtime rules", () => {
 	expect(pressed.diagnostics).toEqual([]);
 	expect(pressed.needsRuntimeHost).toBe(true);
 	expect(pressed.code).toMatch(/"kind": "active"/);
-	expect(pressed.code).toContain("attachActiveTracking");
-	expect(pressed.code).toContain("InputBegan");
+	expect(runtimeSource).toContain("attachActiveTracking");
+	expect(runtimeSource).toContain("InputBegan");
 
 	const focused = transform(
 		`export const B = () => <textbox className="border focus:border-blue-600" />;`,
@@ -3302,10 +3404,10 @@ test("lowers active and focus variants into runtime rules", () => {
 	);
 	expect(focused.diagnostics).toEqual([]);
 	expect(focused.code).toMatch(/"kind": "focus"/);
-	expect(focused.code).toContain("attachFocusTracking");
+	expect(runtimeSource).toContain("attachFocusTracking");
 	// Text boxes take keyboard focus; everything else reads selection focus.
-	expect(focused.code).toContain("FocusLost");
-	expect(focused.code).toContain("SelectionGained");
+	expect(runtimeSource).toContain("FocusLost");
+	expect(runtimeSource).toContain("SelectionGained");
 });
 
 test("lowers the dark variant into a color scheme rule", () => {
@@ -3319,8 +3421,8 @@ test("lowers the dark variant into a color scheme rule", () => {
 	expect(result.code).toMatch(/"kind": "color-scheme"/);
 	expect(result.code).toMatch(/"value": "dark"/);
 	// Roblox exposes no color scheme, so the app owns it through an attribute.
-	expect(result.code).toContain("VelaColorScheme");
-	expect(result.code).toContain("GetAttributeChangedSignal");
+	expect(runtimeSource).toContain("VelaColorScheme");
+	expect(runtimeSource).toContain("GetAttributeChangedSignal");
 });
 
 test("resolves arbitrary length values", () => {
@@ -3440,7 +3542,7 @@ test("preflight lets a runtime-resolved background reopen the neutralized base",
 
 	expect(result.diagnostics).toEqual([]);
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("withPreflightBackground");
+	expect(runtimeSource).toContain("withPreflightBackground");
 	expect(result.code).toMatch(/"preflight":\s*true/);
 });
 
@@ -3563,11 +3665,11 @@ test("resolves plugin utilities on the runtime path too", () => {
 	);
 
 	expect(result.needsRuntimeHost).toBe(true);
-	expect(result.code).toContain("pluginUtilities");
+	expect(runtimeSource).toContain("pluginUtilities");
 	expect(result.code).toContain(
 		'"bg-blue-600 rounded-lg px-4 hover:bg-blue-700"',
 	);
-	expect(result.code).toContain("MAX_PLUGIN_EXPANSION_DEPTH");
+	expect(runtimeSource).toContain("MAX_PLUGIN_EXPANSION_DEPTH");
 });
 
 test("imports the configured motion driver instead of tweening itself", () => {
@@ -3594,11 +3696,11 @@ test("imports the configured motion driver instead of tweening itself", () => {
 		'import { springDriver as __VelaMotionDriverSource } from "@rbxts/vela-spring";',
 	);
 	expect(result.code).toContain(
-		"const __VelaMotionDriver: VelaMotionDriver = __VelaMotionDriverSource;",
+		"createVelaRuntimeHost(__VelaRuntimeConfig, __VelaMotionDriverSource)",
 	);
 	// The built-in path stays in the module: a driver that only implements one
 	// method leaves the other to TweenService.
-	expect(result.code).toContain("__VelaTweenService.Create(instance, info");
+	expect(runtimeSource).toContain("__VelaTweenService.Create(instance, info");
 });
 
 test("a motion driver with no export name is imported as the default", () => {
@@ -3618,8 +3720,6 @@ test("a motion driver with no export name is imported as the default", () => {
 test("falls back to the built-in driver when no plugin sets one", () => {
 	const result = transform('<frame className="animate-spin" />');
 
-	expect(result.code).toContain(
-		"const __VelaMotionDriver: VelaMotionDriver = {};",
-	);
+	expect(result.code).toContain("createVelaRuntimeHost(__VelaRuntimeConfig)");
 	expect(result.code).not.toContain("__VelaMotionDriverSource");
 });

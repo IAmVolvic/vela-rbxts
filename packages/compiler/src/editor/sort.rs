@@ -123,7 +123,7 @@ fn group_rank(utility: &UtilityKind) -> u32 {
         | UtilityKind::Padding(PaddingKind::Right)
         | UtilityKind::Padding(PaddingKind::Bottom)
         | UtilityKind::Padding(PaddingKind::Left) => 8,
-        // `opacity-*` and a `bg-*/N` modifier share `BackgroundTransparency`.
+        // `opacity-*` composes over whatever alpha the background settled on.
         UtilityKind::BackgroundColor
         | UtilityKind::Opacity
         | UtilityKind::ImageColor
