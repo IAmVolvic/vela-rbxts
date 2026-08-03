@@ -2,7 +2,7 @@ use crate::ir::model::RuntimeCondition;
 
 /// Runtime variant names paired with the condition they check, phrased for
 /// editor documentation. Keep the widths in sync with `parse_variant_prefix`.
-pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 9] = [
+pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 11] = [
     ("sm", "the viewport is at least 640px wide"),
     ("md", "the viewport is at least 768px wide"),
     ("lg", "the viewport is at least 1024px wide"),
@@ -12,6 +12,8 @@ pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 9] = [
     ("mouse", "the last input was a mouse or keyboard"),
     ("gamepad", "the last input was a gamepad"),
     ("hover", "the pointer is over the element"),
+    ("active", "the element is being pressed"),
+    ("focus", "the element holds input focus"),
 ];
 
 pub(crate) fn variant_condition(prefix: &str) -> Option<&'static str> {
@@ -45,6 +47,8 @@ pub(crate) enum VariantKind {
         value: String,
     },
     Hover,
+    Active,
+    Focus,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,6 +77,8 @@ impl ParsedVariant {
                 value: value.clone(),
             },
             VariantKind::Hover => RuntimeCondition::Hover,
+            VariantKind::Active => RuntimeCondition::Active,
+            VariantKind::Focus => RuntimeCondition::Focus,
         })
     }
 }
@@ -110,6 +116,8 @@ pub(crate) fn parse_variant_prefix(prefix: &str) -> Option<VariantKind> {
             value: "gamepad".to_owned(),
         }),
         "hover" => Some(VariantKind::Hover),
+        "active" => Some(VariantKind::Active),
+        "focus" => Some(VariantKind::Focus),
         _ => None,
     }
 }

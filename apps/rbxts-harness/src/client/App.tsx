@@ -58,7 +58,7 @@ export const App = () => {
 				<frame BackgroundTransparency={1} className="rounded" />
 				<frame
 					BackgroundTransparency={1}
-					className="tracking-wide focus:px-4 bg-[oops] from-blue-600/50 blorb-2"
+					className="tracking-wide checked:px-4 bg-[oops] from-blue-600/50 blorb-2"
 				/>
 				<frame
 					BackgroundTransparency={1}
@@ -105,6 +105,14 @@ export const App = () => {
 					className="font-mono"
 				/>
 				<canvasgroup className="opacity-50 size-6 bg-slate-700" />
+				<textbutton
+					Text="press me"
+					className="bg-slate-700 active:bg-blue-600 transition size-6"
+				/>
+				<textbox
+					PlaceholderText="type here"
+					className="border border-slate-500 focus:border-blue-600 size-6"
+				/>
 				<scrollingframe className="scroll-y scrollbar-w-2 scrollbar-slate-500 canvas-auto-y w-20 h-12">
 					<frame BackgroundTransparency={1} />
 				</scrollingframe>

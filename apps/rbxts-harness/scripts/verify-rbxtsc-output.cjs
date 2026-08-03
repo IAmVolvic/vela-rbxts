@@ -36,7 +36,7 @@ const source = fs.readFileSync(appLuauPath, "utf8");
 
 const requiredDiagnostics = [
 	'Tailwind "tracking" utilities have no Roblox equivalent, so "tracking-wide" is ignored.',
-	'Unknown variant "focus" in "focus:px-4"',
+	'Unknown variant "checked" in "checked:px-4"',
 	'Arbitrary value "[oops]" is not supported yet',
 	'Color opacity modifier "/50" is not supported',
 	'Unsupported utility family "blorb" in className literal.',
@@ -50,8 +50,14 @@ const requiredFragments = [
 	"Color3.fromRGB(255, 0, 0)",
 	"BackgroundTransparency = 0.5",
 	'kind = "hover"',
+	'kind = "active"',
+	'kind = "focus"',
 	"attachHoverTracking",
+	"attachActiveTracking",
+	"attachFocusTracking",
 	"MouseEnter",
+	"InputBegan",
+	"SelectionGained",
 	// Held tween values seed from the merged props. Narrowing this back to
 	// resolution.props loses every statically lowered base value, and a
 	// variant then has nothing to tween from.

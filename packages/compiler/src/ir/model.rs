@@ -88,6 +88,8 @@ pub(crate) enum RuntimeCondition {
         value: String,
     },
     Hover,
+    Active,
+    Focus,
 }
 
 #[derive(Clone, Debug, Serialize)]

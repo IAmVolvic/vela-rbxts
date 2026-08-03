@@ -3055,6 +3055,29 @@ test("lowers hover variants into runtime rules", () => {
 	expect(result.code).toContain("MouseEnter");
 });
 
+test("lowers active and focus variants into runtime rules", () => {
+	const pressed = transform(
+		`export const A = () => <textbutton className="bg-slate-700 active:bg-blue-600" />;`,
+		null,
+	);
+	expect(pressed.diagnostics).toEqual([]);
+	expect(pressed.needsRuntimeHost).toBe(true);
+	expect(pressed.code).toMatch(/"kind": "active"/);
+	expect(pressed.code).toContain("attachActiveTracking");
+	expect(pressed.code).toContain("InputBegan");
+
+	const focused = transform(
+		`export const B = () => <textbox className="border focus:border-blue-600" />;`,
+		null,
+	);
+	expect(focused.diagnostics).toEqual([]);
+	expect(focused.code).toMatch(/"kind": "focus"/);
+	expect(focused.code).toContain("attachFocusTracking");
+	// Text boxes take keyboard focus; everything else reads selection focus.
+	expect(focused.code).toContain("FocusLost");
+	expect(focused.code).toContain("SelectionGained");
+});
+
 test("resolves arbitrary hex colors", () => {
 	const result = transform(
 		`export const A = () => <frame className="bg-[#ff0000] border-[#0f0]" />;`,

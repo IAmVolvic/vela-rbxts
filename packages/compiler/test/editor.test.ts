@@ -991,13 +991,13 @@ test("documents runtime variant conditions in completions and hovers", () => {
 });
 
 test("hovers unknown variants without claiming they run", () => {
-	const source = '<frame className="focus:px-4" />';
+	const source = '<frame className="checked:px-4" />';
 	const hover = getHover({
 		source,
-		position: positionAfter(source, "focus:px-4") - 1,
+		position: positionAfter(source, "checked:px-4") - 1,
 	});
 
-	expect(hover.contents?.documentation).toContain("Unknown variant `focus`");
+	expect(hover.contents?.documentation).toContain("Unknown variant `checked`");
 	expect(hover.contents?.documentation).toContain("never applies at runtime");
 	expect(hover.contents?.documentation).not.toContain("Runtime variant");
 });

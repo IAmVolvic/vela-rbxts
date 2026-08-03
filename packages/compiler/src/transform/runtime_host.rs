@@ -98,6 +98,12 @@ type RuntimeCondition =
 	  }
 	| {
 			kind: "hover";
+	  }
+	| {
+			kind: "active";
+	  }
+	| {
+			kind: "focus";
 	  };
 
 type RuntimeRule = {
@@ -125,6 +131,8 @@ type RuntimeEnvironment = {
 	orientation: "portrait" | "landscape";
 	input: "touch" | "mouse" | "gamepad";
 	hovered: boolean;
+	pressed: boolean;
+	focused: boolean;
 };
 
 type RuntimeCamera = {
@@ -215,6 +223,8 @@ type RuntimeResolution = {
 	sizeWidth?: UDim;
 	sizeHeight?: UDim;
 	usesHover?: boolean;
+	usesActive?: boolean;
+	usesFocus?: boolean;
 };
 
 type VelaRuntimeHostProps = {
@@ -249,11 +259,15 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 	return __VelaReact.forwardRef((props: VelaRuntimeHostProps, forwardedRef: unknown) => {
 		const globalEnvironment = useRuntimeEnvironment();
 		const [hovered, setHovered] = __VelaReact.useState(false);
+		const [pressed, setPressed] = __VelaReact.useState(false);
+		const [focused, setFocused] = __VelaReact.useState(false);
 		const environment: RuntimeEnvironment = {
 			width: globalEnvironment.width,
 			orientation: globalEnvironment.orientation,
 			input: globalEnvironment.input,
 			hovered,
+			pressed,
+			focused,
 		};
 		const __velaTag = props.__velaTag;
 		const __velaRules = props.__velaRules ?? [];
@@ -309,6 +323,14 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 
 		if (resolution.usesHover === true) {
 			attachHoverTracking(hostProps, setHovered);
+		}
+
+		if (resolution.usesActive === true) {
+			attachActiveTracking(hostProps, setPressed);
+		}
+
+		if (resolution.usesFocus === true) {
+			attachFocusTracking(hostProps, __velaTag, setFocused);
 		}
 
 		applyTextConfig(hostProps, props.__velaText, resolution);
@@ -846,6 +868,8 @@ function readRuntimeEnvironment(
 		orientation: width >= height ? "landscape" : "portrait",
 		input: detectInputMode(),
 		hovered: false,
+		pressed: false,
+		focused: false,
 	};
 }
 
@@ -933,8 +957,14 @@ function resolveRuntimeResolution(
 	};
 
 	for (const rule of runtimeRules) {
-		if (conditionUsesHover(rule.condition)) {
+		if (conditionUsesState(rule.condition, "hover")) {
 			resolution.usesHover = true;
+		}
+		if (conditionUsesState(rule.condition, "active")) {
+			resolution.usesActive = true;
+		}
+		if (conditionUsesState(rule.condition, "focus")) {
+			resolution.usesFocus = true;
 		}
 		if (matchesRuntimeCondition(rule.condition, environment)) {
 			applyEffectBundle(resolution, rule.effects);
@@ -967,6 +997,12 @@ function applyToken(
 
 	if (segments.includes("hover")) {
 		resolution.usesHover = true;
+	}
+	if (segments.includes("active")) {
+		resolution.usesActive = true;
+	}
+	if (segments.includes("focus")) {
+		resolution.usesFocus = true;
 	}
 
 	if (!segments.every((segment) => matchesVariant(segment, environment))) {
@@ -1264,51 +1300,110 @@ function matchesVariant(
 			return environment.input === "gamepad";
 		case "hover":
 			return environment.hovered;
+		case "active":
+			return environment.pressed;
+		case "focus":
+			return environment.focused;
 		default:
 			return false;
 	}
 }
 
-function conditionUsesHover(condition: RuntimeCondition): boolean {
-	if (condition.kind === "hover") {
+function conditionUsesState(
+	condition: RuntimeCondition,
+	kind: "hover" | "active" | "focus",
+): boolean {
+	if (condition.kind === kind) {
 		return true;
 	}
 	if (condition.kind === "all") {
-		return condition.conditions.some((entry) => conditionUsesHover(entry));
+		return condition.conditions.some((entry) => conditionUsesState(entry, kind));
 	}
 	return false;
 }
 
-/// Attaches MouseEnter/MouseLeave to drive the hover state, composing with any
-/// handlers the consumer already declared in their Event table.
-function attachHoverTracking(
+/// Wraps one Event entry, keeping whatever handler the consumer declared and
+/// whatever an earlier tracker already composed onto it.
+function composeEvent(
 	hostProps: Record<string, unknown>,
-	setHovered: (hovered: boolean) => void,
+	name: string,
+	handler: (...args: unknown[]) => void,
 ) {
 	const existing = hostProps["Event"];
 	const events: Record<string, unknown> = {};
 	if (typeIs(existing, "table")) {
-		for (const [name, handler] of pairs(existing as Record<string, unknown>)) {
-			events[name as string] = handler;
+		for (const [key, value] of pairs(existing as Record<string, unknown>)) {
+			events[key as string] = value;
 		}
 	}
 
-	const previousEnter = events["MouseEnter"];
-	events["MouseEnter"] = (...args: unknown[]) => {
-		setHovered(true);
-		if (typeIs(previousEnter, "function")) {
-			(previousEnter as (...args: unknown[]) => void)(...args);
-		}
-	};
-	const previousLeave = events["MouseLeave"];
-	events["MouseLeave"] = (...args: unknown[]) => {
-		setHovered(false);
-		if (typeIs(previousLeave, "function")) {
-			(previousLeave as (...args: unknown[]) => void)(...args);
+	const previous = events[name];
+	events[name] = (...args: unknown[]) => {
+		handler(...args);
+		if (typeIs(previous, "function")) {
+			(previous as (...args: unknown[]) => void)(...args);
 		}
 	};
 
 	hostProps["Event"] = events;
+}
+
+/// Attaches MouseEnter/MouseLeave to drive the hover state.
+function attachHoverTracking(
+	hostProps: Record<string, unknown>,
+	setHovered: (hovered: boolean) => void,
+) {
+	composeEvent(hostProps, "MouseEnter", () => setHovered(true));
+	composeEvent(hostProps, "MouseLeave", () => setHovered(false));
+}
+
+/// Drives the pressed state from mouse and touch input. A release that lands
+/// outside the element never reaches its `InputEnded`, so leaving the element
+/// clears the state too.
+function attachActiveTracking(
+	hostProps: Record<string, unknown>,
+	setPressed: (pressed: boolean) => void,
+) {
+	composeEvent(hostProps, "InputBegan", (...args: unknown[]) => {
+		if (isPressInput(args[1])) {
+			setPressed(true);
+		}
+	});
+	composeEvent(hostProps, "InputEnded", (...args: unknown[]) => {
+		if (isPressInput(args[1])) {
+			setPressed(false);
+		}
+	});
+	composeEvent(hostProps, "MouseLeave", () => setPressed(false));
+}
+
+function isPressInput(input: unknown): boolean {
+	if (!typeIs(input, "Instance") || !input.IsA("InputObject")) {
+		return false;
+	}
+
+	return (
+		input.UserInputType === Enum.UserInputType.MouseButton1 ||
+		input.UserInputType === Enum.UserInputType.Touch
+	);
+}
+
+/// Text boxes carry their own keyboard focus events; every other element reads
+/// focus as the selection a gamepad or `GuiService` moved onto it.
+function attachFocusTracking(
+	hostProps: Record<string, unknown>,
+	tag: VelaRuntimeTag,
+	setFocused: (focused: boolean) => void,
+) {
+	let gained = "SelectionGained";
+	let lost = "SelectionLost";
+	if (tag === "textbox") {
+		gained = "Focused";
+		lost = "FocusLost";
+	}
+
+	composeEvent(hostProps, gained, () => setFocused(true));
+	composeEvent(hostProps, lost, () => setFocused(false));
 }
 
 function matchesRuntimeCondition(
@@ -1332,6 +1427,10 @@ function matchesRuntimeCondition(
 			return environment.input === condition.value;
 		case "hover":
 			return environment.hovered;
+		case "active":
+			return environment.pressed;
+		case "focus":
+			return environment.focused;
 		default:
 			return false;
 	}
