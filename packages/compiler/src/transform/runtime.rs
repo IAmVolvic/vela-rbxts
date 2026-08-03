@@ -34,7 +34,7 @@ use crate::semantic::{
         OUTLINE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, PaddingKind, RING_COLOR_FAMILY,
         RING_THICKNESS_VALUES, SHADOW_COLOR_FAMILY, ShadowPreset, StrokePayload, TEXT_COLOR_FAMILY,
         UtilityKind, classify_stroke_payload, end_relative_position_axis, font_face_expression,
-        is_automatic_size_key, is_known_unsupported_border_payload,
+        format_ratio, is_automatic_size_key, is_known_unsupported_border_payload,
         resolve_align_content_flex_value, resolve_align_items_value, resolve_align_self_value,
         resolve_anchor_point_value, resolve_animation_value, resolve_aspect_ratio_value,
         resolve_border_thickness_value, resolve_color_value, resolve_duration_seconds,
@@ -115,6 +115,11 @@ fn default_list_layout_sort_order(style: &mut StyleIr) {
         value: "Enum.SortOrder.LayoutOrder".to_owned(),
     });
 }
+
+/// Roblox's stock `UIGridLayout.CellSize` extent. `grid-cols-*` divides the
+/// axis it fills and leaves the cross axis here, since a column count says
+/// nothing about row height.
+const GRID_CROSS_AXIS_DEFAULT: u32 = 100;
 
 const COLOR_OPACITY_FAMILIES: [ColorFamilySpec; 3] = [
     BACKGROUND_COLOR_FAMILY,
@@ -214,6 +219,14 @@ struct PendingAxes {
     translate_x: Option<SizeAxisValue>,
     translate_y: Option<SizeAxisValue>,
     gap_offset: Option<String>,
+    /// Track count from `grid-cols-*`/`grid-rows-*`, and whether it divides the
+    /// horizontal axis. Held until `flush` so `CellSize` can subtract the gap
+    /// share no matter what order the tokens appeared in.
+    grid_cells: Option<(u32, bool)>,
+    /// Cross-axis cell extent from `auto-rows-*`/`auto-cols-*`. `grid-cols-N`
+    /// only divides the axis it fills; UIGridLayout still needs a number for the
+    /// other one, and Tailwind names it separately.
+    grid_cross_extent: Option<String>,
     center_x: bool,
     center_y: bool,
     transition_enabled: Option<bool>,
@@ -304,6 +317,43 @@ impl PendingAxes {
                 "FontFace",
                 font_face_expression(self.font_weight, self.font_style),
             );
+        }
+
+        // `UIGridLayout` stamps `CellSize` onto every child and ignores whatever
+        // `Size` the child set for itself, so a grid that never names a cell size
+        // collapses the whole track to Roblox's 100x100 default — content wider
+        // than that spills over its neighbours. `grid-cols-N` means N equal
+        // tracks across the container, so divide the filled axis and give back
+        // this cell's share of the gaps. The cross axis keeps the engine default:
+        // Tailwind's column count says nothing about row height, and no utility
+        // names one yet.
+        if let Some((count, fills_horizontally)) = self.grid_cells
+            && style
+                .base
+                .helpers
+                .iter()
+                .any(|helper| helper.tag == "uigridlayout")
+        {
+            let cells = f64::from(count);
+            let gap = self
+                .gap_offset
+                .as_deref()
+                .and_then(|value| value.parse::<f64>().ok())
+                .unwrap_or(0.0);
+            let scale = format_ratio(1.0 / cells);
+            // Normalize away negative zero so a gapless grid emits `0`, not `-0`.
+            let gap_share = gap * (cells - 1.0) / cells;
+            let offset = format_ratio(if gap_share == 0.0 { 0.0 } else { -gap_share });
+            let cross = self
+                .grid_cross_extent
+                .clone()
+                .unwrap_or_else(|| GRID_CROSS_AXIS_DEFAULT.to_string());
+            let cell_size = if fills_horizontally {
+                format!("new UDim2({scale}, {offset}, 0, {cross})")
+            } else {
+                format!("new UDim2(0, {cross}, {scale}, {offset})")
+            };
+            style.set_helper_prop("uigridlayout", "CellSize", cell_size);
         }
 
         if let Some(gap) = self.gap_offset
@@ -906,13 +956,31 @@ fn apply_analyzed_token(
                         "FillDirection",
                         format!("Enum.FillDirection.{direction}"),
                     );
-                    style.set_helper_prop("uigridlayout", "FillDirectionMaxCells", count);
+                    style.set_helper_prop("uigridlayout", "FillDirectionMaxCells", count.clone());
+                    if let Ok(parsed) = count.parse::<u32>() {
+                        pending.grid_cells =
+                            Some((parsed, matches!(analysis.utility, UtilityKind::GridColumns)));
+                    }
                 } else {
                     diagnostics.push(unsupported_grid_value_diagnostic(
                         count_key,
                         &analysis.parsed.raw,
                     ));
                 }
+            }
+        }
+        UtilityKind::GridAutoRows | UtilityKind::GridAutoColumns => {
+            if let Some(spacing_key) = analysis.payload()
+                && let Some(extent) = resolve_spacing_value(config, spacing_key)
+                    .as_deref()
+                    .and_then(spacing_value_to_offset)
+            {
+                style.set_helper_prop(
+                    "uigridlayout",
+                    "SortOrder",
+                    "Enum.SortOrder.LayoutOrder".to_owned(),
+                );
+                pending.grid_cross_extent = Some(extent);
             }
         }
         UtilityKind::Basis => {

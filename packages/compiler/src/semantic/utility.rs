@@ -54,6 +54,8 @@ pub(crate) enum UtilityKind {
     Grid,
     GridColumns,
     GridRows,
+    GridAutoRows,
+    GridAutoColumns,
     Basis,
     TranslateX,
     TranslateY,
@@ -389,6 +391,8 @@ impl UtilityKind {
                 | UtilityKind::Radius
                 | UtilityKind::Padding(_)
                 | UtilityKind::Gap
+                | UtilityKind::GridAutoRows
+                | UtilityKind::GridAutoColumns
                 | UtilityKind::Width
                 | UtilityKind::Height
                 | UtilityKind::Size
@@ -719,6 +723,8 @@ pub(crate) fn parse_utility(token: &str) -> ParsedUtility {
         ("leading-", UtilityKind::LineHeight),
         ("grid-cols-", UtilityKind::GridColumns),
         ("grid-rows-", UtilityKind::GridRows),
+        ("auto-rows-", UtilityKind::GridAutoRows),
+        ("auto-cols-", UtilityKind::GridAutoColumns),
         ("basis-", UtilityKind::Basis),
         ("translate-x-", UtilityKind::TranslateX),
         ("translate-y-", UtilityKind::TranslateY),
@@ -1549,7 +1555,7 @@ fn format_transparency(remainder: u32) -> String {
     format!("0.{remainder:02}")
 }
 
-fn format_ratio(value: f64) -> String {
+pub(crate) fn format_ratio(value: f64) -> String {
     let rounded = value.round();
     if (value - rounded).abs() < 1e-9 {
         return format!("{rounded:.0}");

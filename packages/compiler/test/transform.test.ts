@@ -2212,6 +2212,58 @@ test("lowers grid utilities into UIGridLayout", () => {
 	expect(rows.code).toMatch(/FillDirectionMaxCells=\{2\}/);
 });
 
+test("sizes grid cells so tracks divide the container instead of collapsing", () => {
+	// UIGridLayout overrides each child's own Size with CellSize, so a grid that
+	// names no cell size pins every cell to Roblox's 100x100 default and wide
+	// content spills over its neighbours.
+	const columns = transform(
+		`export const A = () => <frame className="grid grid-cols-2 gap-2.5" />;`,
+		null,
+	);
+
+	expect(columns.diagnostics).toEqual([]);
+	// Two tracks, each giving back its share of the single 10px gap.
+	expect(columns.code).toMatch(/CellSize=\{new UDim2\(0\.5, -5, 0, 100\)\}/);
+
+	const gapless = transform(
+		`export const B = () => <frame className="grid grid-cols-3" />;`,
+		null,
+	);
+
+	expect(gapless.code).toMatch(
+		/CellSize=\{new UDim2\(0\.3333333333, 0, 0, 100\)\}/,
+	);
+
+	// `grid-rows-*` fills vertically, so it divides the other axis.
+	const rows = transform(
+		`export const C = () => <frame className="grid grid-rows-4 gap-2" />;`,
+		null,
+	);
+
+	expect(rows.code).toMatch(/CellSize=\{new UDim2\(0, 100, 0\.25, -6\)\}/);
+});
+
+test("names the grid cross axis with auto-rows/auto-cols", () => {
+	// `grid-cols-N` only sizes the axis it fills; UIGridLayout still needs a
+	// number for the other one, so Tailwind's auto-track utilities supply it.
+	const rows = transform(
+		`export const A = () => <frame className="grid grid-cols-2 gap-2.5 auto-rows-37.5" />;`,
+		null,
+	);
+
+	expect(rows.diagnostics).toEqual([]);
+	expect(rows.code).toMatch(/CellSize=\{new UDim2\(0\.5, -5, 0, 150\)\}/);
+
+	const columns = transform(
+		`export const B = () => <frame className="grid grid-rows-3 auto-cols-20" />;`,
+		null,
+	);
+
+	expect(columns.code).toMatch(
+		/CellSize=\{new UDim2\(0, 80, 0\.3333333333, 0\)\}/,
+	);
+});
+
 test("keeps gap on UIListLayout when no grid is present", () => {
 	const result = transform(
 		`export const A = () => <frame className="flex gap-2" />;`,

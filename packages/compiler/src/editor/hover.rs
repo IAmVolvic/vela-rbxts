@@ -153,6 +153,20 @@ fn describe_token(
                 documentation: format!("{variant_prefix}Sets `UIListLayout.Padding` to `{value}`."),
             })
         }
+        UtilityKind::GridAutoRows | UtilityKind::GridAutoColumns => {
+            let spacing_key = analysis.payload()?;
+            let value = resolve_spacing_value(config, spacing_key)?;
+            let axis = match &analysis.utility {
+                UtilityKind::GridAutoRows => "Y",
+                _ => "X",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGridLayout.CellSize.{axis}"),
+                documentation: format!(
+                    "{variant_prefix}Sets the cross axis of `UIGridLayout.CellSize` to `{value}`. `grid-cols-*`/`grid-rows-*` size the axis they fill; this names the other one."
+                ),
+            })
+        }
         UtilityKind::Width | UtilityKind::Height | UtilityKind::Size => {
             let size_key = analysis.payload()?;
             let target = match &analysis.utility {
