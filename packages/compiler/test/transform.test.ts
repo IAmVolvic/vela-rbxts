@@ -1294,6 +1294,31 @@ test("rewrites dynamic border className through the inline runtime helper", () =
 	expect(result.code).not.toContain("vela-rbxts/runtime");
 });
 
+test("resolves text colors on the runtime path", () => {
+	const result = transform(
+		'<textlabel className={["text-slate-100", muted && "text-slate-400"]} />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.needsRuntimeHost).toBe(true);
+	// The `text-` branch has to reach TextColor3, not fall through to nothing:
+	// a dropped text color leaves the label on Roblox's near-black default,
+	// which is invisible on any dark surface.
+	expect(result.code).toContain('startsWith(token, "text-")');
+	expect(result.code).toContain('name: "TextColor3"');
+	expect(result.code).toContain("TextTransparency");
+});
+
+test("leaves non-color text utilities unresolved on the runtime path", () => {
+	const result = transform('<textlabel className={[size, "text-left"]} />');
+
+	expect(result.needsRuntimeHost).toBe(true);
+	// `text-lg`/`text-left` share the prefix with colors but are not theme
+	// colors, so the branch must fall through rather than invent a value.
+	expect(result.code).not.toContain('name: "TextXAlignment"');
+	expect(result.code).not.toContain('name: "TextSize"');
+});
+
 test("rewrites dynamic border object maps through the inline runtime helper", () => {
 	const result = transform(
 		'<frame className={{ "border-2": thick, "border-transparent": hidden }} />',

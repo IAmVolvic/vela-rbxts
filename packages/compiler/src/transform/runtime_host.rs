@@ -1474,6 +1474,53 @@ function resolveUtilityToken(
 		};
 	}
 
+	// `text-*` is an overloaded prefix: sizes (`text-lg`), alignment
+	// (`text-left`) and colors all share it. Only colors resolve here — every
+	// other key falls through to `undefined` exactly as it did before, so the
+	// non-color halves keep their current behavior rather than resolving to
+	// something wrong.
+	if (startsWith(token, "text-")) {
+		const key = substring(token, stringLength("text-"));
+		if (key === "transparent") {
+			return {
+				props: [{ name: "TextTransparency", value: 1 }],
+				helpers: [],
+			};
+		}
+
+		const [colorName, shade] = splitColorKey(key);
+		const value = theme.colors[colorName];
+		if (typeIs(value, "string")) {
+			if (shade !== undefined) {
+				return undefined;
+			}
+
+			const parsed = parseColor3(value);
+			if (parsed === undefined) {
+				return undefined;
+			}
+
+			return {
+				props: [{ name: "TextColor3", value: parsed }],
+				helpers: [],
+			};
+		}
+
+		if (value === undefined) {
+			return undefined;
+		}
+
+		const shadeValue = value[shade ?? PALETTE_DEFAULT_KEY];
+		if (shadeValue === undefined) {
+			return undefined;
+		}
+
+		return {
+			props: [{ name: "TextColor3", value: shadeValue }],
+			helpers: [],
+		};
+	}
+
 	if (startsWith(token, "rounded-")) {
 		const key = substring(token, stringLength("rounded-"));
 		const value = resolveRadiusValue(theme, key);
