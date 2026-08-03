@@ -115,6 +115,8 @@ const requiredFragments = [
 	"__velaTag",
 	"__velaTransition",
 	"TweenService",
+	'property = "colors"',
+	"transitionCoversProp",
 	'__velaAnimation = "spin"',
 	"startPresetAnimation",
 	'Text = "<u>STATIC &amp; &lt;STYLED&gt;</u>"',

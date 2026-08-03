@@ -75,6 +75,7 @@ export const App = () => {
 				/>
 				<imagelabel BackgroundTransparency={1} className="object-cover" />
 				<frame className="bg-slate-700 md:bg-blue-600 transition duration-300 ease-out" />
+				<frame className="bg-slate-700 md:bg-blue-600 md:w-20 transition-colors size-6" />
 				<frame className="bg-blue-600 animate-spin" />
 				<frame className="bg-[#ff0000] size-6" />
 				<frame className="bg-blue-600/50 hover:bg-blue-600 transition size-6" />

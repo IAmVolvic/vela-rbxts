@@ -3055,6 +3055,32 @@ test("lowers hover variants into runtime rules", () => {
 	expect(result.code).toContain("MouseEnter");
 });
 
+test("narrows the tween to the transition property group", () => {
+	const colors = transform(
+		`export const A = () => <frame className="bg-slate-700 md:bg-blue-600 transition-colors" />;`,
+		null,
+	);
+	expect(colors.diagnostics).toEqual([]);
+	expect(colors.code).toMatch(/"property": "colors"/);
+	expect(colors.code).toContain("transitionCoversProp");
+
+	const all = transform(
+		`export const B = () => <frame className="bg-slate-700 md:bg-blue-600 transition" />;`,
+		null,
+	);
+	expect(all.code).toMatch(/"property": "all"/);
+
+	// A shadow lives on a helper instance, which applies instantly, so there
+	// is nothing for the filter to hold back.
+	const shadow = transform(
+		`export const C = () => <frame className="md:bg-blue-600 transition-shadow" />;`,
+		null,
+	);
+	expect(shadow.diagnostics).toEqual([
+		expect.objectContaining({ code: "unsupported-transition-value" }),
+	]);
+});
+
 test("lowers active and focus variants into runtime rules", () => {
 	const pressed = transform(
 		`export const A = () => <textbutton className="bg-slate-700 active:bg-blue-600" />;`,

@@ -19,6 +19,7 @@ Versions are released in lockstep across every workspace package.
 
 ### Changed
 
+- `transition-colors`, `transition-opacity`, and `transition-transform` now narrow the tween to their property group instead of all being treated as `transition-all`. `transition-shadow` reports `unsupported-transition-value`: a shadow lives on a helper instance, which applies instantly, so there is nothing for the filter to hold back.
 - `z-[N]` and `border-[Npx]` resolve instead of reporting `unsupported-arbitrary-z-index`/`unsupported-arbitrary-value`. A fractional `z-[1.5]` keeps the diagnostic, since `ZIndex` is an integer.
 - `opacity-*` on a `canvasgroup` now lowers to `GroupTransparency` instead of `BackgroundTransparency`, so it fades the whole subtree the way CSS `opacity` does. Every other host keeps the previous behavior.
 - Tailwind's own `scroll-*` utilities (`scroll-smooth`, `scroll-m-*`) report `unsupported-scroll-value` with the supported values instead of `no-roblox-equivalent`, now that the family carries a Roblox meaning.

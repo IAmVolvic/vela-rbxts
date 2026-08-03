@@ -111,8 +111,10 @@ React.createElement(VelaRuntimeHost, {
 | `ease-out` | `Quad` + `Out` |
 | `ease-in-out` | `Quad` + `InOut` |
 
-- `transition-colors|opacity|transform|all` 등 프로퍼티 필터는 1차에서는 전부
-  `all`로 취급(단순화), 필터링은 후속.
+- `transition-colors|opacity|transform`는 트윈 대상 prop을 좁힌다 (`colors` →
+  `*Color3`, `opacity` → `*Transparency`, `transform` → Position/Size/Rotation/
+  AnchorPoint). 그룹 밖 prop은 즉시 적용. `transition-shadow`는 그림자가 헬퍼
+  인스턴스라 즉시 적용되므로 걸러낼 대상이 없어 진단으로 돌린다.
 - `hover:` variant는 호스트가 MouseEnter/MouseLeave로 상태를 추적해 지원한다
   (소비자 Event 핸들러와 합성). `bg-[#hex]` arbitrary 색과 `색/불투명도`
   수식어(`bg-blue-600/50` → transparency prop)도 지원 — 수식어는 transparency

@@ -60,6 +60,7 @@ pub(crate) struct TransitionSpec {
     pub(crate) style: String,
     pub(crate) direction: String,
     pub(crate) delay: f64,
+    pub(crate) property: String,
 }
 
 #[derive(Clone, Debug, Serialize, Default)]

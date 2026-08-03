@@ -246,6 +246,7 @@ struct PendingAxes {
     center_x: bool,
     center_y: bool,
     transition_enabled: Option<bool>,
+    transition_property: Option<&'static str>,
     transition_time: Option<f64>,
     transition_ease: Option<(&'static str, &'static str)>,
     transition_delay: Option<f64>,
@@ -405,6 +406,7 @@ impl PendingAxes {
                 style: easing_style.to_owned(),
                 direction: easing_direction.to_owned(),
                 delay: self.transition_delay.unwrap_or(0.0),
+                property: self.transition_property.unwrap_or("all").to_owned(),
             });
         }
 
@@ -1203,8 +1205,9 @@ fn apply_analyzed_token(
             pending.position_y = Some(SizeAxisValue::scale("0.5"));
         }
         UtilityKind::Transition => {
-            if let Some(enabled) = resolve_transition_toggle(analysis.payload()) {
+            if let Some((enabled, property)) = resolve_transition_toggle(analysis.payload()) {
                 pending.transition_enabled = Some(enabled);
+                pending.transition_property = Some(property);
             } else {
                 diagnostics.push(unsupported_transition_value_diagnostic(
                     "transition",

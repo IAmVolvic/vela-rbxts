@@ -175,6 +175,7 @@ type RuntimeTransition = {
 	style: string;
 	direction: string;
 	delay: number;
+	property: string;
 };
 
 type RuntimeTransitionState = {
@@ -183,6 +184,7 @@ type RuntimeTransitionState = {
 	style?: string;
 	direction?: string;
 	delay?: number;
+	property?: string;
 };
 
 type RuntimeTextSpec = {
@@ -363,6 +365,9 @@ function __createVelaRuntimeHost(config: VelaRuntimeConfig) {
 				// Layout props move to the margin wrapper, which the inner
 				// instance ref cannot tween; they apply instantly instead.
 				if (margin !== undefined && isMarginWrapperProp(name as string)) {
+					continue;
+				}
+				if (!transitionCoversProp(transition.property, name as string)) {
 					continue;
 				}
 				tweenGoal[name as string] = value;
@@ -1167,8 +1172,19 @@ function applyTransitionToken(
 		const state = transitionState(resolution);
 		if (token === "transition-none") {
 			state.enabled = false;
-		} else {
+			return true;
+		}
+
+		const property = substring(token, stringLength("transition-"));
+		if (
+			token === "transition" ||
+			property === "all" ||
+			property === "colors" ||
+			property === "opacity" ||
+			property === "transform"
+		) {
 			state.enabled = true;
+			state.property = token === "transition" ? "all" : property;
 		}
 		return true;
 	}
@@ -1238,7 +1254,36 @@ function resolveTransitionConfig(
 		style: dynamic?.style ?? base?.style ?? "Quad",
 		direction: dynamic?.direction ?? base?.direction ?? "Out",
 		delay: dynamic?.delay ?? base?.delay ?? 0,
+		property: dynamic?.property ?? base?.property ?? "all",
 	};
+}
+
+/// `transition-colors` and friends narrow the tween to one group of props;
+/// anything outside it keeps applying instantly. Only top-level instance props
+/// tween at all, so a helper prop is never a candidate here.
+function transitionCoversProp(property: string, name: string): boolean {
+	if (property === "all") {
+		return true;
+	}
+
+	if (property === "colors") {
+		return endsWith(name, "Color3");
+	}
+
+	if (property === "opacity") {
+		return endsWith(name, "Transparency");
+	}
+
+	if (property === "transform") {
+		return (
+			name === "Position" ||
+			name === "Size" ||
+			name === "Rotation" ||
+			name === "AnchorPoint"
+		);
+	}
+
+	return false;
 }
 
 function isTweenableValue(value: unknown): value is RuntimePropValue {

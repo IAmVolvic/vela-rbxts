@@ -266,6 +266,7 @@ async function main() {
 		"bg-[#ff0000]",
 		"bg-blue-600/50",
 		"transition",
+		"transition-colors",
 		"duration-300",
 		"ease-out",
 		"animate-spin",

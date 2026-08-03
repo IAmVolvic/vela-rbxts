@@ -408,12 +408,17 @@ fn describe_token(
             })
         }
         UtilityKind::Transition => {
-            let enabled = resolve_transition_toggle(analysis.payload())?;
+            let (enabled, property) = resolve_transition_toggle(analysis.payload())?;
             Some(HoverContent {
                 display: format!("`{token}` -> TweenService"),
                 documentation: if enabled {
+                    let scope = if property == "all" {
+                        "every tweenable prop".to_owned()
+                    } else {
+                        format!("the `{property}` props only")
+                    };
                     format!(
-                        "{variant_prefix}Tweens runtime style changes with TweenService ({DEFAULT_TRANSITION_TIME}s by default). Combine with `duration-*`, `ease-*`, and `delay-*`."
+                        "{variant_prefix}Tweens runtime style changes with TweenService ({DEFAULT_TRANSITION_TIME}s by default), covering {scope}. Combine with `duration-*`, `ease-*`, and `delay-*`."
                     )
                 } else {
                     format!(
