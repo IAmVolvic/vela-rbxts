@@ -209,10 +209,7 @@ impl LanguageServer for RbxtsLanguageServer {
                 // source action in its menu or runs it on save.
                 code_action_provider: Some(CodeActionProviderCapability::Options(
                     CodeActionOptions {
-                        code_action_kinds: Some(vec![
-                            CodeActionKind::QUICKFIX,
-                            sort_action_kind(),
-                        ]),
+                        code_action_kinds: Some(vec![CodeActionKind::QUICKFIX, sort_action_kind()]),
                         ..Default::default()
                     },
                 )),
@@ -376,9 +373,7 @@ impl LanguageServer for RbxtsLanguageServer {
 
         let mut actions: CodeActionResponse = Vec::new();
 
-        if wants_sort
-            && let Some(action) = sort_action(&uri, &document, &options)
-        {
+        if wants_sort && let Some(action) = sort_action(&uri, &document, &options) {
             actions.push(CodeActionOrCommand::CodeAction(action));
         }
 
