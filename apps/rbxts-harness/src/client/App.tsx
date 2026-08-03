@@ -99,6 +99,15 @@ export const App = () => {
 					Text="typography probe"
 					className="leading-tight italic font-bold"
 				/>
+				<textlabel
+					BackgroundTransparency={1}
+					Text="font family probe"
+					className="font-mono"
+				/>
+				<canvasgroup className="opacity-50 size-6 bg-slate-700" />
+				<scrollingframe className="scroll-y scrollbar-w-2 scrollbar-slate-500 canvas-auto-y w-20 h-12">
+					<frame BackgroundTransparency={1} />
+				</scrollingframe>
 			</frame>
 		</screengui>
 	);
