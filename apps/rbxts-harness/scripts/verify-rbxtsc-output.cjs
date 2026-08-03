@@ -118,13 +118,13 @@ const requiredFragments = [
 	// preset animations it does not implement stay on the built-in path.
 	"harnessMotionDriver",
 	'TS.import(script, script.Parent, "motion").harnessMotionDriver',
-	"__VelaMotionDriver = __VelaMotionDriverSource",
+	"__VelaMotionDriver = motionDriver",
 	"local driven = __VelaMotionDriver.transition",
 	"local driven = __VelaMotionDriver.animate",
 	// The runtime resolver reads the same plugin table for a dynamic className.
 	"pluginUtilities",
 	'["harness-card"] = "bg-slate-800 rounded-lg p-2 hover:bg-slate-700"',
-	"__createVelaRuntimeHost",
+	"local function createVelaRuntimeHost(config, motionDriver)",
 	"React.createElement(VelaRuntimeHost",
 	"__velaRules",
 	"__velaTag",
@@ -172,8 +172,8 @@ const forbiddenFragments = [
 
 const requiredPatterns = [
 	{
-		description: "runtime helper is inlined into the Luau output",
-		pattern: /__createVelaRuntimeHost/,
+		description: "runtime helper is inlined, scoped inside one initializer",
+		pattern: /local VelaRuntimeHost = \(function\(\)/,
 	},
 	{
 		description: "transition config reaches the runtime host element",

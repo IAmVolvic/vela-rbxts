@@ -1,5 +1,70 @@
 # @vela-rbxts/compiler
 
+## 0.9.0
+
+### Minor Changes
+
+- a467af1: Compose `opacity-*` into everything the element draws, and into the subtree
+  written under it.
+
+  `opacity-*` lowered to `BackgroundTransparency` alone, which is invisible on a
+  label whose background is already transparent, and it reached nothing below the
+  instance it was written on. It now fades every channel the host paints itself —
+  `BackgroundTransparency` everywhere, `TextTransparency` on the text hosts,
+  `ImageTransparency` on the image hosts, and the `Transparency` of a `UIStroke` or
+  `UIShadow` drawn alongside it. A `canvasgroup` still takes `GroupTransparency`
+  alone, which already covers all of them.
+
+  Roblox has no inherited transparency: CSS fades a subtree by compositing it once
+  and multiplying alpha over the result, and the closest thing that stays a
+  property is to hand every instance below the class the running product. The
+  transformer now walks the JSX with that alpha and applies `1 - (1 - own) * alpha`
+  to each element it reaches, which includes children written inside an expression
+  — `{cond && <X />}` and `{items.map(…)}` are nested JSX as far as the AST is
+  concerned. A `canvasgroup` on the way down ends the walk. A child whose
+  `className` is only known at render time is handed the alpha as `__velaOpacity`
+  so the runtime host composes what it resolves, variant rules included; the
+  statically known half is composed at compile time and neither side does it twice.
+
+  Two shapes stay out of reach — `{props.children}`, and a component child whose
+  instances are created elsewhere — and both now report
+  `opacity-unreachable-child` rather than silently fading half a subtree.
+
+  `opacity-*` also stopped being order-dependent. `bg-slate-700` clears
+  `BackgroundTransparency`, so `opacity-50 bg-slate-700` came out opaque while
+  `bg-slate-700 opacity-50` did not. Tailwind reads `opacity-*` as independent of a
+  color's own alpha and multiplies the two, so the utility is now held until the
+  whole class list is read and composed over whatever alpha the colors settled on.
+
+  Overlapping siblings are where this parts ways with a real composite: it fades
+  each of them rather than the group, so the overlap darkens.
+
+### Patch Changes
+
+- Scope the inlined runtime host so a file with enough parts of its own still
+  compiles.
+
+  Luau caps a function at 200 local registers, and a module body is a function.
+  The runtime was inlined as ~96 top-level declarations, which every transformed
+  file paid before it declared anything itself — so a component with enough parts
+  crossed the limit and failed to compile at all, reporting
+  `Out of local registers when trying to allocate <name>: exceeded limit 200`
+  against generated code the author never wrote. A six-part `card` hit it at the
+  second part; the four components beside it were merely close.
+
+  The runtime now arrives as a single initializer, so the module body spends one
+  register on it instead of ninety-six. Type declarations stay outside it: they
+  cost no register, and the host cast names one of them.
+
+  Measured on the rbxts harness, module-scope locals in an emitted file went from
+  96 to 12.
+
+  The runtime source moved out of a string literal in the Rust crate and into
+  `packages/runtime/src/index.ts`, which the compiler reads at build time. It is
+  not published and consumers install nothing — the point is that the runtime is
+  now real TypeScript the repo typechecks and formats, which it could never do
+  while it was a string. That alone caught a live brace error in it.
+
 ## 0.8.0
 
 ### Minor Changes
