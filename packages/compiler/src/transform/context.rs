@@ -477,7 +477,7 @@ impl VelaTransformer {
     /// the same, and wraps itself on the way past.
     fn provide_unreachable_opacity_children(
         &mut self,
-        children: &mut Vec<JSXElementChild>,
+        children: &mut [JSXElementChild],
         alpha: f64,
     ) {
         for child in children.iter_mut() {

@@ -236,10 +236,11 @@ mod tests {
                 loose += 1;
             } else if let Some(member) = line.strip_prefix('\t') {
                 let member = member.strip_prefix("export ").unwrap_or(member);
-                if super::starts_declaration(member) && !super::is_type_declaration(member) {
-                    if let Some(last) = namespaces.last_mut() {
-                        last.1 += 1;
-                    }
+                if super::starts_declaration(member)
+                    && !super::is_type_declaration(member)
+                    && let Some(last) = namespaces.last_mut()
+                {
+                    last.1 += 1;
                 }
             }
         }
