@@ -1,5 +1,24 @@
 import React from "@rbxts/react";
 
+// A statically lowered root: nothing here resolves at render time, so the only
+// way a fade written around `<FadedLabel />` reaches this text is the context.
+const FadedLabel = (props: { text: string }) => (
+	<textlabel
+		BackgroundTransparency={1}
+		Text={props.text}
+		TextScaled
+		className="text-slate-100"
+	/>
+);
+
+// The same shape one level deeper, and behind a recipe rather than a literal.
+const FadedCard = (props: { active: boolean; children?: React.Element }) => (
+	<frame className={["bg-slate-700 size-8", props.active && "rounded-md"]}>
+		<FadedLabel text="nested" />
+		{props.children}
+	</frame>
+);
+
 export const App = () => {
 	const [active, setActive] = React.useState(false);
 	const [roomy, setRoomy] = React.useState(false);
@@ -109,6 +128,19 @@ export const App = () => {
 				<frame className="opacity-50 size-6 bg-slate-700">
 					<textlabel Text="faded with its parent" />
 					<frame className="opacity-50 bg-white size-6" />
+				</frame>
+				{/* The component boundary, both ways: a fade written outside one
+				    and a fade written on one. */}
+				<frame className="opacity-50 size-8 bg-slate-700">
+					<FadedLabel text="faded across the boundary" />
+					<FadedCard active={active}>
+						<textlabel Text="handed down as children" />
+					</FadedCard>
+				</frame>
+				<FadedLabel text="opaque control" />
+				<FadedCard active={active} />
+				<frame className={["size-8", active && "opacity-50"]}>
+					<FadedLabel text="faded by a recipe" />
 				</frame>
 				<textbutton
 					Text="press me"

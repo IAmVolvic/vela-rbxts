@@ -241,11 +241,21 @@ fn describe_token(
         UtilityKind::Opacity => {
             let percent = analysis.payload()?;
             let value = resolve_opacity_value(percent)?;
-            let props = opacity_transparency_props(element_tag).join(", ");
+            // A component element names no instance, so there is no channel to
+            // report: the fade crosses to whatever it renders and lowers there.
+            let Some(tag) = element_tag else {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> the component's subtree"),
+                    documentation: format!(
+                        "{variant_prefix}Fades everything this component renders to `{value}` transparency, multiplied with any fade it is already nested in."
+                    ),
+                });
+            };
+            let props = opacity_transparency_props(Some(tag)).join(", ");
             Some(HoverContent {
                 display: format!("`{token}` -> {props}"),
                 documentation: format!(
-                    "{variant_prefix}Fades this element to `{value}` transparency, and composes into the children written under it."
+                    "{variant_prefix}Fades this element to `{value}` transparency, and composes into the subtree under it."
                 ),
             })
         }

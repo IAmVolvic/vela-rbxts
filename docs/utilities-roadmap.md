@@ -297,16 +297,50 @@ as properties is passing the accumulated alpha directly to every instance below.
 `{cond && <X/>}` or `{items.map(...)}` is still nested in the AST, so it is reached
 too. It stops at a `canvasgroup` (that one already composites its subtree).
 
-Only two places are out of reach, and instead of passing over them silently they emit
-an `opacity-unreachable-child` warning.
-
-- Expression children that contain no JSX, such as `{props.children}`
-- Component children like `<Button />` — the instances inside are created elsewhere
-
 Children with a runtime class value (`className={cn(...)}`) get the alpha via
 `__velaOpacity`, so the runtime host composes what it resolved itself (variant rules
 included) the same way. The transformer handles the statically knowable half and the
 runtime handles the rest — neither one covers both.
+
+### Crossing the component boundary
+
+Two shapes are out of the transformer's reach: expression children that contain no
+JSX (`{props.children}`) and component children like `<Button />`, whose instances
+are created somewhere this pass never sees. A component element the fade is written
+*on* is the same problem from the other side — `<Label className="opacity-50" />`
+knows no tag, so there is no channel to lower to and the text stayed opaque.
+
+React context is the only thing that crosses that boundary, so the alpha travels as
+one. `__VelaOpacity` holds a context, a provider and a consumer:
+
+- The transformer wraps what it cannot reach in `<__VelaOpacity.Provider value={α}>`,
+  which renders no instance, so the tree keeps its shape and its keys.
+- The provider is **relative**: it multiplies its own alpha by the one it is nested
+  in, because a context otherwise lets the inner value simply win.
+- An `opacity-*` on a component element lowers to no props at all. It becomes that
+  alpha, statically or through `resolution.opacityAlpha` on the runtime host.
+- Every component definition gets its root wrapped in `<__VelaOpacity.Fade>`, unless
+  that root is a runtime host or another component — those read the context already.
+  The consumer walks the instances below it and composes the alpha onto each, which
+  is what reaches a subtree that was lowered entirely at compile time.
+- The walk stops at anything that reads the context itself. Fading a runtime host or
+  a component from outside as well would apply the same alpha twice.
+
+The context is created once on a shared global rather than per module: the runtime is
+inlined into every file that needs it, so `createContext` in each copy would make one
+context per module and nothing would ever cross. A file that needs only the fade
+inlines the namespace alone rather than the whole host.
+
+Because the boundary is now crossed at render time, a class value that only settles
+then is left whole to the runtime: the transformer stops fading the subtree under a
+`className={cn(…)}` and the host, which resolves all of it, hands its children one
+alpha. The fade ends at a `canvasgroup` on both paths — its `GroupTransparency`
+already carries the subtree, so the runtime resets the context there rather than
+letting a consumer below apply it again.
+
+One thing the runtime cannot mirror: the static path leaves a transparency the author
+declared on the element alone, and a fade arriving through the context has no way to
+tell that prop from one Vela lowered, so it composes over both.
 
 Limitation: overlapping siblings would fade together under real compositing, but here
 each fades on its own, so the overlap ends up darker.

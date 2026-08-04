@@ -3,26 +3,31 @@ use crate::class_value::collapse::collapse_class_value_expr;
 use crate::class_value::scope::ClassValueScopeStack;
 use crate::diagnostics::compiler::{
     decoration_on_richtext_diagnostic, motion_on_component_diagnostic,
-    opacity_unreachable_child_diagnostic,
 };
 use crate::ir::model::{PropEntry, StyleIr, TextSpec};
 use crate::swc::builders::{
-    create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
+    create_helper_child, create_helper_child_cast_any, create_opacity_provider, create_prop_attr,
+    create_prop_attr_cast_any,
+};
+use crate::transform::fade::{
+    fade_component_function, fade_component_initializer, is_component_binding,
 };
 use crate::transform::jsx::{
-    element_display_name, element_expression_source, is_component_element, lower_class_name,
+    element_expression_source, is_component_element, lower_class_name,
     unsupported_host_class_name_diagnostic,
 };
 use crate::transform::module::{
-    create_runtime_host_module_items, element_tag_name, is_supported_host_element,
+    create_opacity_module_items, create_runtime_host_module_items, element_tag_name,
+    is_supported_host_element,
 };
 use crate::transform::opacity::{compose_inherited_opacity, static_opacity_alpha};
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        BlockStmt, Expr, Ident, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue,
-        JSXClosingElement, JSXElement, JSXElementChild, JSXElementName, JSXExpr, JSXFragment,
-        Module, Pat, Str, VarDecl, VarDeclKind,
+        BlockStmt, DefaultDecl, ExportDefaultDecl, Expr, FnDecl, Ident, JSXAttr, JSXAttrName,
+        JSXAttrOrSpread, JSXAttrValue, JSXClosingElement, JSXElement, JSXElementChild,
+        JSXElementName, JSXEmptyExpr, JSXExpr, JSXExprContainer, JSXFragment, Module, Pat, Str,
+        VarDecl, VarDeclKind, VarDeclarator,
     },
     ecma::visit::{Visit, VisitMut, VisitMutWith, VisitWith},
 };
@@ -33,6 +38,9 @@ pub(crate) struct VelaTransformer {
     pub(crate) diagnostics: Vec<Diagnostic>,
     pub(crate) ir: Vec<StyleIr>,
     pub(crate) runtime_host_needed: bool,
+    /// Whether a fade left the static path and needs the runtime's opacity
+    /// helpers, which a file can need without needing the whole host.
+    pub(crate) opacity_helper_needed: bool,
     pub(crate) class_value_scopes: ClassValueScopeStack,
     /// The alpha every enclosing `opacity-*` has left for this element. 1 is
     /// opaque, and the root starts there.
@@ -45,10 +53,16 @@ impl VisitMut for VelaTransformer {
         module.visit_mut_children_with(self);
         self.class_value_scopes.pop();
 
+        // The host already carries the opacity namespace, so a file that needs
+        // both inlines the runtime once.
         if self.runtime_host_needed {
             let mut runtime_items = create_runtime_host_module_items(&self.config);
             runtime_items.append(&mut module.body);
             module.body = runtime_items;
+        } else if self.opacity_helper_needed {
+            let mut opacity_items = create_opacity_module_items();
+            opacity_items.append(&mut module.body);
+            module.body = opacity_items;
         }
     }
 
@@ -56,6 +70,51 @@ impl VisitMut for VelaTransformer {
         self.class_value_scopes.push();
         block.visit_mut_children_with(self);
         self.class_value_scopes.pop();
+    }
+
+    // A component defined here is rendered from somewhere this pass cannot see,
+    // so the fade that reaches it arrives as context. Its root is where that is
+    // read, and the instances it lowered statically are faded from there.
+    fn visit_mut_fn_decl(&mut self, declaration: &mut FnDecl) {
+        declaration.visit_mut_children_with(self);
+
+        if is_component_binding(&declaration.ident.sym)
+            && fade_component_function(&mut declaration.function)
+        {
+            self.opacity_helper_needed = true;
+            self.changed = true;
+        }
+    }
+
+    fn visit_mut_export_default_decl(&mut self, declaration: &mut ExportDefaultDecl) {
+        declaration.visit_mut_children_with(self);
+
+        let DefaultDecl::Fn(function) = &mut declaration.decl else {
+            return;
+        };
+        if fade_component_function(&mut function.function) {
+            self.opacity_helper_needed = true;
+            self.changed = true;
+        }
+    }
+
+    fn visit_mut_var_declarator(&mut self, declarator: &mut VarDeclarator) {
+        declarator.visit_mut_children_with(self);
+
+        let Pat::Ident(binding) = &declarator.name else {
+            return;
+        };
+        if !is_component_binding(&binding.id.sym) {
+            return;
+        }
+
+        let Some(init) = declarator.init.as_deref_mut() else {
+            return;
+        };
+        if fade_component_initializer(init) {
+            self.opacity_helper_needed = true;
+            self.changed = true;
+        }
     }
 
     fn visit_mut_var_decl(&mut self, var_decl: &mut VarDecl) {
@@ -87,12 +146,13 @@ impl VisitMut for VelaTransformer {
     }
 
     // A fragment carries no instance and no class, but it does carry children,
-    // and the fade running through it still has to report the ones it misses.
+    // and the fade running through it still has to reach the ones it cannot see.
     fn visit_mut_jsx_fragment(&mut self, fragment: &mut JSXFragment) {
-        if self.opacity_alpha < 1.0 {
-            self.report_unreachable_opacity_children(&fragment.children);
-        }
         fragment.visit_mut_children_with(self);
+        if self.opacity_alpha < 1.0 {
+            let alpha = self.opacity_alpha;
+            self.provide_unreachable_opacity_children(&mut fragment.children, alpha);
+        }
     }
 
     fn visit_mut_jsx_element(&mut self, element: &mut JSXElement) {
@@ -102,11 +162,19 @@ impl VisitMut for VelaTransformer {
             (is_host && !is_component).then(|| element_tag_name(&element.opening.name));
 
         let inherited_alpha = self.opacity_alpha;
-        self.opacity_alpha = self.subtree_opacity_alpha(element, element_tag.as_deref());
-        if self.opacity_alpha < 1.0 {
-            self.report_unreachable_opacity_children(&element.children);
-        }
+        // A component renders its children wherever it likes, and the provider
+        // wrapped around it reaches them there. Fading them here as well would
+        // apply the same alpha twice.
+        self.opacity_alpha = if is_component {
+            1.0
+        } else {
+            self.subtree_opacity_alpha(element, element_tag.as_deref())
+        };
         element.visit_mut_children_with(self);
+        if self.opacity_alpha < 1.0 {
+            let alpha = self.opacity_alpha;
+            self.provide_unreachable_opacity_children(&mut element.children, alpha);
+        }
         self.opacity_alpha = inherited_alpha;
 
         if !is_host && !is_component {
@@ -135,6 +203,9 @@ impl VisitMut for VelaTransformer {
                     inherited_alpha,
                 );
             }
+            if is_component {
+                self.provide_component_opacity(element, inherited_alpha);
+            }
             return;
         };
 
@@ -155,12 +226,16 @@ impl VisitMut for VelaTransformer {
             );
         }
 
+        // A component element has no channel of its own to fade, so its own
+        // `opacity-*` joins what it inherited and travels on as one alpha.
+        let component_alpha = inherited_alpha * lowered.style_ir.opacity_alpha.unwrap_or(1.0);
+
         // A class value that only exists at render time resolves tokens this
         // pass never sees, so the runtime host fades whatever it resolves —
         // variant rules included. Everything statically known is faded here.
         let inherited_opacity_at_runtime =
-            inherited_alpha < 1.0 && lowered.style_ir.runtime_class_value;
-        if inherited_alpha < 1.0 {
+            component_alpha < 1.0 && lowered.style_ir.runtime_class_value;
+        if inherited_alpha < 1.0 && !is_component {
             let declared = declared_prop_names(&lowered.preserved_attrs);
             compose_inherited_opacity(
                 &mut lowered.style_ir,
@@ -205,12 +280,24 @@ impl VisitMut for VelaTransformer {
         let needs_runtime_host = lowered.needs_runtime_host || lowered.style_ir.text.is_some();
         lowered.needs_runtime_host = needs_runtime_host;
 
+        // The runtime host provides for its own subtree, alpha and all. A
+        // component element the static path lowered has no such moment, so the
+        // provider is wrapped around it here.
+        let component_provider_alpha = if is_component && !needs_runtime_host {
+            component_alpha
+        } else {
+            1.0
+        };
+
         // The runtime host renders this tag itself, so a component has to be
         // forwarded as a reference rather than as a host element name.
         let runtime_tag = if is_component {
             match element_expression_source(&element.opening.name) {
                 Some(source) => source,
-                None => return,
+                None => {
+                    self.provide_component_opacity(element, component_alpha);
+                    return;
+                }
             }
         } else {
             format!("\"{}\"", element_tag_name(&element.opening.name))
@@ -289,7 +376,7 @@ impl VisitMut for VelaTransformer {
             if inherited_opacity_at_runtime {
                 attrs.push(create_prop_attr(PropEntry {
                     name: "__velaOpacity".into(),
-                    value: inherited_alpha.to_string(),
+                    value: component_alpha.to_string(),
                 }));
             }
             attrs.push(create_prop_attr(PropEntry {
@@ -314,29 +401,24 @@ impl VisitMut for VelaTransformer {
 
         element.opening.attrs = attrs;
 
-        if element.opening.self_closing && helper_children.is_empty() {
-            return;
+        if !helper_children.is_empty() {
+            if element.opening.self_closing {
+                element.opening.self_closing = false;
+                element.closing = Some(JSXClosingElement {
+                    span: DUMMY_SP,
+                    name: element.opening.name.clone(),
+                });
+                element.children = helper_children;
+            } else {
+                let existing_children = std::mem::take(&mut element.children);
+                element.children = helper_children
+                    .into_iter()
+                    .chain(existing_children)
+                    .collect();
+            }
         }
 
-        if element.opening.self_closing {
-            element.opening.self_closing = false;
-            element.closing = Some(JSXClosingElement {
-                span: DUMMY_SP,
-                name: element.opening.name.clone(),
-            });
-            element.children = helper_children;
-            return;
-        }
-
-        if helper_children.is_empty() {
-            return;
-        }
-
-        let existing_children = std::mem::take(&mut element.children);
-        element.children = helper_children
-            .into_iter()
-            .chain(existing_children)
-            .collect();
+        self.provide_component_opacity(element, component_provider_alpha);
     }
 }
 
@@ -376,6 +458,13 @@ impl VelaTransformer {
                     return None;
                 };
                 let collapse = collapse_class_value_expr(expr, &self.class_value_scopes);
+                // A class value settled at render time can name an `opacity-*`
+                // this pass never sees, so the whole list is left to the runtime
+                // host: it resolves all of it and hands its subtree one alpha,
+                // rather than the two of them each fading part of it.
+                if collapse.is_dynamic() {
+                    return None;
+                }
                 static_opacity_alpha(collapse.static_tokens, &self.config)
             }
             _ => None,
@@ -383,30 +472,53 @@ impl VelaTransformer {
     }
 
     /// Children written as JSX are walked and faded with everything else.
-    /// Children that arrive as a value are not, and neither is anything a
-    /// component renders out of sight, so the fade names what it missed.
-    fn report_unreachable_opacity_children(&mut self, children: &[JSXElementChild]) {
-        for child in children {
+    /// Children that arrive as a value are elements this pass never sees, so the
+    /// alpha is handed to them at render time instead. A component child needs
+    /// the same, and wraps itself on the way past.
+    fn provide_unreachable_opacity_children(
+        &mut self,
+        children: &mut Vec<JSXElementChild>,
+        alpha: f64,
+    ) {
+        for child in children.iter_mut() {
             let unreachable = match child {
-                JSXElementChild::JSXElement(child) if is_component_element(&child.opening.name) => {
-                    format!("`<{} />`", element_display_name(&child.opening.name))
-                }
-                JSXElementChild::JSXExprContainer(container) => {
-                    let JSXExpr::Expr(expr) = &container.expr else {
-                        continue;
-                    };
-                    if contains_jsx(expr) {
-                        continue;
-                    }
-                    "the children this expression evaluates to".to_owned()
-                }
-                JSXElementChild::JSXSpreadChild(_) => "the spread children".to_owned(),
-                _ => continue,
+                JSXElementChild::JSXExprContainer(container) => match &container.expr {
+                    JSXExpr::Expr(expr) => !contains_jsx(expr),
+                    JSXExpr::JSXEmptyExpr(_) => false,
+                },
+                JSXElementChild::JSXSpreadChild(_) => true,
+                _ => false,
             };
+            if !unreachable {
+                continue;
+            }
 
-            self.diagnostics
-                .push(opacity_unreachable_child_diagnostic(&unreachable));
+            let wrapped = std::mem::replace(
+                child,
+                JSXElementChild::JSXExprContainer(JSXExprContainer {
+                    span: DUMMY_SP,
+                    expr: JSXExpr::JSXEmptyExpr(JSXEmptyExpr { span: DUMMY_SP }),
+                }),
+            );
+            *child = JSXElementChild::JSXElement(create_opacity_provider(alpha, vec![wrapped]));
+            self.changed = true;
+            self.opacity_helper_needed = true;
         }
+    }
+
+    /// Wraps a component element in the runtime's provider. Its instances are
+    /// created out of sight of this pass, so the alpha reaches them as context
+    /// and lowers against the tags it finds there.
+    fn provide_component_opacity(&mut self, element: &mut JSXElement, alpha: f64) {
+        if alpha >= 1.0 {
+            return;
+        }
+
+        let mut provider = create_opacity_provider(alpha, Vec::new());
+        std::mem::swap(element, provider.as_mut());
+        element.children.push(JSXElementChild::JSXElement(provider));
+        self.changed = true;
+        self.opacity_helper_needed = true;
     }
 
     /// Fades an element that carries no `className` of its own — a plain
@@ -453,7 +565,7 @@ impl Visit for JsxPresence {
     }
 }
 
-fn contains_jsx(expr: &Expr) -> bool {
+pub(crate) fn contains_jsx(expr: &Expr) -> bool {
     let mut presence = JsxPresence::default();
     expr.visit_with(&mut presence);
     presence.found

@@ -122,7 +122,14 @@ where
     default_list_layout_sort_order(&mut style);
     reset_variant_color_opacity(&mut style);
     if let Some(alpha) = own_opacity {
-        compose_inherited_opacity(&mut style, element_tag, alpha, &[], true);
+        // A component element hides which instance it will render, so there is no
+        // channel to name here; the alpha travels to whatever it renders and
+        // lowers there against a tag that is known.
+        if element_tag.is_none() {
+            style.opacity_alpha = Some(alpha);
+        } else {
+            compose_inherited_opacity(&mut style, element_tag, alpha, &[], true);
+        }
     }
     style
 }
@@ -584,7 +591,14 @@ fn resolve_single_analyzed_token(
     let own_opacity = pending.opacity.take();
     pending.flush(&mut style, SizeEmission::PerAxis);
     if let Some(alpha) = own_opacity {
-        compose_inherited_opacity(&mut style, element_tag, alpha, &[], true);
+        // A component element hides which instance it will render, so there is no
+        // channel to name here; the alpha travels to whatever it renders and
+        // lowers there against a tag that is known.
+        if element_tag.is_none() {
+            style.opacity_alpha = Some(alpha);
+        } else {
+            compose_inherited_opacity(&mut style, element_tag, alpha, &[], true);
+        }
     }
     style
 }

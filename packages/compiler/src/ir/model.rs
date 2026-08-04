@@ -33,6 +33,11 @@ pub(crate) struct StyleIr {
     pub(crate) margin: Option<MarginSpec>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) divide: Option<DivideSpec>,
+    /// What an `opacity-*` came to on a component element. There is no tag there
+    /// to name a transparency channel against, so the alpha is carried instead
+    /// and handed to whatever the component renders.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) opacity_alpha: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

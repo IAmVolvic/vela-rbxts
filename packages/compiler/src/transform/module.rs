@@ -6,6 +6,10 @@ pub(crate) fn create_runtime_host_module_items(
     crate::transform::runtime_host::create_runtime_host_module_items(config)
 }
 
+pub(crate) fn create_opacity_module_items() -> Vec<ModuleItem> {
+    crate::transform::runtime_host::create_opacity_module_items()
+}
+
 pub(crate) fn element_tag_name(name: &JSXElementName) -> String {
     match name {
         JSXElementName::Ident(ident) => ident.sym.to_string(),

@@ -1,5 +1,6 @@
 pub(crate) mod context;
 pub(crate) mod emit;
+pub(crate) mod fade;
 pub(crate) mod jsx;
 pub(crate) mod module;
 pub(crate) mod opacity;
@@ -96,6 +97,7 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
         diagnostics,
         ir: Vec::new(),
         runtime_host_needed: false,
+        opacity_helper_needed: false,
         class_value_scopes: crate::class_value::scope::ClassValueScopeStack::default(),
         opacity_alpha: 1.0,
     };

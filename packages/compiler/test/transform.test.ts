@@ -20,6 +20,11 @@ const withoutPreflight = {
 	configJson: JSON.stringify(defineConfig({ preflight: false })),
 };
 
+// What the compiler inlines sits above the file's own code and names Roblox
+// properties of its own, so an assertion about what an element emitted has to
+// read the declaration rather than the whole emit.
+const emitted = (code: string) => code.trimEnd().split("\n").at(-1) ?? "";
+
 test("applies theme.extend while top-level theme scales replace the family", () => {
 	const config = defineConfig({
 		theme: {
@@ -1952,28 +1957,129 @@ test("hands a dynamic class value the inherited opacity to compose itself", () =
 test("the runtime host composes the opacity handed to it", () => {
 	expect(runtimeSource).toContain("__velaOpacity");
 	expect(runtimeSource).toContain("function composeInheritedOpacity(");
-	expect(runtimeSource).toContain("function opacityTransparencyProps(");
+	expect(runtimeSource).toContain("function transparencyProps(");
 });
 
-test("reports the children an opacity cannot reach", () => {
+// A rendered element carries the Roblox class name — roblox-ts lowers
+// `<textlabel />` to `"TextLabel"` — while every table the runtime resolves
+// against is keyed by the JSX tag. Comparing the two as they come matches
+// nothing, and the fade silently reaches no channel at all.
+test("the fade reads an element's tag as a class name", () => {
+	expect(runtimeSource).toContain("(elementType as string).lower()");
+});
+
+test("hands the children an opacity cannot reach to the runtime", () => {
 	const result = transform(
 		'<frame className="opacity-50">{props.children}<Button /></frame>',
 	);
 
-	expect(result.diagnostics).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({
-				level: "warning",
-				code: "opacity-unreachable-child",
-			}),
-		]),
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain(
+		"<__VelaOpacity.Provider value={0.5}>{props.children}</__VelaOpacity.Provider>",
 	);
+	expect(emitted(result.code)).toContain(
+		"<__VelaOpacity.Provider value={0.5}><Button/></__VelaOpacity.Provider>",
+	);
+});
+
+test("an opacity on a component element crosses as an alpha, not a background", () => {
+	const result = transform('<Label className="opacity-50 w-20" />');
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain(
+		"<__VelaOpacity.Provider value={0.5}>",
+	);
+	// The tag is unknown here, so a background is the wrong channel to guess at:
+	// the label's own text is what the fade has to reach.
+	expect(emitted(result.code)).not.toContain("BackgroundTransparency");
+	expect(emitted(result.code)).toContain("Size=");
+});
+
+test("a component's own opacity multiplies with the one it inherits", () => {
+	const result = transform(
+		'<frame className="opacity-50"><Label className="opacity-50" /></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain(
+		"<__VelaOpacity.Provider value={0.25}>",
+	);
+});
+
+test("a component root reads the alpha its caller provided", () => {
+	const result = transform(
+		'export const Label = () => <textlabel className="text-sm" Text="hi" />;',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain("<__VelaOpacity.Fade>");
+	expect(result.code).toContain("namespace __VelaOpacity");
+	// The whole runtime is a great deal more than a fade needs.
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(result.code).not.toContain("createVelaRuntimeHost");
+});
+
+test("a component root that resolves at runtime needs no fade of its own", () => {
+	const result = transform(
+		'export const Label = () => <textlabel className="text-sm hover:text-lg" Text="hi" />;',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).not.toContain("__VelaOpacity.Fade");
+	expect(result.needsRuntimeHost).toBe(true);
+});
+
+test("a callback inside a component is not a component root", () => {
+	const result = transform(
+		"export const List = () => <frame>{items.map((item) => <textlabel Text={item} />)}</frame>;",
+	);
+
+	expect(result.diagnostics).toEqual([]);
 	expect(
-		result.diagnostics.filter(
-			(diagnostic: { code: string }) =>
-				diagnostic.code === "opacity-unreachable-child",
-		),
+		emitted(result.code).match(/__VelaOpacity\.Fade>/g) ?? [],
 	).toHaveLength(2);
+});
+
+test("a fade that only resolves at runtime is left whole to the runtime", () => {
+	const result = transform(
+		'<frame className={active && "opacity-50"}><textlabel Text="hi" /><Label /></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.needsRuntimeHost).toBe(true);
+	// The host resolves the whole class list and hands its subtree one alpha.
+	// Fading part of it here would have applied that part twice.
+	expect(emitted(result.code)).not.toContain("TextTransparency");
+	expect(emitted(result.code)).not.toContain("__VelaOpacity.Provider");
+	expect(runtimeSource).toContain("resolution.opacityAlpha");
+	expect(runtimeSource).toContain("provide(childAlpha, userChildren)");
+});
+
+test("the fade ends at a canvasgroup on both paths", () => {
+	const result = transform(
+		'<frame className="opacity-50"><canvasgroup className="bg-slate-700"><Label /></canvasgroup></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// The group composites its own subtree, so nothing below it repeats the
+	// multiplication — no provider is handed down past it.
+	expect(emitted(result.code)).not.toContain("__VelaOpacity.Provider");
+	expect(emitted(result.code)).toContain("GroupTransparency={0.5}");
+	expect(runtimeSource).toContain("__VelaOpacity.stop(userChildren)");
+});
+
+test("a component's children are faded once, by the provider", () => {
+	const result = transform(
+		'<frame className="opacity-50"><Card><textlabel Text="hi" /></Card></frame>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// The card renders them out of sight, so the provider is what reaches them;
+	// fading them here as well would land the same alpha twice.
+	expect(emitted(result.code)).not.toContain("TextTransparency");
+	expect(emitted(result.code)).toContain(
+		"<__VelaOpacity.Provider value={0.5}>",
+	);
 });
 
 test("warns on out-of-range opacity values", () => {
@@ -3523,7 +3629,7 @@ test("preflight neutralizes the Roblox host defaults by default", () => {
 		null,
 	);
 
-	expect(painted.code).not.toMatch(/BackgroundTransparency/);
+	expect(emitted(painted.code)).not.toMatch(/BackgroundTransparency/);
 
 	const off = transform(
 		`export const C = () => <frame className="w-full" />;`,
@@ -3532,7 +3638,9 @@ test("preflight neutralizes the Roblox host defaults by default", () => {
 		},
 	);
 
-	expect(off.code).not.toMatch(/BackgroundTransparency|BorderSizePixel/);
+	expect(emitted(off.code)).not.toMatch(
+		/BackgroundTransparency|BorderSizePixel/,
+	);
 });
 
 test("preflight lets a runtime-resolved background reopen the neutralized base", () => {
