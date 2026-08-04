@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { getFlagValue, parseDryRunFlag, parseReleaseTag } from "./release-config";
 import {
 	PACK_MANIFEST_PATH,
@@ -8,6 +10,7 @@ import {
 import { runCommand } from "./utils/exec";
 import { exists, readJsonFile } from "./utils/fs";
 import { packageVersionExistsOnNpm, resolveNpmCommand } from "./utils/npm";
+import { publishArtifactWithRecovery } from "./utils/publish-attempt";
 import {
 	type ArtifactPublishCandidate,
 	assertNoDuplicateArtifactCoordinates,
@@ -78,6 +81,7 @@ async function main() {
 
 	const npmCommand = resolveNpmCommand();
 	const publishedPackages: string[] = [];
+	const recoveredPackages: string[] = [];
 	const skippedPackages: string[] = [];
 	const failedPackages: string[] = [];
 
@@ -107,22 +111,44 @@ async function main() {
 			publishArgs.push("--provenance");
 		}
 
-		try {
-			runCommand(npmCommand, publishArgs);
+		const outcome = await publishArtifactWithRecovery({
+			publish: () => {
+				runCommand(npmCommand, publishArgs);
+			},
+			doesVersionExist: () =>
+				packageVersionExistsOnNpm(
+					decision.artifact.packageName,
+					decision.artifact.version,
+				),
+			wait: delay,
+		});
+
+		if (outcome.status === "published") {
 			console.log(`published ${coordinate}`);
 			publishedPackages.push(coordinate);
-		} catch (error) {
-			failedPackages.push(coordinate);
-			const reason = error instanceof Error ? error.message : String(error);
-			console.error(`failed ${coordinate}: ${reason}`);
+			continue;
 		}
+
+		if (outcome.status === "recovered") {
+			console.log(
+				`published ${coordinate} despite a failing npm publish; the registry has it. Reported: ${outcome.reason}`,
+			);
+			publishedPackages.push(coordinate);
+			recoveredPackages.push(coordinate);
+			continue;
+		}
+
+		failedPackages.push(coordinate);
+		console.error(`failed ${coordinate}: ${outcome.reason}`);
 	}
 
 	console.log("Publish summary:");
 	console.log(`- published count: ${publishedPackages.length}`);
+	console.log(`- recovered after a failing publish count: ${recoveredPackages.length}`);
 	console.log(`- skipped already-published count: ${skippedPackages.length}`);
 	console.log(`- failed count: ${failedPackages.length}`);
 	console.log(`- published packages: ${publishedPackages.length > 0 ? publishedPackages.join(", ") : "(none)"}`);
+	console.log(`- recovered packages: ${recoveredPackages.length > 0 ? recoveredPackages.join(", ") : "(none)"}`);
 	console.log(`- skipped packages: ${skippedPackages.length > 0 ? skippedPackages.join(", ") : "(none)"}`);
 
 	if (failedPackages.length > 0) {
