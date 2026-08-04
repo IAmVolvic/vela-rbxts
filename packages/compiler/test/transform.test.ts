@@ -1345,7 +1345,7 @@ test("resolves text colors on the runtime path", () => {
 	// a dropped text color leaves the label on Roblox's near-black default,
 	// which is invisible on any dark surface.
 	expect(runtimeSource).toContain('startsWith(token, "text-")');
-	expect(runtimeSource).toContain('"TextColor3", "TextTransparency"');
+	expect(runtimeSource).toMatch(/"TextColor3",\s*"TextTransparency"/);
 });
 
 test("resolves size and alignment text utilities on the runtime path", () => {

@@ -2,6 +2,8 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
+const { peakLocalRegisters } = require("./luau-local-registers.cjs");
+
 const transformerModule = require("vela-rbxts/transformer");
 const transformer =
 	typeof transformerModule === "function"
@@ -298,6 +300,18 @@ for (const check of forbiddenPatterns) {
 			`emitted Luau still contains forbidden pattern: ${check.description}`,
 		);
 	}
+}
+
+// Luau refuses to compile a function that needs more than 200 live locals, and
+// the inlined runtime shares the module's register file with the consumer's own
+// code. The budget is the ceiling minus the room a real component needs.
+const REGISTER_BUDGET = 120;
+const peak = peakLocalRegisters(source);
+
+if (peak.registers > REGISTER_BUDGET) {
+	failures.push(
+		`emitted Luau spends ${peak.registers} local registers in ${peak.name} (line ${peak.line}), over the ${REGISTER_BUDGET} budget`,
+	);
 }
 
 if (failures.length > 0) {
