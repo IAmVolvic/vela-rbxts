@@ -1,16 +1,16 @@
 import { TweenService } from "@rbxts/services";
 
-const EASING_STYLES: Record<string, Enum.EasingStyle> = {
-	linear: Enum.EasingStyle.Linear,
-	quad: Enum.EasingStyle.Quad,
-	cubic: Enum.EasingStyle.Cubic,
-};
+// The spec names the Roblox enum members directly, so the driver indexes them
+// rather than keeping a table of its own to drift out of date.
+const EASING_STYLES = Enum.EasingStyle as unknown as Record<
+	string,
+	Enum.EasingStyle | undefined
+>;
 
-const EASING_DIRECTIONS: Record<string, Enum.EasingDirection> = {
-	in: Enum.EasingDirection.In,
-	out: Enum.EasingDirection.Out,
-	"in-out": Enum.EasingDirection.InOut,
-};
+const EASING_DIRECTIONS = Enum.EasingDirection as unknown as Record<
+	string,
+	Enum.EasingDirection | undefined
+>;
 
 /**
  * Replaces the built-in transition driver with one the harness owns, leaving
@@ -27,7 +27,7 @@ export const harnessMotionDriver = {
 		const info = new TweenInfo(
 			spec.time,
 			EASING_STYLES[spec.style] ?? Enum.EasingStyle.Quad,
-			EASING_DIRECTIONS[spec.direction] ?? Enum.EasingDirection.InOut,
+			EASING_DIRECTIONS[spec.direction] ?? Enum.EasingDirection.Out,
 			0,
 			false,
 			spec.delay,

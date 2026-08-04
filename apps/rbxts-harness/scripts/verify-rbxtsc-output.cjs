@@ -120,9 +120,11 @@ const requiredFragments = [
 	// preset animations it does not implement stay on the built-in path.
 	"harnessMotionDriver",
 	'TS.import(script, script.Parent, "motion").harnessMotionDriver',
-	"__VelaMotionDriver = motionDriver",
-	"local driven = __VelaMotionDriver.transition",
-	"local driven = __VelaMotionDriver.animate",
+	"__VelaMotion.setDriver(motionDriver)",
+	// A driver's methods carry an implicit `self`, so the call has to stay a
+	// method call — detached, every argument lands one place to the left.
+	"driver:transition(instance, goal, spec)",
+	"driver:animate(instance, animation)",
 	// The runtime resolver reads the same plugin table for a dynamic className.
 	"pluginUtilities",
 	'["harness-card"] = "bg-slate-800 rounded-lg p-2 hover:bg-slate-700"',

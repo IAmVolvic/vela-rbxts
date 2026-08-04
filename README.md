@@ -471,13 +471,17 @@ The driver is an object with two optional methods:
 ```ts
 export const springDriver = {
   // Only the properties that changed, plus the resolved `transition` spec
-  // ({ time, style, direction, delay, property }).
+  // ({ time, style, direction, delay, property }). `style` and `direction` are
+  // `EasingStyle`/`EasingDirection` member names — "Linear", "InOut" — so they
+  // index the enums directly.
   transition(instance: Instance, goal: Record<string, unknown>, spec) { … },
   // `animate-spin` and friends, by name. Return a cleanup for when the
   // animation is taken away.
   animate(instance: Instance, animation: string) { … return () => {}; },
 };
 ```
+
+Write them as methods, as above — not as arrow properties. roblox-ts gives a method an implicit `self` and the runtime calls it as one; `transition: (instance, goal, spec) => { … }` is rejected with `Attempted to assign non-method where method was expected`.
 
 Each method is taken over independently, so a driver that only implements `transition` keeps the built-in `animate-*` presets. **A driver that implements `transition` owns writing those properties**: while a transition is in play the element renders its held value and never assigns the new one itself, so a driver that does nothing leaves the instance where it was.
 
