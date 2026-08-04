@@ -1970,7 +1970,8 @@ test("reports the children an opacity cannot reach", () => {
 	);
 	expect(
 		result.diagnostics.filter(
-			(diagnostic) => diagnostic.code === "opacity-unreachable-child",
+			(diagnostic: { code: string }) =>
+				diagnostic.code === "opacity-unreachable-child",
 		),
 	).toHaveLength(2);
 });
