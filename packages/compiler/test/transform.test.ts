@@ -1366,7 +1366,7 @@ test("resolves size and alignment text utilities on the runtime path", () => {
 // long time, and a family missing there is silent: a component whose classes
 // come from a recipe simply renders without them. These pin the whole surface.
 test("the runtime host knows every utility family the static path lowers", () => {
-	const result = transform("<frame className={recipe} />");
+	transform("<frame className={recipe} />");
 
 	const FAMILY_PREFIXES = [
 		"bg-",
@@ -1497,7 +1497,7 @@ test("the runtime host knows every utility family the static path lowers", () =>
 });
 
 test("composes the runtime families that only meet at the end", () => {
-	const result = transform("<frame className={recipe} />");
+	transform("<frame className={recipe} />");
 
 	// Position, AnchorPoint, the size constraints, a grid track and the gradient
 	// stops are all built from more than one token, so the dynamic path needs
@@ -1515,7 +1515,7 @@ test("composes the runtime families that only meet at the end", () => {
 });
 
 test("drops runtime utilities the host element cannot carry", () => {
-	const result = transform("<frame className={recipe} />");
+	transform("<frame className={recipe} />");
 
 	// `TextColor3` on a Frame is a hard Roblox error rather than a no-op, so the
 	// dynamic path filters by host tag the way `is_utility_allowed_on_host` does.
@@ -1527,7 +1527,7 @@ test("drops runtime utilities the host element cannot carry", () => {
 });
 
 test("resolves color opacity modifiers and arbitrary hex on the runtime path", () => {
-	const result = transform("<frame className={recipe} />");
+	transform("<frame className={recipe} />");
 
 	expect(runtimeSource).toContain("function splitColorOpacity(");
 	expect(runtimeSource).toContain("function opacityToTransparency(");
@@ -1872,7 +1872,7 @@ test("lowers opacity on a canvas group to GroupTransparency", () => {
 	expect(result.code).toMatch(/GroupTransparency=\{0\.75\}/);
 	expect(result.code).not.toMatch(/BackgroundTransparency=\{0\.75\}/);
 
-	const runtime = transform('<canvasgroup className="md:opacity-25" />');
+	transform('<canvasgroup className="md:opacity-25" />');
 	expect(runtimeSource).toContain("__velaRules");
 	expect(runtimeSource).toContain("GroupTransparency");
 });
@@ -3087,7 +3087,7 @@ test("rejects unsupported animate presets", () => {
 });
 
 test("renders the runtime host through forwardRef for slotting compatibility", () => {
-	const result = transform(
+	transform(
 		`export const A = () => <frame className="bg-blue-600 animate-spin" />;`,
 		null,
 	);
