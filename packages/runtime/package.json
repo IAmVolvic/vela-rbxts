@@ -1,6 +1,6 @@
 {
   "name": "@vela-rbxts/runtime",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Source of truth for the runtime class resolver the compiler inlines. Not published: the compiler reads this source at build time.",
   "license": "MIT",
   "author": "astra-void",
