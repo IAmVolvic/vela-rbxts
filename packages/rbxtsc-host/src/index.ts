@@ -9,6 +9,7 @@ export {
 	isTransformableHostFile,
 } from "./filter.js";
 export {
+	clearProjectConfigCache,
 	resolveProjectConfig,
 	resolveProjectConfigInfo,
 } from "./project-config.js";

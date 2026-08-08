@@ -75,16 +75,40 @@ export function resolveProjectConfigInfo(sourceFileName: string): {
 	};
 }
 
+// Every source file resolves its own config, so a host that walks a whole
+// project would otherwise transpile and evaluate the same file once per file.
+const configCache = new Map<
+	string,
+	{ sourceText: string; config: TailwindConfig }
+>();
+
+export function clearProjectConfigCache(): void {
+	configCache.clear();
+}
+
 function loadProjectConfig(configFilePath: string): TailwindConfig {
-	if (configFilePath.endsWith(".json")) {
-		return loadJsonProjectConfig(configFilePath);
+	const sourceText = fs.readFileSync(configFilePath, "utf8");
+	const cached = configCache.get(configFilePath);
+
+	if (cached !== undefined && cached.sourceText === sourceText) {
+		return cached.config;
 	}
 
+	const config = configFilePath.endsWith(".json")
+		? loadJsonProjectConfig(configFilePath, sourceText)
+		: loadTypeScriptProjectConfig(configFilePath, sourceText);
+
+	configCache.set(configFilePath, { sourceText, config });
+
+	return config;
+}
+
+function loadTypeScriptProjectConfig(
+	configFilePath: string,
+	rawSourceText: string,
+): TailwindConfig {
 	const ts = loadTypeScript(configFilePath);
-	const sourceText = stripVelaRbxtsImports(
-		ts,
-		fs.readFileSync(configFilePath, "utf8"),
-	);
+	const sourceText = stripVelaRbxtsImports(ts, rawSourceText);
 	const transpiled = ts.transpileModule(sourceText, {
 		compilerOptions: {
 			module: ts.ModuleKind.CommonJS,
@@ -145,8 +169,10 @@ function loadProjectConfig(configFilePath: string): TailwindConfig {
 	);
 }
 
-function loadJsonProjectConfig(configFilePath: string): TailwindConfig {
-	const sourceText = fs.readFileSync(configFilePath, "utf8");
+function loadJsonProjectConfig(
+	configFilePath: string,
+	sourceText: string,
+): TailwindConfig {
 	let parsed: unknown;
 
 	try {
