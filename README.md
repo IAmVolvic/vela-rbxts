@@ -11,6 +11,7 @@ The implementation is intentionally narrow and focuses on Roblox UI styling rath
 
 - `className?: ClassValue` is added to `React.Attributes` through `vela-rbxts`.
 - Supported TSX files are lowered by the `rbxtsc` transformer when they target supported Roblox host elements or your own components.
+- The `vela` CLI lowers the same files ahead of `rbxtsc` for projects that cannot register a transform plugin.
 - Dynamic `ClassValue` expressions and supported Roblox-oriented variants are rewritten with an inline runtime helper when needed.
 - The standalone Rust LSP server under `packages/lsp` provides completions, hover, document colors, quickfixes, and diagnostics in editors.
 - Unsupported utility families and unknown theme keys produce diagnostics instead of being silently ignored.
@@ -21,7 +22,7 @@ Full documentation lives at [docs.astra-void.xyz/vela-rbxts](https://docs.astra-
 
 | Path | What it does |
 | --- | --- |
-| `packages/vela-rbxts` | The only package an app installs. Re-exports config helpers, `createTransformer`, shared types, and the `./transformer` subpath export. |
+| `packages/vela-rbxts` | The only package an app installs. Re-exports config helpers, `createTransformer`, shared types, the `./transformer` subpath export, and the `vela` CLI that lowers a source tree without the transformer. |
 | `packages/compiler` | Native compiler implementation that resolves, validates, and lowers utility classes. |
 | `packages/lsp` | Standalone Rust stdio LSP server that adapts the compiler's editor APIs for completions, hover, colors, quickfixes, and diagnostics. |
 | `packages/vscode-extension` | VS Code client for the LSP, published to the marketplace as `astra-void.vela-rbxts-lsp`. |
@@ -175,6 +176,62 @@ rojo serve default.project.json
 ```
 
 In a typical project, `rbxtsc -p tsconfig.json` is your build step, `rbxtsc -w -p tsconfig.json` is your local watch mode, and `rojo serve` keeps Studio synced with the compiled output and mapped module folders.
+
+## Without the transformer: the `vela` CLI
+
+The transformer plugin is one way to run Vela, not the only one. `vela-rbxts` also installs a `vela` binary that lowers a source tree ahead of time, so `rbxtsc` compiles ordinary TSX with no plugin registered at all. Use it when a project cannot or will not load a `rbxtsc` transform plugin — a pinned toolchain, a build system that drives `tsc` itself, or a CI step that wants the lowered sources as a reviewable artifact.
+
+Both paths call the same compiler and emit the same Luau. Nothing about `vela.config.ts`, the declaration file, or the classes you write changes.
+
+```bash
+vela build
+vela watch
+```
+
+`vela build` reads `src` and writes the lowered tree to `.vela/src`, transforming `.tsx` files that use `className` and copying everything else through byte for byte. `vela watch` does the same, then re-transforms on change. Point `rbxtsc` at the generated tree instead of your sources:
+
+```json
+{
+  "compilerOptions": {
+    "rootDir": ".vela/src",
+    "baseUrl": ".vela/src",
+    "outDir": "out"
+  },
+  "include": [".vela/src"]
+}
+```
+
+Remove the `{ "transform": "vela-rbxts/transformer" }` plugin entry when you do — running both paths is redundant work. `vela build` warns about either mistake.
+
+Your build and watch commands become two steps:
+
+```bash
+vela build && rbxtsc -p tsconfig.json
+```
+
+```bash
+vela watch & rbxtsc -w -p tsconfig.json
+```
+
+Diagnostics are printed the same way the transformer reports them, anchored to your real source files:
+
+```
+src/client/App.tsx:80:31 - warning vela/compiler(unknown-variant): Unknown variant "checked" in "checked:px-4"; ...
+```
+
+`vela build` exits non-zero when a file fails to compile, so it is safe to chain with `&&`.
+
+| Option | What it does |
+| --- | --- |
+| `-p, --project <dir>` | Project root. Defaults to the current directory. |
+| `--src <dir>` | Source tree to read. Defaults to `src`. |
+| `--out <dir>` | Generated tree to write. Defaults to `.vela/src`. |
+| `--clean` | Delete the generated tree before building. |
+| `-q, --quiet` | Print diagnostics only. |
+
+The CLI writes `.vela/.gitignore` so the generated tree stays out of version control, and it records what it emitted in `.vela/build-manifest.json`. Pruning is driven by that manifest, so a file the CLI never wrote is never deleted.
+
+Two consequences are worth knowing before you switch. Editors, stack traces, and `tsc --noEmit` see the generated tree rather than `src`, because that is what `rbxtsc` compiles; the LSP still reads your real sources, so completions and hover are unaffected. And the lowered tree is a build output — edit `src`, never `.vela/src`.
 
 ## Supported Surface
 
