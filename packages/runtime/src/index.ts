@@ -4133,16 +4133,21 @@ namespace __VelaValue {
 			return undefined;
 		}
 
+		const [, categoryName, memberName] = segments;
+		if (categoryName === undefined || memberName === undefined) {
+			return undefined;
+		}
+
 		const registry = Enum as unknown as Record<
 			string,
 			Record<string, EnumItem> | undefined
 		>;
-		const category = registry[segments[1]];
+		const category = registry[categoryName];
 		if (category === undefined) {
 			return undefined;
 		}
 
-		return category[segments[2]];
+		return category[memberName];
 	}
 }
 
@@ -4640,12 +4645,13 @@ namespace __VelaApply {
 			}
 		}
 
-		if (__VelaLua.arraySize(stops) === 0) {
+		const color = colorSequenceValue(stops);
+		if (color === undefined) {
 			return;
 		}
 
 		setResolvedHelperProp(resolution.helpers, "uigradient", [
-			{ name: "Color", value: colorSequenceValue(stops) },
+			{ name: "Color", value: color },
 		]);
 
 		const rotation = resolution.gradientRotation;
@@ -4663,19 +4669,29 @@ namespace __VelaApply {
 		}
 	}
 
-	export function colorSequenceValue(stops: Color3[]): ColorSequence {
-		if (__VelaLua.arraySize(stops) === 1) {
-			return new ColorSequence(stops[0]);
+	export function colorSequenceValue(
+		stops: Color3[],
+	): ColorSequence | undefined {
+		const [first, second] = stops;
+		if (first === undefined) {
+			return undefined;
 		}
 
-		if (__VelaLua.arraySize(stops) === 2) {
-			return new ColorSequence(stops[0], stops[1]);
+		if (second === undefined) {
+			return new ColorSequence(first);
 		}
 
 		const last = __VelaLua.arraySize(stops) - 1;
+		if (last === 1) {
+			return new ColorSequence(first, second);
+		}
+
 		const keypoints: ColorSequenceKeypoint[] = [];
 		for (let index = 0; index <= last; index++) {
-			keypoints.push(new ColorSequenceKeypoint(index / last, stops[index]));
+			const stop = stops[index];
+			if (stop !== undefined) {
+				keypoints.push(new ColorSequenceKeypoint(index / last, stop));
+			}
 		}
 
 		return new ColorSequence(keypoints);
@@ -4995,7 +5011,9 @@ namespace __VelaLua {
 		return tostring?.(value) ?? "";
 	}
 
-	export function toNumber(value: string): number | undefined {
+	// Mirrors `tonumber`, which answers nil for a nil argument: the callers read
+	// parsed call arguments, and an index past the end is absent, not a number.
+	export function toNumber(value: string | undefined): number | undefined {
 		const numeric = tonumber?.(value);
 
 		if (numeric === undefined || isNaNNumber(numeric)) {
