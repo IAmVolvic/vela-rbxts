@@ -9,7 +9,8 @@
   },
   "include": [
     "src/index.ts",
-    "src/transformer.cts"
+    "src/transformer.cts",
+    "src/cli/**/*.ts"
   ],
   "references": [
     {
