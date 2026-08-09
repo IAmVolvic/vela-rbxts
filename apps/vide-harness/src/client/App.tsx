@@ -90,6 +90,27 @@ function DerivableClassValue(props: {
 	);
 }
 
+/// Driven by input rather than by the environment. The state lives in the host
+/// and the trackers compose onto the instance's own events.
+function InteractionVariants() {
+	return (
+		<>
+			<Row label="hover:">
+				<textbutton
+					className="w-24 h-6 bg-slate-700 hover:bg-blue-500 text-white text-xs rounded-sm"
+					Text="hover"
+				/>
+			</Row>
+			<Row label="active:">
+				<textbutton
+					className="w-24 h-6 bg-slate-700 active:bg-emerald-500 text-white text-xs rounded-sm"
+					Text="press"
+				/>
+			</Row>
+		</>
+	);
+}
+
 /// Resolved against the environment rather than the class list alone.
 function EnvironmentVariants() {
 	return (
@@ -143,10 +164,11 @@ export function App() {
 				className="bg-slate-950 rounded-xl p-4 flex flex-col gap-1"
 				AnchorPoint={new Vector2(0.5, 0.5)}
 				Position={UDim2.fromScale(0.5, 0.5)}
-				Size={UDim2.fromOffset(520, 460)}
+				Size={UDim2.fromOffset(520, 540)}
 			>
 				{StaticUtilities()}
 				{DerivableClassValue({ active, padded })}
+				{InteractionVariants()}
 				{EnvironmentVariants()}
 				{InheritedOpacity()}
 			</frame>

@@ -7,6 +7,7 @@ import type {
 	RuntimeRemConfig,
 	RuntimeResolution,
 	RuntimeRule,
+	VariantEventBinding,
 	VelaMotionDriver,
 	VelaRuntimeConfig,
 	VelaRuntimeTag,
@@ -18,6 +19,7 @@ import {
 	__VelaOpacity as __VelaOpacityCore,
 	__VelaRem as __VelaRemCore,
 	__VelaResolution,
+	__VelaVariant,
 } from "@rbxts/vela-runtime-core";
 import Vide from "@rbxts/vide";
 
@@ -185,6 +187,10 @@ export function createVelaRuntimeHost(
 		const tests = props.__velaTests ?? [];
 		const rawClassName = props.className;
 
+		const hovered = Vide.source(false);
+		const pressed = Vide.source(false);
+		const focused = Vide.source(false);
+
 		function environment(): RuntimeEnvironment {
 			const base = __VelaEnvSource.current();
 			const readTests: boolean[] = [];
@@ -198,10 +204,9 @@ export function createVelaRuntimeHost(
 				orientation: base.orientation,
 				input: base.input,
 				colorScheme: base.colorScheme,
-				// Interaction variants land with the tracking that drives them.
-				hovered: false,
-				pressed: false,
-				focused: false,
+				hovered: hovered(),
+				pressed: pressed(),
+				focused: focused(),
 				tests: readTests,
 			};
 		}
@@ -274,6 +279,40 @@ export function createVelaRuntimeHost(
 				const resolved = composed[name] ?? current.props[name];
 				return resolved ?? fallback;
 			};
+		}
+
+		// Which states the class list reads is fixed by the list and the rules,
+		// so the snapshot answers it. The trackers compose onto whatever handler
+		// the consumer already wrote.
+		if (instanceCapable) {
+			const bindings: VariantEventBinding[] = [];
+			if (shape.usesHover === true) {
+				for (const binding of __VelaVariant.hoverTracking(hovered)) {
+					bindings.push(binding);
+				}
+			}
+			if (shape.usesActive === true) {
+				for (const binding of __VelaVariant.activeTracking(pressed)) {
+					bindings.push(binding);
+				}
+			}
+			if (shape.usesFocus === true) {
+				for (const binding of __VelaVariant.focusTracking(tag, focused)) {
+					bindings.push(binding);
+				}
+			}
+
+			// Vide writes a handler under the property name itself, and composes
+			// onto whatever the consumer already put there.
+			for (const binding of bindings) {
+				const previous = applied[binding.name];
+				applied[binding.name] = (...args: unknown[]) => {
+					binding.handler(...args);
+					if (typeIs(previous, "function")) {
+						(previous as (...args: unknown[]) => void)(...args);
+					}
+				};
+			}
 		}
 
 		let slot = 1;

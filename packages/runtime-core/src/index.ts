@@ -392,6 +392,11 @@ export type RuntimeHelperProp = {
 	value: RuntimePropValue;
 };
 
+export type VariantEventBinding = {
+	name: string;
+	handler: (...args: unknown[]) => void;
+};
+
 export type RuntimeHelper = {
 	tag: string;
 	props: RuntimeHelperProp[];
@@ -1689,6 +1694,58 @@ export namespace __VelaVariant {
 	}
 
 	/// Attaches MouseEnter/MouseLeave to drive the hover state.
+	/// What a variant needs connected, named rather than attached: `Event` is
+	/// how @rbxts/react spells a handler, and Vide writes one under the property
+	/// name itself. Each host runtime composes these its own way.
+	export function hoverTracking(
+		setHovered: (hovered: boolean) => void,
+	): VariantEventBinding[] {
+		return [
+			{ name: "MouseEnter", handler: () => setHovered(true) },
+			{ name: "MouseLeave", handler: () => setHovered(false) },
+		];
+	}
+
+	/// The input object arrives first here, because a binding is connected to
+	/// the signal itself. @rbxts/react prepends the instance to every handler's
+	/// arguments, which is why the attach form below reads one place further in.
+	export function activeTracking(
+		setPressed: (pressed: boolean) => void,
+	): VariantEventBinding[] {
+		return [
+			{
+				name: "InputBegan",
+				handler: (...args: unknown[]) => {
+					if (isPressInput(args[0])) {
+						setPressed(true);
+					}
+				},
+			},
+			{
+				name: "InputEnded",
+				handler: (...args: unknown[]) => {
+					if (isPressInput(args[0])) {
+						setPressed(false);
+					}
+				},
+			},
+			{ name: "MouseLeave", handler: () => setPressed(false) },
+		];
+	}
+
+	export function focusTracking(
+		tag: VelaRuntimeTag,
+		setFocused: (focused: boolean) => void,
+	): VariantEventBinding[] {
+		const gained = tag === "textbox" ? "Focused" : "SelectionGained";
+		const lost = tag === "textbox" ? "FocusLost" : "SelectionLost";
+
+		return [
+			{ name: gained, handler: () => setFocused(true) },
+			{ name: lost, handler: () => setFocused(false) },
+		];
+	}
+
 	export function attachHoverTracking(
 		hostProps: Record<string, unknown>,
 		setHovered: (hovered: boolean) => void,
