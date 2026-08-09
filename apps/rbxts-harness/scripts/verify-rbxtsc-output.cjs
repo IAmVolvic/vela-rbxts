@@ -48,10 +48,25 @@ const runtimeLuauPath = path.join(
 );
 const runtimeSource = fs.readFileSync(runtimeLuauPath, "utf8");
 
-// The default theme rides along with the runtime as its own module, so no
+// The React host and the framework-neutral core it is built on. Which of the
+// two a given behavior lands in is an implementation detail, so what the
+// runtime must do is asserted against the pair; what it must not do, and the
+// register budget, are asserted against each.
+const runtimeCoreLuauPath = path.join(
+	projectRoot,
+	"node_modules",
+	"@rbxts",
+	"vela-runtime-core",
+	"out",
+	"init.luau",
+);
+const runtimeCoreSource = fs.readFileSync(runtimeCoreLuauPath, "utf8");
+const runtimeModules = `${runtimeSource}\n${runtimeCoreSource}`;
+
+// The default theme rides along with the core as its own module, so no
 // emitted file has to carry a palette it did not change.
 const runtimeDefaults = fs.readFileSync(
-	path.join(path.dirname(runtimeLuauPath), "config-defaults.json"),
+	path.join(path.dirname(runtimeCoreLuauPath), "config-defaults.json"),
 	"utf8",
 );
 
@@ -356,8 +371,8 @@ for (const check of forbiddenPatterns) {
 }
 
 for (const fragment of requiredRuntimeFragments) {
-	if (!runtimeSource.includes(fragment)) {
-		failures.push(`the runtime module is missing ${fragment}`);
+	if (!runtimeModules.includes(fragment)) {
+		failures.push(`the runtime modules are missing ${fragment}`);
 	}
 }
 
@@ -368,9 +383,9 @@ for (const fragment of ["slate", "Color3.fromRGB(255, 251, 235)"]) {
 }
 
 for (const check of requiredRuntimePatterns) {
-	if (!check.pattern.test(runtimeSource)) {
+	if (!check.pattern.test(runtimeModules)) {
 		failures.push(
-			`the runtime module is missing expected pattern: ${check.description}`,
+			`the runtime modules are missing expected pattern: ${check.description}`,
 		);
 	}
 }
@@ -378,6 +393,7 @@ for (const check of requiredRuntimePatterns) {
 for (const [label, text] of [
 	["emitted Luau", source],
 	["the runtime module", runtimeSource],
+	["the runtime core module", runtimeCoreSource],
 ]) {
 	for (const check of forbiddenLoweringPatterns) {
 		if (check.pattern.test(text)) {
@@ -394,6 +410,7 @@ const REGISTER_BUDGET = 120;
 for (const [label, text] of [
 	["emitted Luau", source],
 	["the runtime module", runtimeSource],
+	["the runtime core module", runtimeCoreSource],
 ]) {
 	const peak = peakLocalRegisters(text);
 

@@ -4,11 +4,16 @@ import { expect, expectTypeOf, test } from "vitest";
 import { defaultConfig, defineConfig, plugin } from "../../config/src/index";
 
 // The runtime host ships as its own package, so what it resolves is asserted
-// against its source rather than against a copy inlined into the emit.
-const runtimeSource = readFileSync(
+// against its source rather than against a copy inlined into the emit. Most of
+// what resolves a class value lives in the framework-neutral core the host is
+// built on, and which of the two holds a given branch is not what these
+// assertions are about.
+const runtimeSource = [
 	new URL("../../runtime/src/index.ts", import.meta.url),
-	"utf8",
-);
+	new URL("../../runtime-core/src/index.ts", import.meta.url),
+]
+	.map((url) => readFileSync(url, "utf8"))
+	.join("\n");
 
 function buildColorPalette(entries: Record<string, string>) {
 	return entries;

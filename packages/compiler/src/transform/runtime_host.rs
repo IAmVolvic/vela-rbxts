@@ -198,7 +198,10 @@ mod tests {
 
     /// Read rather than embedded: the runtime ships as its own package now, and
     /// this is the seam that would otherwise let the two drift apart unnoticed.
+    /// The host package is what the preamble names; everything the emit is
+    /// resolved against lives in the core both host runtimes are built on.
     const RUNTIME_SOURCE: &str = include_str!("../../../runtime/src/index.ts");
+    const RUNTIME_CORE_SOURCE: &str = include_str!("../../../runtime-core/src/index.ts");
 
     /// forwardRef alone pins one ref type for every tag, which types every
     /// consumer ref as `unknown`; the generic restatement is what keeps `ref`
@@ -241,11 +244,12 @@ mod tests {
     #[test]
     fn the_runtime_reads_the_defaults_this_crate_diffs_against() {
         assert!(
-            RUNTIME_SOURCE.contains("from \"./config-defaults.json\""),
-            "the runtime must read the shared defaults, not a copy of its own"
+            RUNTIME_CORE_SOURCE.contains("from \"./config-defaults.json\""),
+            "the runtime core must read the shared defaults, not a copy of its own"
         );
 
-        let materialize = include_str!("../../../runtime/scripts/materialize-config-defaults.cjs");
+        let materialize =
+            include_str!("../../../runtime-core/scripts/materialize-config-defaults.cjs");
         assert!(
             materialize.contains("\"config\", \"src\", \"defaults.json\""),
             "the runtime's defaults must be copied from packages/config"
@@ -275,8 +279,8 @@ mod tests {
 
         for constructor in CONSTRUCTORS {
             assert!(
-                RUNTIME_SOURCE.contains(&format!("\"{constructor}\"")),
-                "runtime host never parses a `{constructor}` prop value"
+                RUNTIME_CORE_SOURCE.contains(&format!("\"{constructor}\"")),
+                "runtime core never parses a `{constructor}` prop value"
             );
         }
     }
@@ -287,8 +291,8 @@ mod tests {
     fn the_runtime_host_matches_every_static_utility_prefix() {
         for (prefix, _) in UTILITY_PREFIXES {
             assert!(
-                RUNTIME_SOURCE.contains(&format!("\"{prefix}\"")),
-                "runtime host never matches the \"{prefix}\" family"
+                RUNTIME_CORE_SOURCE.contains(&format!("\"{prefix}\"")),
+                "runtime core never matches the \"{prefix}\" family"
             );
         }
     }
