@@ -28,4 +28,14 @@ declare global {
 			className?: ClassValue;
 		}
 	}
+
+	// Vide's analogue of `React.Attributes`: `ActionAttributes` carries it to
+	// every intrinsic and `JSX.IntrinsicAttributes` to every component. It is a
+	// UMD global, so this is where the augmentation merges. A Vide prop may be
+	// a source, and a class value is no exception.
+	namespace Vide {
+		interface Attributes {
+			className?: ClassValue | (() => ClassValue);
+		}
+	}
 }
