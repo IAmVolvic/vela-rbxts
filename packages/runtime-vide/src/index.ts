@@ -2,8 +2,10 @@ import { Workspace as __VelaWorkspace } from "@rbxts/services";
 import type {
 	ClassValue,
 	RuntimeCamera,
+	RuntimeDivide,
 	RuntimeEnvironment,
-	RuntimeHelper,
+	RuntimeMargin,
+	RuntimePropValue,
 	RuntimeRemConfig,
 	RuntimeResolution,
 	RuntimeRule,
@@ -14,12 +16,14 @@ import type {
 } from "@rbxts/vela-runtime-core";
 import {
 	__VelaApply,
+	__VelaDivide,
 	__VelaEnv as __VelaEnvCore,
 	__VelaMargin,
 	__VelaMotion,
 	__VelaOpacity as __VelaOpacityCore,
 	__VelaRem as __VelaRemCore,
 	__VelaResolution,
+	__VelaValue,
 	__VelaVariant,
 } from "@rbxts/vela-runtime-core";
 import Vide from "@rbxts/vide";
@@ -46,6 +50,8 @@ type VelaRuntimeHostProps = {
 	/// ones. Nothing re-runs this component, so each test arrives as a thunk.
 	__velaTests?: readonly (() => boolean)[];
 	__velaRem?: readonly string[];
+	__velaDivide?: RuntimeDivide;
+	__velaMargin?: RuntimeMargin;
 	__velaOpacity?: number;
 	className?: ClassValue | (() => ClassValue);
 	children?: Vide.Node;
@@ -243,6 +249,8 @@ export function createVelaRuntimeHost(
 				name !== "__velaRules" &&
 				name !== "__velaTests" &&
 				name !== "__velaRem" &&
+				name !== "__velaDivide" &&
+				name !== "__velaMargin" &&
 				name !== "__velaOpacity" &&
 				name !== "className" &&
 				name !== "children"
@@ -256,10 +264,45 @@ export function createVelaRuntimeHost(
 		// turns that into the set of names to bind.
 		const shape = Vide.untrack(() => resolution());
 		const bound = new Set<string>();
+		const remProps = new Set<string>();
+		for (const name of props.__velaRem ?? []) {
+			bound.add(name);
+			remProps.add(name);
+		}
+		if (statics.TextSize !== undefined) {
+			bound.add("TextSize");
+		}
+
+		// A composer fills the axis a rule left out from what the element already
+		// declares — `md:w-1/2` beside a static `h-6` — so it has to be handed
+		// those props rather than an empty table.
+		function declaredProps(
+			current: RuntimeResolution,
+		): Record<string, unknown> {
+			const remRatio = current.remRatio ?? 1;
+			const declared: Record<string, unknown> = {};
+
+			for (const [name, value] of pairs(statics)) {
+				const raw = readDerivable(value);
+				if (raw === undefined) {
+					continue;
+				}
+				declared[name as string] =
+					remRatio !== 1 && remProps.has(name as string)
+						? __VelaRemCore.apply(raw as RuntimePropValue, remRatio)
+						: raw;
+			}
+
+			return declared;
+		}
+
 		for (const [name] of pairs(shape.props as Record<string, unknown>)) {
 			bound.add(name as string);
 		}
-		for (const [name] of pairs(composedProps(shape, preflight))) {
+		// Discovered from the resolution alone: seeding here would bind every
+		// static the element was handed, and a handler bound as a thunk is what
+		// Vide would connect to the signal.
+		for (const [name] of pairs(composedProps(shape, preflight, {}))) {
 			bound.add(name as string);
 		}
 		for (const rule of rules) {
@@ -276,15 +319,21 @@ export function createVelaRuntimeHost(
 		const alpha = props.__velaOpacity ?? 1;
 
 		for (const name of bound) {
-			const fallback = statics[name];
 			applied[name] = () => {
 				const current = resolution();
 				if (hostTag !== undefined && alpha < 1) {
 					__VelaResolution.composeInheritedOpacity(current, hostTag, alpha);
 				}
-				const composed = composedProps(current, preflight);
-				const resolved = composed[name] ?? current.props[name];
-				return resolved ?? fallback;
+				const composed = composedProps(
+					current,
+					preflight,
+					declaredProps(current),
+				);
+				const value = composed[name];
+
+				return name === "TextSize" && typeIs(value, "number")
+					? math.min(value, __VelaRemCore.TEXT_SIZE_CEILING)
+					: value;
 			};
 		}
 
@@ -323,46 +372,126 @@ export function createVelaRuntimeHost(
 		}
 
 		let slot = 1;
-		for (const helper of helperChildren(shape, resolution)) {
-			(applied as Record<number, unknown>)[slot] = helper;
-			slot += 1;
+		(applied as Record<number, unknown>)[slot] = helperChildren(
+			shape,
+			rules,
+			resolution,
+		);
+		slot += 1;
+
+		function currentDivide(): RuntimeDivide | undefined {
+			const current = resolution();
+			return __VelaDivide.resolveDivideConfig(
+				props.__velaDivide,
+				current.divide,
+				current.remRatio ?? 1,
+			);
 		}
-		if (props.children !== undefined) {
+
+		// A separator carries resolved values like a helper does, so its own
+		// props follow the resolution. Whether it exists at all is fixed here.
+		const divide = Vide.untrack(currentDivide);
+		if (divide !== undefined) {
+			const separator = () =>
+				videJsx("frame", {
+					BackgroundColor3: () => divideColor(currentDivide() ?? divide),
+					BackgroundTransparency: () =>
+						(currentDivide() ?? divide).transparency ?? 0,
+					BorderSizePixel: 0,
+					Size: () => divideSize(currentDivide() ?? divide),
+				});
+
+			for (const child of interleaveDivideSeparators(
+				separator,
+				flattenChildren(props.children),
+			)) {
+				(applied as Record<number, unknown>)[slot] = child;
+				slot += 1;
+			}
+		} else if (props.children !== undefined) {
 			(applied as Record<number, unknown>)[slot] = props.children;
 		}
 
-		if (!instanceCapable) {
-			return (tag as (props: never) => Vide.Node)(applied as never);
+		const renderElement = () =>
+			instanceCapable
+				? videJsx(hostTag as string, applied)
+				: (tag as (props: never) => Vide.Node)(applied as never);
+		const wrapsMargin =
+			props.__velaMargin !== undefined ||
+			shape.margin !== undefined ||
+			rawClassName !== undefined;
+		if (!wrapsMargin) {
+			return renderElement();
 		}
 
-		// `m-*` is spacing outside the instance, which Roblox has no property
-		// for. The element moves inside a padded wrapper that takes over the
-		// layout props it was positioned by — which has to happen before the
-		// instance is created, since Vide applies props as it builds.
-		const margin = __VelaMargin.resolveMarginConfig(
-			undefined,
-			shape.margin,
-			shape.remRatio ?? 1,
-		);
-		if (margin === undefined) {
-			return videJsx(hostTag as string, applied);
-		}
-
-		const wrapperProps = __VelaMargin.prepareMarginWrapper(margin, applied);
-		const element = videJsx(hostTag as string, applied);
+		const margin = () => {
+			const current = resolution();
+			return __VelaMargin.resolveMarginConfig(
+				props.__velaMargin,
+				current.margin,
+				current.remRatio ?? 1,
+			);
+		};
+		const wrapperProps = prepareMarginWrapper(margin, applied);
 		const padding = videJsx("uipadding", {
-			PaddingTop: new UDim(0, margin.top),
-			PaddingRight: new UDim(0, margin.right),
-			PaddingBottom: new UDim(0, margin.bottom),
-			PaddingLeft: new UDim(0, margin.left),
+			PaddingTop: () => new UDim(0, margin()?.top ?? 0),
+			PaddingRight: () => new UDim(0, margin()?.right ?? 0),
+			PaddingBottom: () => new UDim(0, margin()?.bottom ?? 0),
+			PaddingLeft: () => new UDim(0, margin()?.left ?? 0),
 		});
 
 		return videJsx("frame", {
 			...wrapperProps,
 			[1]: padding,
-			[2]: element,
+			[2]: renderElement(),
 		});
 	};
+}
+
+function readDerivable(value: unknown): unknown {
+	return typeIs(value, "function") ? (value as () => unknown)() : value;
+}
+
+function prepareMarginWrapper(
+	margin: () => RuntimeMargin | undefined,
+	hostProps: Record<string, unknown>,
+): Record<string, unknown> {
+	const wrapperProps: Record<string, unknown> = {
+		BackgroundTransparency: 1,
+		BorderSizePixel: 0,
+	};
+
+	for (const name of __VelaMargin.MARGIN_WRAPPER_PROPS) {
+		const value = hostProps[name];
+		if (value !== undefined) {
+			wrapperProps[name] = value;
+			hostProps[name] = undefined;
+		}
+	}
+
+	const declaredSize = wrapperProps.Size;
+	const automaticSize = hostProps.AutomaticSize;
+	if (declaredSize !== undefined) {
+		wrapperProps.Size = () => {
+			const size = readDerivable(declaredSize);
+			const current = margin();
+			return typeIs(size, "UDim2")
+				? new UDim2(
+						size.X.Scale,
+						size.X.Offset + (current?.left ?? 0) + (current?.right ?? 0),
+						size.Y.Scale,
+						size.Y.Offset + (current?.top ?? 0) + (current?.bottom ?? 0),
+					)
+				: size;
+		};
+		hostProps.Size = UDim2.fromScale(1, 1);
+	} else if (automaticSize !== undefined) {
+		wrapperProps.AutomaticSize = automaticSize;
+	} else {
+		wrapperProps.AutomaticSize = Enum.AutomaticSize.XY;
+	}
+
+	return wrapperProps;
 }
 
 /// A rule can name an axis rather than a property: `md:w-1/2` writes `SizeX`,
@@ -377,11 +506,87 @@ const COMPOSED_BY_CONTRIBUTOR: Record<string, string> = {
 	TranslateY: "Position",
 };
 
+function divideColor(divide: RuntimeDivide): Color3 {
+	return (
+		(divide.color !== undefined
+			? __VelaValue.parseColor3(divide.color)
+			: undefined) ?? Color3.fromRGB(229, 231, 235)
+	);
+}
+
+function divideSize(divide: RuntimeDivide): UDim2 {
+	return divide.axis === "x"
+		? new UDim2(0, divide.thickness, 1, 0)
+		: new UDim2(1, 0, 0, divide.thickness);
+}
+
+/// Vide hands a component its children as the node itself, or as a plain array
+/// when there is more than one. Interleaving needs them one by one, so the
+/// arrays are opened up — but only the plain ones: an action is a table too,
+/// and it is the metatable that tells them apart.
+function flattenChildren(node: unknown): defined[] {
+	const flat: defined[] = [];
+
+	function walk(value: unknown) {
+		if (value === undefined) {
+			return;
+		}
+		if (typeIs(value, "table") && getmetatable(value) === undefined) {
+			for (const [key, entry] of pairs(value as Record<string, unknown>)) {
+				if (typeIs(key, "number")) {
+					walk(entry);
+				}
+			}
+			return;
+		}
+		flat.push(value as defined);
+	}
+
+	walk(node);
+
+	return flat;
+}
+
+/// Separators go between consecutive children that take a layout slot. A child
+/// Vide has already built answers that itself; anything else — a thunk, a
+/// binding — is taken at its word and counted as content.
+function interleaveDivideSeparators(
+	separator: () => Vide.Node,
+	children: defined[],
+): defined[] {
+	const result: defined[] = [];
+	let seenContentChild = false;
+
+	for (const child of children) {
+		if (typeIs(child, "Instance") && child.IsA("UIBase")) {
+			result.push(child);
+			continue;
+		}
+		if (seenContentChild) {
+			const between = separator();
+			if (between !== undefined) {
+				result.push(between as defined);
+			}
+		}
+		seenContentChild = true;
+		result.push(child);
+	}
+
+	return result;
+}
+
 function composedProps(
 	resolution: RuntimeResolution,
 	preflight: boolean,
+	declared: Record<string, unknown>,
 ): Record<string, unknown> {
 	const hostProps: Record<string, unknown> = {};
+	for (const [name, value] of pairs(declared)) {
+		hostProps[name as string] = value;
+	}
+	for (const [name, value] of pairs(resolution.props)) {
+		hostProps[name as string] = value;
+	}
 	__VelaApply.applyComposedResolution(hostProps, resolution, preflight);
 
 	return hostProps;
@@ -407,33 +612,78 @@ function helperProps(
 /// alone they would freeze at creation, which for rem means freezing at the
 /// 1x1 viewport the first frame has not replaced yet.
 ///
-/// Which helpers exist is still fixed here; a rule that introduces one lands
-/// with the tracking that would create and destroy it.
+/// Every tag a rule could ever ask for is built here rather than when the rule
+/// first fires, because Vide refuses to open a reactive scope inside one — and
+/// a helper built inside the children effect is exactly that. What the returned
+/// thunk leaves out, Vide unparents; `hover:rounded-lg` costs one UICorner that
+/// spends most of its life detached.
 function helperChildren(
 	shape: RuntimeResolution,
+	rules: readonly RuntimeRule[],
 	resolution: () => RuntimeResolution,
-): defined[] {
+): () => defined[] {
 	__VelaApply.applyHelperDefaults(shape.helpers);
 
-	const children: defined[] = [];
-	for (const helper of shape.helpers) {
-		const tag = helper.tag;
-		const initial = __VelaApply.helperToProps(helper.props);
-		const props: Record<string, unknown> = {};
+	const tags: string[] = [];
+	const instances = new Map<string, defined>();
 
-		for (const [name, value] of pairs(initial)) {
-			const propName = name as string;
-			props[propName] = () =>
-				helperProps(resolution(), tag)?.[propName] ?? value;
+	function build(tag: string) {
+		if (instances.has(tag)) {
+			return;
 		}
 
-		const child = videJsx(__VelaApply.hostClassName(tag), props);
-		if (child !== undefined) {
-			children.push(child);
+		const child = videJsx(__VelaApply.hostClassName(tag), {});
+		if (child === undefined) {
+			return;
+		}
+
+		// One effect for the whole helper rather than a thunk per prop: which
+		// props it carries is a rule's to change, and a name the resolution has
+		// dropped must keep its last value rather than be written back as nil.
+		Vide.effect(() => {
+			const props = helperProps(resolution(), tag);
+			if (props === undefined) {
+				return;
+			}
+			for (const [name, value] of pairs(props)) {
+				(child as unknown as Record<string, unknown>)[name as string] = value;
+			}
+		});
+
+		tags.push(tag);
+		instances.set(tag, child as defined);
+	}
+
+	for (const helper of shape.helpers) {
+		build(helper.tag);
+	}
+	for (const rule of rules) {
+		for (const helper of rule.effects.helpers) {
+			build(helper.tag);
 		}
 	}
 
-	return children;
+	return () => {
+		const current = resolution();
+		__VelaApply.applyHelperDefaults(current.helpers);
+
+		const present = new Set<string>();
+		for (const helper of current.helpers) {
+			present.add(helper.tag);
+		}
+
+		// Ordered by the tags as they were built, so a helper that comes and goes
+		// does not reshuffle its siblings.
+		const children: defined[] = [];
+		for (const tag of tags) {
+			const child = present.has(tag) ? instances.get(tag) : undefined;
+			if (child !== undefined) {
+				children.push(child);
+			}
+		}
+
+		return children;
+	};
 }
 
 export type {
