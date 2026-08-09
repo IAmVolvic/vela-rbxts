@@ -28,6 +28,39 @@ struct CompletionSpec {
     utility_kind: UtilityKind,
 }
 
+impl CompletionSpec {
+    /// A candidate inserts what it is labelled, and the ranking fields are
+    /// filled in later against what the user typed, so a family only ever says
+    /// its label, its group and what it does.
+    fn new(
+        label: impl Into<String>,
+        category: &str,
+        documentation: String,
+        utility_kind: UtilityKind,
+    ) -> Self {
+        let label = label.into();
+
+        Self {
+            item: CompletionItem {
+                insert_text: label.clone(),
+                label,
+                kind: "utility".to_owned(),
+                category: category.to_owned(),
+                documentation,
+                replacement: None,
+                color: None,
+                sort_text: None,
+            },
+            utility_kind,
+        }
+    }
+
+    fn with_swatch(mut self, color: Option<String>) -> Self {
+        self.item.color = color;
+        self
+    }
+}
+
 pub(crate) fn get_completions_impl(request: CompletionRequest) -> CompletionResponse {
     let config = crate::editor::parse_editor_config(request.options.as_ref());
     let Some(context) = class_name_context_at_position(&request.source, request.position) else {
@@ -222,6 +255,29 @@ pub(crate) fn describe_plugin_utility(utility: &PluginUtility) -> String {
 }
 
 fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    [
+        color_candidates as fn(&TailwindConfig) -> Vec<CompletionSpec>,
+        border_candidates,
+        radius_and_stacking_candidates,
+        spacing_and_size_candidates,
+        transform_and_opacity_candidates,
+        layout_candidates,
+        stroke_effect_candidates,
+        motion_candidates,
+        divide_and_margin_candidates,
+        grid_and_basis_candidates,
+        typography_candidates,
+        visibility_candidates,
+        shadow_and_gradient_candidates,
+        size_constraint_candidates,
+        flex_alignment_candidates,
+    ]
+    .into_iter()
+    .flat_map(|family| family(config))
+    .collect()
+}
+
+fn color_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
     let mut items = Vec::new();
 
     for (prefix, prop, category, utility_kind) in [
@@ -247,118 +303,85 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ),
     ] {
         for color_key in color_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{color_key}"),
-                    insert_text: format!("{prefix}-{color_key}"),
-                    kind: "utility".to_owned(),
-                    category: category.to_owned(),
-                    documentation: format!("Set Roblox {prop} from theme color `{color_key}`."),
-                    replacement: None,
-                    color: color_swatch(config, &color_key),
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(
+                CompletionSpec::new(
+                    format!("{prefix}-{color_key}"),
+                    category,
+                    format!("Set Roblox {prop} from theme color `{color_key}`."),
+                    utility_kind.clone(),
+                )
+                .with_swatch(color_swatch(config, &color_key)),
+            );
         }
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("{prefix}-transparent"),
-                insert_text: format!("{prefix}-transparent"),
-                kind: "utility".to_owned(),
-                category: category.to_owned(),
-                documentation: format!("Use the transparent keyword for Roblox {prop}."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
+        items.push(CompletionSpec::new(
+            format!("{prefix}-transparent"),
+            category,
+            format!("Use the transparent keyword for Roblox {prop}."),
             utility_kind,
-        });
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "border".to_owned(),
-            insert_text: "border".to_owned(),
-            kind: "utility".to_owned(),
-            category: "border".to_owned(),
-            documentation: format!(
-                "Create a Roblox UIStroke with `Thickness` set to {}.",
-                crate::editor::offset_value_text(config, "1")
-            ),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::Border,
-    });
+    items
+}
+
+fn border_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
+
+    items.push(CompletionSpec::new(
+        "border",
+        "border",
+        format!(
+            "Create a Roblox UIStroke with `Thickness` set to {}.",
+            crate::editor::offset_value_text(config, "1")
+        ),
+        UtilityKind::Border,
+    ));
 
     for thickness in BORDER_THICKNESS_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("border-{thickness}"),
-                insert_text: format!("border-{thickness}"),
-                kind: "utility".to_owned(),
-                category: "border".to_owned(),
-                documentation: format!(
-                    "Set Roblox UIStroke.Thickness to {}.",
-                    crate::editor::offset_value_text(config, thickness)
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Border,
-        });
+        items.push(CompletionSpec::new(
+            format!("border-{thickness}"),
+            "border",
+            format!(
+                "Set Roblox UIStroke.Thickness to {}.",
+                crate::editor::offset_value_text(config, thickness)
+            ),
+            UtilityKind::Border,
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "border-transparent".to_owned(),
-            insert_text: "border-transparent".to_owned(),
-            kind: "utility".to_owned(),
-            category: "border".to_owned(),
-            documentation: "Set Roblox UIStroke.Transparency to `1`.".to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::Border,
-    });
+    items.push(CompletionSpec::new(
+        "border-transparent",
+        "border",
+        "Set Roblox UIStroke.Transparency to `1`.".to_owned(),
+        UtilityKind::Border,
+    ));
 
     for line_join in BORDER_LINE_JOIN_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("border-{line_join}"),
-                insert_text: format!("border-{line_join}"),
-                kind: "utility".to_owned(),
-                category: "border".to_owned(),
-                documentation: format!(
-                    "Set Roblox UIStroke.LineJoinMode from `border-{line_join}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Border,
-        });
+        items.push(CompletionSpec::new(
+            format!("border-{line_join}"),
+            "border",
+            format!("Set Roblox UIStroke.LineJoinMode from `border-{line_join}`."),
+            UtilityKind::Border,
+        ));
     }
 
     for color_key in color_completion_keys(config) {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("border-{color_key}"),
-                insert_text: format!("border-{color_key}"),
-                kind: "utility".to_owned(),
-                category: "color".to_owned(),
-                documentation: format!("Set Roblox UIStroke.Color from theme color `{color_key}`."),
-                replacement: None,
-                color: color_swatch(config, &color_key),
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Border,
-        });
+        items.push(
+            CompletionSpec::new(
+                format!("border-{color_key}"),
+                "color",
+                format!("Set Roblox UIStroke.Color from theme color `{color_key}`."),
+                UtilityKind::Border,
+            )
+            .with_swatch(color_swatch(config, &color_key)),
+        );
     }
+
+    items
+}
+
+fn radius_and_stacking_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for key in radius_completion_keys(config) {
         // `rounded-DEFAULT` is not a class; the DEFAULT radius is what a bare
@@ -368,36 +391,28 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         } else {
             format!("rounded-{key}")
         };
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: label.clone(),
-                insert_text: label,
-                kind: "utility".to_owned(),
-                category: "radius".to_owned(),
-                documentation: format!("Set UICorner.CornerRadius from theme radius `{key}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Radius,
-        });
+        items.push(CompletionSpec::new(
+            label.clone(),
+            "radius",
+            format!("Set UICorner.CornerRadius from theme radius `{key}`."),
+            UtilityKind::Radius,
+        ));
     }
 
     for key in Z_INDEX_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("z-{key}"),
-                insert_text: format!("z-{key}"),
-                kind: "utility".to_owned(),
-                category: "stacking".to_owned(),
-                documentation: format!("Set Roblox ZIndex to `{key}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::ZIndex,
-        });
+        items.push(CompletionSpec::new(
+            format!("z-{key}"),
+            "stacking",
+            format!("Set Roblox ZIndex to `{key}`."),
+            UtilityKind::ZIndex,
+        ));
     }
+
+    items
+}
+
+fn spacing_and_size_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     let spacing_keys = spacing_completion_keys(config);
     for (prefix, utility_kind) in [
@@ -416,19 +431,12 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             } else {
                 "UIPadding"
             };
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{key}"),
-                    insert_text: format!("{prefix}-{key}"),
-                    kind: "utility".to_owned(),
-                    category: "spacing".to_owned(),
-                    documentation: format!("Set Roblox {target} from spacing `{key}`."),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{prefix}-{key}"),
+                "spacing",
+                format!("Set Roblox {target} from spacing `{key}`."),
+                utility_kind.clone(),
+            ));
         }
     }
 
@@ -438,137 +446,86 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ("size", UtilityKind::Size),
     ] {
         for key in size_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{key}"),
-                    insert_text: format!("{prefix}-{key}"),
-                    kind: "utility".to_owned(),
-                    category: "size".to_owned(),
-                    documentation: format!("Set Roblox Size using `{prefix}-{key}`."),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{prefix}-{key}"),
+                "size",
+                format!("Set Roblox Size using `{prefix}-{key}`."),
+                utility_kind.clone(),
+            ));
         }
     }
 
+    items
+}
+
+fn transform_and_opacity_candidates(_config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
+
     for degrees in ROTATION_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("rotate-{degrees}"),
-                insert_text: format!("rotate-{degrees}"),
-                kind: "utility".to_owned(),
-                category: "transform".to_owned(),
-                documentation: format!("Set Roblox Rotation to `{degrees}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Rotation,
-        });
+        items.push(CompletionSpec::new(
+            format!("rotate-{degrees}"),
+            "transform",
+            format!("Set Roblox Rotation to `{degrees}`."),
+            UtilityKind::Rotation,
+        ));
 
         if degrees != "0" {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("-rotate-{degrees}"),
-                    insert_text: format!("-rotate-{degrees}"),
-                    kind: "utility".to_owned(),
-                    category: "transform".to_owned(),
-                    documentation: format!("Set Roblox Rotation to `-{degrees}`."),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: UtilityKind::Rotation,
-            });
+            items.push(CompletionSpec::new(
+                format!("-rotate-{degrees}"),
+                "transform",
+                format!("Set Roblox Rotation to `-{degrees}`."),
+                UtilityKind::Rotation,
+            ));
         }
     }
 
     for scale in SCALE_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("scale-{scale}"),
-                insert_text: format!("scale-{scale}"),
-                kind: "utility".to_owned(),
-                category: "transform".to_owned(),
-                documentation: format!("Set Roblox UIScale.Scale from `scale-{scale}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Scale,
-        });
+        items.push(CompletionSpec::new(
+            format!("scale-{scale}"),
+            "transform",
+            format!("Set Roblox UIScale.Scale from `scale-{scale}`."),
+            UtilityKind::Scale,
+        ));
     }
 
     for percent in OPACITY_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("opacity-{percent}"),
-                insert_text: format!("opacity-{percent}"),
-                kind: "utility".to_owned(),
-                category: "effects".to_owned(),
-                documentation: format!(
-                    "Fade this element to `{percent}%` opacity, children included."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Opacity,
-        });
+        items.push(CompletionSpec::new(
+            format!("opacity-{percent}"),
+            "effects",
+            format!("Fade this element to `{percent}%` opacity, children included."),
+            UtilityKind::Opacity,
+        ));
     }
+
+    items
+}
+
+fn layout_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for key in ASPECT_RATIO_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("aspect-{key}"),
-                insert_text: format!("aspect-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Set Roblox UIAspectRatioConstraint.AspectRatio from `aspect-{key}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::AspectRatio,
-        });
+        items.push(CompletionSpec::new(
+            format!("aspect-{key}"),
+            "layout",
+            format!("Set Roblox UIAspectRatioConstraint.AspectRatio from `aspect-{key}`."),
+            UtilityKind::AspectRatio,
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "flex".to_owned(),
-            insert_text: "flex".to_owned(),
-            kind: "utility".to_owned(),
-            category: "layout".to_owned(),
-            documentation: "Create a Roblox UIListLayout with a horizontal fill direction."
-                .to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::FlexDirection,
-    });
+    items.push(CompletionSpec::new(
+        "flex",
+        "layout",
+        "Create a Roblox UIListLayout with a horizontal fill direction.".to_owned(),
+        UtilityKind::FlexDirection,
+    ));
 
     for direction in FLEX_DIRECTION_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("flex-{direction}"),
-                insert_text: format!("flex-{direction}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Set Roblox UIListLayout.FillDirection from `flex-{direction}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::FlexDirection,
-        });
+        items.push(CompletionSpec::new(
+            format!("flex-{direction}"),
+            "layout",
+            format!("Set Roblox UIListLayout.FillDirection from `flex-{direction}`."),
+            UtilityKind::FlexDirection,
+        ));
     }
 
     for (prefix, utility_kind, axis) in [
@@ -582,57 +539,29 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
     ] {
         for key in position_completion_keys(config) {
             for label in [format!("{prefix}-{key}"), format!("-{prefix}-{key}")] {
-                items.push(CompletionSpec {
-                    item: CompletionItem {
-                        label: label.clone(),
-                        insert_text: label,
-                        kind: "utility".to_owned(),
-                        category: "layout".to_owned(),
-                        documentation: format!("Set Roblox {axis} using `{prefix}-{key}`."),
-                        replacement: None,
-                        color: None,
-                        sort_text: None,
-                    },
-                    utility_kind: utility_kind.clone(),
-                });
+                items.push(CompletionSpec::new(
+                    label.clone(),
+                    "layout",
+                    format!("Set Roblox {axis} using `{prefix}-{key}`."),
+                    utility_kind.clone(),
+                ));
             }
         }
     }
 
     for alignment in ALIGN_CONTENT_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("content-{alignment}"),
-                insert_text: format!("content-{alignment}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Set Roblox UIListLayout cross-axis packing from `content-{alignment}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::AlignContent,
-        });
+        items.push(CompletionSpec::new(
+            format!("content-{alignment}"),
+            "layout",
+            format!("Set Roblox UIListLayout cross-axis packing from `content-{alignment}`."),
+            UtilityKind::AlignContent,
+        ));
     }
 
     for (key, alignment) in ALIGN_SELF_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("self-{key}"),
-                insert_text: format!("self-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
+        items.push(CompletionSpec::new(format!("self-{key}"), "layout", format!(
                     "Add a Roblox UIFlexItem with `ItemLineAlignment = Enum.ItemLineAlignment.{alignment}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::AlignSelf,
-        });
+                ), UtilityKind::AlignSelf));
     }
 
     for key in LAYOUT_ORDER_KEYWORDS
@@ -640,51 +569,30 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         .map(|(name, _)| (*name).to_owned())
         .chain((1..=12).map(|order| order.to_string()))
     {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("order-{key}"),
-                insert_text: format!("order-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Set Roblox LayoutOrder from `order-{key}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::LayoutOrder,
-        });
+        items.push(CompletionSpec::new(
+            format!("order-{key}"),
+            "layout",
+            format!("Set Roblox LayoutOrder from `order-{key}`."),
+            UtilityKind::LayoutOrder,
+        ));
     }
 
     for (key, scale_type) in OBJECT_FIT_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("object-{key}"),
-                insert_text: format!("object-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Set Roblox ScaleType to `Enum.ScaleType.{scale_type}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::ObjectFit,
-        });
+        items.push(CompletionSpec::new(
+            format!("object-{key}"),
+            "layout",
+            format!("Set Roblox ScaleType to `Enum.ScaleType.{scale_type}`."),
+            UtilityKind::ObjectFit,
+        ));
     }
 
     for (key, value) in POINTER_EVENTS_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("pointer-events-{key}"),
-                insert_text: format!("pointer-events-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Set Roblox Interactable to `{value}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::PointerEvents,
-        });
+        items.push(CompletionSpec::new(
+            format!("pointer-events-{key}"),
+            "layout",
+            format!("Set Roblox Interactable to `{value}`."),
+            UtilityKind::PointerEvents,
+        ));
     }
 
     for (prefix, utility_kind, direction) in [
@@ -692,191 +600,113 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ("space-y", UtilityKind::SpaceY, "Vertical"),
     ] {
         for key in spacing_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{key}"),
-                    insert_text: format!("{prefix}-{key}"),
-                    kind: "utility".to_owned(),
-                    category: "layout".to_owned(),
-                    documentation: format!(
+            items.push(CompletionSpec::new(format!("{prefix}-{key}"), "layout", format!(
                         "Set Roblox UIListLayout.Padding from spacing `{key}` with `FillDirection = Enum.FillDirection.{direction}`."
-                    ),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+                    ), utility_kind.clone()));
         }
     }
 
     for (key, value) in WHITESPACE_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("whitespace-{key}"),
-                insert_text: format!("whitespace-{key}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox TextWrapped to `{value}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Whitespace,
-        });
+        items.push(CompletionSpec::new(
+            format!("whitespace-{key}"),
+            "typography",
+            format!("Set Roblox TextWrapped to `{value}`."),
+            UtilityKind::Whitespace,
+        ));
     }
 
     for (key, behavior) in OVERSCROLL_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("overscroll-{key}"),
-                insert_text: format!("overscroll-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Set Roblox ElasticBehavior to `Enum.ElasticBehavior.{behavior}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Overscroll,
-        });
+        items.push(CompletionSpec::new(
+            format!("overscroll-{key}"),
+            "layout",
+            format!("Set Roblox ElasticBehavior to `Enum.ElasticBehavior.{behavior}`."),
+            UtilityKind::Overscroll,
+        ));
     }
 
     for (key, direction) in SCROLL_DIRECTION_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("scroll-{key}"),
-                insert_text: format!("scroll-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Set Roblox ScrollingDirection to `Enum.ScrollingDirection.{direction}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::ScrollDirection,
-        });
+        items.push(CompletionSpec::new(
+            format!("scroll-{key}"),
+            "layout",
+            format!("Set Roblox ScrollingDirection to `Enum.ScrollingDirection.{direction}`."),
+            UtilityKind::ScrollDirection,
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "scroll-none".to_owned(),
-            insert_text: "scroll-none".to_owned(),
-            kind: "utility".to_owned(),
-            category: "layout".to_owned(),
-            documentation: "Set Roblox ScrollingEnabled to `false`.".to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::ScrollDirection,
-    });
+    items.push(CompletionSpec::new(
+        "scroll-none",
+        "layout",
+        "Set Roblox ScrollingEnabled to `false`.".to_owned(),
+        UtilityKind::ScrollDirection,
+    ));
 
     for key in spacing_completion_keys(config) {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("scrollbar-w-{key}"),
-                insert_text: format!("scrollbar-w-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Set Roblox ScrollBarThickness from spacing `{key}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::ScrollbarThickness,
-        });
+        items.push(CompletionSpec::new(
+            format!("scrollbar-w-{key}"),
+            "layout",
+            format!("Set Roblox ScrollBarThickness from spacing `{key}`."),
+            UtilityKind::ScrollbarThickness,
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "scrollbar-none".to_owned(),
-            insert_text: "scrollbar-none".to_owned(),
-            kind: "utility".to_owned(),
-            category: "layout".to_owned(),
-            documentation: "Hide the scrollbar by setting `ScrollBarThickness = 0`.".to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::ScrollbarThickness,
-    });
+    items.push(CompletionSpec::new(
+        "scrollbar-none",
+        "layout",
+        "Hide the scrollbar by setting `ScrollBarThickness = 0`.".to_owned(),
+        UtilityKind::ScrollbarThickness,
+    ));
 
     for (key, axis) in CANVAS_SIZE_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("canvas-{key}"),
-                insert_text: format!("canvas-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Set Roblox AutomaticCanvasSize to `Enum.AutomaticSize.{axis}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::CanvasSize,
-        });
+        items.push(CompletionSpec::new(
+            format!("canvas-{key}"),
+            "layout",
+            format!("Set Roblox AutomaticCanvasSize to `Enum.AutomaticSize.{axis}`."),
+            UtilityKind::CanvasSize,
+        ));
     }
+
+    items
+}
+
+fn stroke_effect_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for (family, utility_kind) in [
         ("ring", UtilityKind::Ring),
         ("outline", UtilityKind::Outline),
     ] {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: family.to_owned(),
-                insert_text: family.to_owned(),
-                kind: "utility".to_owned(),
-                category: "effects".to_owned(),
-                documentation: "Set UIStroke.Thickness with `ApplyStrokeMode = Border`; shares the same UIStroke as `border-*`.".to_owned(),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: utility_kind.clone(),
-        });
+        items.push(CompletionSpec::new(family.to_owned(), "effects", "Set UIStroke.Thickness with `ApplyStrokeMode = Border`; shares the same UIStroke as `border-*`.".to_owned(), utility_kind.clone()));
 
         for thickness in RING_THICKNESS_VALUES {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{family}-{thickness}"),
-                    insert_text: format!("{family}-{thickness}"),
-                    kind: "utility".to_owned(),
-                    category: "effects".to_owned(),
-                    documentation: format!(
-                        "Set UIStroke.Thickness to {}.",
-                        crate::editor::offset_value_text(config, thickness)
-                    ),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{family}-{thickness}"),
+                "effects",
+                format!(
+                    "Set UIStroke.Thickness to {}.",
+                    crate::editor::offset_value_text(config, thickness)
+                ),
+                utility_kind.clone(),
+            ));
         }
 
         for color_key in color_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{family}-{color_key}"),
-                    insert_text: format!("{family}-{color_key}"),
-                    kind: "utility".to_owned(),
-                    category: "color".to_owned(),
-                    documentation: format!("Set UIStroke.Color from theme color `{color_key}`."),
-                    replacement: None,
-                    color: color_swatch(config, &color_key),
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(
+                CompletionSpec::new(
+                    format!("{family}-{color_key}"),
+                    "color",
+                    format!("Set UIStroke.Color from theme color `{color_key}`."),
+                    utility_kind.clone(),
+                )
+                .with_swatch(color_swatch(config, &color_key)),
+            );
         }
     }
+
+    items
+}
+
+fn motion_candidates(_config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for (label, documentation) in [
         (
@@ -888,19 +718,12 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             "Disable the transition; runtime style changes apply instantly.".to_owned(),
         ),
     ] {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: label.clone(),
-                insert_text: label,
-                kind: "utility".to_owned(),
-                category: "effects".to_owned(),
-                documentation,
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Transition,
-        });
+        items.push(CompletionSpec::new(
+            label.clone(),
+            "effects",
+            documentation,
+            UtilityKind::Transition,
+        ));
     }
 
     for (prefix, utility_kind, field) in [
@@ -908,113 +731,73 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ("delay", UtilityKind::TransitionDelay, "delay"),
     ] {
         for millis in DURATION_PRESET_VALUES {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{millis}"),
-                    insert_text: format!("{prefix}-{millis}"),
-                    kind: "utility".to_owned(),
-                    category: "effects".to_owned(),
-                    documentation: format!("Set the transition {field} to `{millis}ms`."),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{prefix}-{millis}"),
+                "effects",
+                format!("Set the transition {field} to `{millis}ms`."),
+                utility_kind.clone(),
+            ));
         }
     }
 
     for (key, description) in ANIMATION_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("animate-{key}"),
-                insert_text: format!("animate-{key}"),
-                kind: "utility".to_owned(),
-                category: "effects".to_owned(),
-                documentation: description.to_owned(),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Animation,
-        });
+        items.push(CompletionSpec::new(
+            format!("animate-{key}"),
+            "effects",
+            description.to_owned(),
+            UtilityKind::Animation,
+        ));
     }
 
     for (key, style, direction) in EASE_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("ease-{key}"),
-                insert_text: format!("ease-{key}"),
-                kind: "utility".to_owned(),
-                category: "effects".to_owned(),
-                documentation: format!(
+        items.push(CompletionSpec::new(format!("ease-{key}"), "effects", format!(
                     "Set the transition easing to `Enum.EasingStyle.{style}` / `Enum.EasingDirection.{direction}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::TransitionEase,
-        });
+                ), UtilityKind::TransitionEase));
     }
+
+    items
+}
+
+fn divide_and_margin_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for (label, utility_kind, axis) in [
         ("divide-x", UtilityKind::DivideX, "vertical"),
         ("divide-y", UtilityKind::DivideY, "horizontal"),
     ] {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: label.to_owned(),
-                insert_text: label.to_owned(),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Insert a {} {axis} separator frame between children (not for LayoutOrder lists).",
-                    crate::editor::px_length_text(config, "1")
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: utility_kind.clone(),
-        });
+        items.push(CompletionSpec::new(
+            label.to_owned(),
+            "layout",
+            format!(
+                "Insert a {} {axis} separator frame between children (not for LayoutOrder lists).",
+                crate::editor::px_length_text(config, "1")
+            ),
+            utility_kind.clone(),
+        ));
 
         for thickness in RING_THICKNESS_VALUES {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{label}-{thickness}"),
-                    insert_text: format!("{label}-{thickness}"),
-                    kind: "utility".to_owned(),
-                    category: "layout".to_owned(),
-                    documentation: format!(
-                        "Insert a {} {axis} separator frame between children.",
-                        crate::editor::px_length_text(config, thickness)
-                    ),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{label}-{thickness}"),
+                "layout",
+                format!(
+                    "Insert a {} {axis} separator frame between children.",
+                    crate::editor::px_length_text(config, thickness)
+                ),
+                utility_kind.clone(),
+            ));
         }
     }
 
     for color_key in color_completion_keys(config) {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("divide-{color_key}"),
-                insert_text: format!("divide-{color_key}"),
-                kind: "utility".to_owned(),
-                category: "color".to_owned(),
-                documentation: format!(
-                    "Paint the divide separators from theme color `{color_key}`."
-                ),
-                replacement: None,
-                color: color_swatch(config, &color_key),
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::DivideColor,
-        });
+        items.push(
+            CompletionSpec::new(
+                format!("divide-{color_key}"),
+                "color",
+                format!("Paint the divide separators from theme color `{color_key}`."),
+                UtilityKind::DivideColor,
+            )
+            .with_swatch(color_swatch(config, &color_key)),
+        );
     }
 
     for (prefix, utility_kind, sides) in [
@@ -1035,21 +818,12 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ("ml", UtilityKind::Margin(PaddingKind::Left), "the left"),
     ] {
         for key in spacing_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{key}"),
-                    insert_text: format!("{prefix}-{key}"),
-                    kind: "utility".to_owned(),
-                    category: "layout".to_owned(),
-                    documentation: format!(
-                        "Wrap the element in a margin box padded by spacing `{key}` on {sides}."
-                    ),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{prefix}-{key}"),
+                "layout",
+                format!("Wrap the element in a margin box padded by spacing `{key}` on {sides}."),
+                utility_kind.clone(),
+            ));
         }
     }
 
@@ -1058,21 +832,12 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ("-ml", UtilityKind::Margin(PaddingKind::Left)),
     ] {
         for key in spacing_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{key}"),
-                    insert_text: format!("{prefix}-{key}"),
-                    kind: "utility".to_owned(),
-                    category: "layout".to_owned(),
-                    documentation: format!(
-                        "Shift Position by negative spacing `{key}` (margin pull)."
-                    ),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{prefix}-{key}"),
+                "layout",
+                format!("Shift Position by negative spacing `{key}` (margin pull)."),
+                utility_kind.clone(),
+            ));
         }
     }
 
@@ -1080,154 +845,96 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ("mx-auto", UtilityKind::CenterX, "X"),
         ("my-auto", UtilityKind::CenterY, "Y"),
     ] {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: label.to_owned(),
-                insert_text: label.to_owned(),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Center the element on the {axis} axis via AnchorPoint and Position."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: utility_kind.clone(),
-        });
+        items.push(CompletionSpec::new(
+            label.to_owned(),
+            "layout",
+            format!("Center the element on the {axis} axis via AnchorPoint and Position."),
+            utility_kind.clone(),
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "grid".to_owned(),
-            insert_text: "grid".to_owned(),
-            kind: "utility".to_owned(),
-            category: "layout".to_owned(),
-            documentation: "Add a Roblox UIGridLayout ordered by LayoutOrder.".to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::Grid,
-    });
+    items
+}
+
+fn grid_and_basis_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
+
+    items.push(CompletionSpec::new(
+        "grid",
+        "layout",
+        "Add a Roblox UIGridLayout ordered by LayoutOrder.".to_owned(),
+        UtilityKind::Grid,
+    ));
 
     for (prefix, utility_kind, direction) in [
         ("grid-cols", UtilityKind::GridColumns, "Horizontal"),
         ("grid-rows", UtilityKind::GridRows, "Vertical"),
     ] {
         for count in 1..=GRID_CELL_COUNT_MAX {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{count}"),
-                    insert_text: format!("{prefix}-{count}"),
-                    kind: "utility".to_owned(),
-                    category: "layout".to_owned(),
-                    documentation: format!(
+            items.push(CompletionSpec::new(format!("{prefix}-{count}"), "layout", format!(
                         "Add a Roblox UIGridLayout with `FillDirection = Enum.FillDirection.{direction}` and `FillDirectionMaxCells = {count}`."
-                    ),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+                    ), utility_kind.clone()));
         }
     }
 
     for key in size_completion_keys(config) {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("basis-{key}"),
-                insert_text: format!("basis-{key}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Set the main-axis (row) size from `basis-{key}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::Basis,
-        });
+        items.push(CompletionSpec::new(
+            format!("basis-{key}"),
+            "layout",
+            format!("Set the main-axis (row) size from `basis-{key}`."),
+            UtilityKind::Basis,
+        ));
     }
 
     for origin in ANCHOR_ORIGIN_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("origin-{origin}"),
-                insert_text: format!("origin-{origin}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Set Roblox AnchorPoint from `origin-{origin}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::AnchorPoint,
-        });
+        items.push(CompletionSpec::new(
+            format!("origin-{origin}"),
+            "layout",
+            format!("Set Roblox AnchorPoint from `origin-{origin}`."),
+            UtilityKind::AnchorPoint,
+        ));
     }
 
+    items
+}
+
+fn typography_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
+
     for (key, value) in TEXT_SIZE_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("text-{key}"),
-                insert_text: format!("text-{key}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox TextSize to `{value}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::TextSize,
-        });
+        items.push(CompletionSpec::new(
+            format!("text-{key}"),
+            "typography",
+            format!("Set Roblox TextSize to `{value}`."),
+            UtilityKind::TextSize,
+        ));
     }
 
     for key in font_family_completion_keys(config) {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("font-{key}"),
-                insert_text: format!("font-{key}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set the Roblox FontFace family from font family `{key}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::FontFamily,
-        });
+        items.push(CompletionSpec::new(
+            format!("font-{key}"),
+            "typography",
+            format!("Set the Roblox FontFace family from font family `{key}`."),
+            UtilityKind::FontFamily,
+        ));
     }
 
     for (key, weight) in FONT_WEIGHT_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("font-{key}"),
-                insert_text: format!("font-{key}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox FontFace weight to `{weight}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::FontWeight,
-        });
+        items.push(CompletionSpec::new(
+            format!("font-{key}"),
+            "typography",
+            format!("Set Roblox FontFace weight to `{weight}`."),
+            UtilityKind::FontWeight,
+        ));
     }
 
     for (key, value) in LINE_HEIGHT_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("leading-{key}"),
-                insert_text: format!("leading-{key}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox LineHeight to `{value}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::LineHeight,
-        });
+        items.push(CompletionSpec::new(
+            format!("leading-{key}"),
+            "typography",
+            format!("Set Roblox LineHeight to `{value}`."),
+            UtilityKind::LineHeight,
+        ));
     }
 
     for (label, documentation, utility_kind) in [
@@ -1267,98 +974,62 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             UtilityKind::TextDecoration,
         ),
     ] {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: label.to_owned(),
-                insert_text: label.to_owned(),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: documentation.to_owned(),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
+        items.push(CompletionSpec::new(
+            label.to_owned(),
+            "typography",
+            documentation.to_owned(),
             utility_kind,
-        });
+        ));
     }
 
     for (key, style) in FONT_STYLE_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: key.to_owned(),
-                insert_text: key.to_owned(),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox FontFace style to `Enum.FontStyle.{style}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::FontStyle,
-        });
+        items.push(CompletionSpec::new(
+            key.to_owned(),
+            "typography",
+            format!("Set Roblox FontFace style to `Enum.FontStyle.{style}`."),
+            UtilityKind::FontStyle,
+        ));
     }
 
     for alignment in TEXT_X_ALIGN_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("text-{alignment}"),
-                insert_text: format!("text-{alignment}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox TextXAlignment from `text-{alignment}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::TextXAlignment,
-        });
+        items.push(CompletionSpec::new(
+            format!("text-{alignment}"),
+            "typography",
+            format!("Set Roblox TextXAlignment from `text-{alignment}`."),
+            UtilityKind::TextXAlignment,
+        ));
     }
 
     for alignment in TEXT_Y_ALIGN_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("align-{alignment}"),
-                insert_text: format!("align-{alignment}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox TextYAlignment from `align-{alignment}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::TextYAlignment,
-        });
+        items.push(CompletionSpec::new(
+            format!("align-{alignment}"),
+            "typography",
+            format!("Set Roblox TextYAlignment from `align-{alignment}`."),
+            UtilityKind::TextYAlignment,
+        ));
     }
 
     for wrap in TEXT_WRAP_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("text-{wrap}"),
-                insert_text: format!("text-{wrap}"),
-                kind: "utility".to_owned(),
-                category: "typography".to_owned(),
-                documentation: format!("Set Roblox TextWrapped from `text-{wrap}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::TextWrap,
-        });
+        items.push(CompletionSpec::new(
+            format!("text-{wrap}"),
+            "typography",
+            format!("Set Roblox TextWrapped from `text-{wrap}`."),
+            UtilityKind::TextWrap,
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "truncate".to_owned(),
-            insert_text: "truncate".to_owned(),
-            kind: "utility".to_owned(),
-            category: "typography".to_owned(),
-            documentation: "Set Roblox TextTruncate to `Enum.TextTruncate.AtEnd`.".to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::TextTruncate,
-    });
+    items.push(CompletionSpec::new(
+        "truncate",
+        "typography",
+        "Set Roblox TextTruncate to `Enum.TextTruncate.AtEnd`.".to_owned(),
+        UtilityKind::TextTruncate,
+    ));
+
+    items
+}
+
+fn visibility_candidates(_config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for (label, prop, value, utility_kind) in [
         ("hidden", "Visible", "false", UtilityKind::Visibility),
@@ -1394,34 +1065,26 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             UtilityKind::FlexWrap,
         ),
     ] {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: label.to_owned(),
-                insert_text: label.to_owned(),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Set Roblox {prop} to `{value}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
+        items.push(CompletionSpec::new(
+            label.to_owned(),
+            "layout",
+            format!("Set Roblox {prop} to `{value}`."),
             utility_kind,
-        });
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "shadow".to_owned(),
-            insert_text: "shadow".to_owned(),
-            kind: "utility".to_owned(),
-            category: "effects".to_owned(),
-            documentation: "Create a Roblox UIShadow with the default drop shadow.".to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::ShadowSize,
-    });
+    items
+}
+
+fn shadow_and_gradient_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
+
+    items.push(CompletionSpec::new(
+        "shadow",
+        "effects",
+        "Create a Roblox UIShadow with the default drop shadow.".to_owned(),
+        UtilityKind::ShadowSize,
+    ));
 
     for size in SHADOW_SIZE_VALUES {
         let documentation = if size == "none" {
@@ -1429,53 +1092,30 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         } else {
             format!("Create a Roblox UIShadow sized like Tailwind `shadow-{size}`.")
         };
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("shadow-{size}"),
-                insert_text: format!("shadow-{size}"),
-                kind: "utility".to_owned(),
-                category: "effects".to_owned(),
-                documentation,
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::ShadowSize,
-        });
+        items.push(CompletionSpec::new(
+            format!("shadow-{size}"),
+            "effects",
+            documentation,
+            UtilityKind::ShadowSize,
+        ));
     }
 
     for color_key in color_completion_keys(config) {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("shadow-{color_key}"),
-                insert_text: format!("shadow-{color_key}"),
-                kind: "utility".to_owned(),
-                category: "color".to_owned(),
-                documentation: format!("Set Roblox UIShadow.Color from theme color `{color_key}`."),
-                replacement: None,
-                color: color_swatch(config, &color_key),
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::ShadowColor,
-        });
+        items.push(
+            CompletionSpec::new(
+                format!("shadow-{color_key}"),
+                "color",
+                format!("Set Roblox UIShadow.Color from theme color `{color_key}`."),
+                UtilityKind::ShadowColor,
+            )
+            .with_swatch(color_swatch(config, &color_key)),
+        );
     }
 
     for direction in GRADIENT_DIRECTION_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("bg-gradient-to-{direction}"),
-                insert_text: format!("bg-gradient-to-{direction}"),
-                kind: "utility".to_owned(),
-                category: "effects".to_owned(),
-                documentation: format!(
+        items.push(CompletionSpec::new(format!("bg-gradient-to-{direction}"), "effects", format!(
                     "Create a Roblox UIGradient pointing `{direction}`. Combine with `from-*`/`via-*`/`to-*`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::GradientDirection,
-        });
+                ), UtilityKind::GradientDirection));
     }
 
     for (prefix, utility_kind) in [
@@ -1484,23 +1124,25 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ("to", UtilityKind::GradientTo),
     ] {
         for color_key in color_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{color_key}"),
-                    insert_text: format!("{prefix}-{color_key}"),
-                    kind: "utility".to_owned(),
-                    category: "color".to_owned(),
-                    documentation: format!(
+            items.push(
+                CompletionSpec::new(
+                    format!("{prefix}-{color_key}"),
+                    "color",
+                    format!(
                         "Add a `{prefix}` UIGradient color stop from theme color `{color_key}`."
                     ),
-                    replacement: None,
-                    color: color_swatch(config, &color_key),
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+                    utility_kind.clone(),
+                )
+                .with_swatch(color_swatch(config, &color_key)),
+            );
         }
     }
+
+    items
+}
+
+fn size_constraint_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for (prefix, target, utility_kind) in [
         ("min-w", "UISizeConstraint.MinSize.X", UtilityKind::MinWidth),
@@ -1517,21 +1159,20 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ),
     ] {
         for key in spacing_completion_keys(config) {
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{key}"),
-                    insert_text: format!("{prefix}-{key}"),
-                    kind: "utility".to_owned(),
-                    category: "size".to_owned(),
-                    documentation: format!("Set Roblox {target} from spacing `{key}`."),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{prefix}-{key}"),
+                "size",
+                format!("Set Roblox {target} from spacing `{key}`."),
+                utility_kind.clone(),
+            ));
         }
     }
+
+    items
+}
+
+fn flex_alignment_candidates(_config: &TailwindConfig) -> Vec<CompletionSpec> {
+    let mut items = Vec::new();
 
     for (prefix, utility_kind) in [
         ("justify", UtilityKind::JustifyContent),
@@ -1543,69 +1184,38 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             } else {
                 "UIListLayout.VerticalAlignment"
             };
-            items.push(CompletionSpec {
-                item: CompletionItem {
-                    label: format!("{prefix}-{alignment}"),
-                    insert_text: format!("{prefix}-{alignment}"),
-                    kind: "utility".to_owned(),
-                    category: "layout".to_owned(),
-                    documentation: format!("Set Roblox {target} from `{prefix}-{alignment}`."),
-                    replacement: None,
-                    color: None,
-                    sort_text: None,
-                },
-                utility_kind: utility_kind.clone(),
-            });
+            items.push(CompletionSpec::new(
+                format!("{prefix}-{alignment}"),
+                "layout",
+                format!("Set Roblox {target} from `{prefix}-{alignment}`."),
+                utility_kind.clone(),
+            ));
         }
     }
 
     for alignment in JUSTIFY_FLEX_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: format!("justify-{alignment}"),
-                insert_text: format!("justify-{alignment}"),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!(
-                    "Set Roblox UIListLayout.HorizontalFlex from `justify-{alignment}`."
-                ),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::JustifyContent,
-        });
+        items.push(CompletionSpec::new(
+            format!("justify-{alignment}"),
+            "layout",
+            format!("Set Roblox UIListLayout.HorizontalFlex from `justify-{alignment}`."),
+            UtilityKind::JustifyContent,
+        ));
     }
 
-    items.push(CompletionSpec {
-        item: CompletionItem {
-            label: "items-stretch".to_owned(),
-            insert_text: "items-stretch".to_owned(),
-            kind: "utility".to_owned(),
-            category: "layout".to_owned(),
-            documentation: "Set Roblox UIListLayout.VerticalFlex to `Enum.UIFlexAlignment.Fill`."
-                .to_owned(),
-            replacement: None,
-            color: None,
-            sort_text: None,
-        },
-        utility_kind: UtilityKind::AlignItems,
-    });
+    items.push(CompletionSpec::new(
+        "items-stretch",
+        "layout",
+        "Set Roblox UIListLayout.VerticalFlex to `Enum.UIFlexAlignment.Fill`.".to_owned(),
+        UtilityKind::AlignItems,
+    ));
 
     for label in FLEX_ITEM_VALUES {
-        items.push(CompletionSpec {
-            item: CompletionItem {
-                label: label.to_owned(),
-                insert_text: label.to_owned(),
-                kind: "utility".to_owned(),
-                category: "layout".to_owned(),
-                documentation: format!("Add a Roblox UIFlexItem from `{label}`."),
-                replacement: None,
-                color: None,
-                sort_text: None,
-            },
-            utility_kind: UtilityKind::FlexItem,
-        });
+        items.push(CompletionSpec::new(
+            label.to_owned(),
+            "layout",
+            format!("Add a Roblox UIFlexItem from `{label}`."),
+            UtilityKind::FlexItem,
+        ));
     }
 
     items
