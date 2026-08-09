@@ -5,6 +5,7 @@ import type {
 	RuntimeEnvironment,
 	RuntimeHelper,
 	RuntimeRemConfig,
+	RuntimeResolution,
 	RuntimeRule,
 	VelaMotionDriver,
 	VelaRuntimeConfig,
@@ -286,9 +287,12 @@ export function createVelaRuntimeHost(
 		for (const [name] of pairs(shape.props as Record<string, unknown>)) {
 			bound.add(name as string);
 		}
+		for (const [name] of pairs(composedProps(shape, preflight))) {
+			bound.add(name as string);
+		}
 		for (const rule of rules) {
 			for (const entry of rule.effects.props) {
-				bound.add(entry.name);
+				bound.add(COMPOSED_BY_CONTRIBUTOR[entry.name] ?? entry.name);
 			}
 		}
 
@@ -303,12 +307,11 @@ export function createVelaRuntimeHost(
 			const fallback = statics[name];
 			applied[name] = () => {
 				const current = resolution();
-				const hostProps: Record<string, unknown> = {};
-				__VelaApply.applyComposedResolution(hostProps, current, preflight);
 				if (hostTag !== undefined && alpha < 1) {
 					__VelaResolution.composeInheritedOpacity(current, hostTag, alpha);
 				}
-				const resolved = hostProps[name] ?? current.props[name];
+				const composed = composedProps(current, preflight);
+				const resolved = composed[name] ?? current.props[name];
 				return resolved ?? fallback;
 			};
 		}
@@ -328,6 +331,28 @@ export function createVelaRuntimeHost(
 
 		return videJsx(hostTag as string, applied);
 	};
+}
+
+/// A rule can name an axis rather than a property: `md:w-1/2` writes `SizeX`,
+/// which the composers fold into `Size`. Written straight through it would
+/// reach the instance, where no such member exists.
+const COMPOSED_BY_CONTRIBUTOR: Record<string, string> = {
+	SizeX: "Size",
+	SizeY: "Size",
+	PositionX: "Position",
+	PositionY: "Position",
+	TranslateX: "Position",
+	TranslateY: "Position",
+};
+
+function composedProps(
+	resolution: RuntimeResolution,
+	preflight: boolean,
+): Record<string, unknown> {
+	const hostProps: Record<string, unknown> = {};
+	__VelaApply.applyComposedResolution(hostProps, resolution, preflight);
+
+	return hostProps;
 }
 
 function helperChildren(helpers: RuntimeHelper[]): defined[] {
