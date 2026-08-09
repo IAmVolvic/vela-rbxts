@@ -1,3 +1,4 @@
+use crate::class_value::collapse::ClassValueCollapse;
 use crate::config::model::TailwindConfig;
 use crate::ir::model::{HelperEntry, PropEntry, StyleIr};
 use crate::semantic::plugin::{ExpandedToken, expand_class_token};
@@ -51,6 +52,28 @@ where
     }
 
     alpha
+}
+
+/// Whether a branch in this class value asks for a fade the branch path cannot
+/// deliver. A bare `opacity-*` fades the element's subtree as well as the
+/// element, and the subtree is wrapped from the tokens that always apply — a
+/// branch is not among them, so the whole class value goes to the runtime,
+/// which resolves it and hands its subtree one alpha.
+///
+/// A CanvasGroup is the exception: it composites its own subtree, so
+/// `GroupTransparency` on the instance is the whole fade and a rule can carry it.
+pub(crate) fn branch_opacity_needs_runtime(
+    collapse: &ClassValueCollapse,
+    element_tag: Option<&str>,
+    config: &TailwindConfig,
+) -> bool {
+    if element_tag == Some("canvasgroup") {
+        return false;
+    }
+
+    collapse
+        .branches()
+        .any(|branch| static_opacity_alpha(&branch.tokens, config).is_some())
 }
 
 /// Roblox has no inherited transparency. CSS fades a subtree by compositing it

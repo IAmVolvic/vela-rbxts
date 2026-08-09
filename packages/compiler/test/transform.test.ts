@@ -1644,6 +1644,50 @@ test("hands a whole class value back when a branch reaches past a rule", () => {
 	expect(JSON.parse(result.ir[0]).runtimeRules).toEqual([]);
 });
 
+// A bare `opacity-*` fades the element's subtree as well as the element, and the
+// subtree is wrapped from the tokens that always apply — a branch is not among
+// them. Lowered as a rule it painted the element's own transparency and the
+// subtree never learned about the alpha at all.
+test("hands a whole class value back when a branch names an opacity", () => {
+	const result = transform(
+		'export const A = ({ on }: { on: boolean }) => <frame className={["size-8", on && "opacity-50"]}><textlabel Text="x" /></frame>;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// The tokens written around the branch stay static; only the branch itself
+	// goes back, and the host resolves it and fades the subtree from there.
+	expect(result.code).toContain('className={on && "opacity-50"}');
+	expect(result.code).not.toContain("__velaTests=");
+	expect(JSON.parse(result.ir[0]).runtimeRules).toEqual([]);
+});
+
+// A CanvasGroup composites its own subtree, so `GroupTransparency` on the
+// instance is the whole fade and a rule can carry it.
+test("keeps a canvasgroup's branch opacity on the rule path", () => {
+	const result = transform(
+		'export const A = ({ on }: { on: boolean }) => <canvasgroup className={["size-8", on && "opacity-50"]} />;',
+		null,
+	);
+
+	expect(result.code).not.toContain("className={");
+	expect(JSON.parse(result.ir[0]).runtimeRules[0].effects.props).toEqual([
+		{ name: "GroupTransparency", value: "0.5" },
+	]);
+});
+
+// The fade is written outside the branch, so the branch is no reason to stop
+// reading it — the tokens around it are as static as they ever were.
+test("fades a subtree from an opacity written beside a branch", () => {
+	const result = transform(
+		'export const A = ({ on }: { on: boolean }) => <frame className={["size-8 opacity-50", on && "bg-red-500"]}><textlabel Text="x" /></frame>;',
+		null,
+	);
+
+	expect(result.code).toContain("TextTransparency");
+	expect(result.code).toContain("__velaTests=");
+});
+
 test("reports an unknown utility written inside a branch", () => {
 	const result = transform(
 		'export const A = ({ on }: { on: boolean }) => <frame className={on ? "bg-blu-500" : "bg-slate-900"} />;',

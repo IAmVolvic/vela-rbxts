@@ -63,12 +63,6 @@ impl ClassValueCollapse {
     pub(crate) fn has_branches(&self) -> bool {
         self.branches().next().is_some()
     }
-
-    /// Whether anything is left for render time — an expression the runtime has
-    /// to resolve, or a branch only it can decide.
-    pub(crate) fn is_dynamic(&self) -> bool {
-        self.dynamic_expr.is_some() || self.has_branches()
-    }
 }
 
 /// The tokens a branch is resolved against: every static token of the class

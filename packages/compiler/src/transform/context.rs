@@ -19,7 +19,9 @@ use crate::transform::jsx::{
 use crate::transform::module::{
     RuntimeNeeds, create_runtime_module_items, element_tag_name, is_supported_host_element,
 };
-use crate::transform::opacity::{compose_inherited_opacity, static_opacity_alpha};
+use crate::transform::opacity::{
+    branch_opacity_needs_runtime, compose_inherited_opacity, static_opacity_alpha,
+};
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
@@ -478,11 +480,15 @@ impl VelaTransformer {
 
         self.opacity_alpha
             * self
-                .own_opacity_alpha(&element.opening.attrs)
+                .own_opacity_alpha(&element.opening.attrs, element_tag)
                 .unwrap_or(1.0)
     }
 
-    fn own_opacity_alpha(&self, attrs: &[JSXAttrOrSpread]) -> Option<f64> {
+    fn own_opacity_alpha(
+        &self,
+        attrs: &[JSXAttrOrSpread],
+        element_tag: Option<&str>,
+    ) -> Option<f64> {
         let value = attrs.iter().find_map(|attr| match attr {
             JSXAttrOrSpread::JSXAttr(JSXAttr {
                 name: JSXAttrName::Ident(ident),
@@ -503,10 +509,14 @@ impl VelaTransformer {
                 };
                 let collapse = collapse_class_value_expr(expr, &self.class_value_scopes);
                 // A class value settled at render time can name an `opacity-*`
-                // this pass never sees, so the whole list is left to the runtime
-                // host: it resolves all of it and hands its subtree one alpha,
-                // rather than the two of them each fading part of it.
-                if collapse.is_dynamic() {
+                // this pass never sees, and a branch naming one takes the whole
+                // list with it. Either way the runtime host resolves all of it
+                // and hands its subtree one alpha, rather than the two of them
+                // each fading part of it. A branch that names none is no reason
+                // to ignore the tokens written around it.
+                if collapse.dynamic_expr.is_some()
+                    || branch_opacity_needs_runtime(&collapse, element_tag, &self.config)
+                {
                     return None;
                 }
                 static_opacity_alpha(collapse.static_tokens(), &self.config)

@@ -6,6 +6,7 @@ use crate::config::model::TailwindConfig;
 use crate::ir::model::{
     HelperEntry, PropEntry, RuntimeCondition, RuntimeRule, StyleEffectBundle, StyleIr,
 };
+use crate::transform::opacity::branch_opacity_needs_runtime;
 use crate::transform::runtime::resolve_class_tokens;
 
 pub(crate) struct LoweredBranches {
@@ -23,6 +24,14 @@ pub(crate) fn lower_branches(
     config: &TailwindConfig,
     element_tag: Option<&str>,
 ) -> Option<LoweredBranches> {
+    // The fade a bare `opacity-*` asks for reaches past this element, and a rule
+    // only ever reaches the element. Caught here rather than in `diff_effects`,
+    // which compares `opacity_alpha` — a host has none, because its fade lowers
+    // to a transparency prop and a wrapper around its children.
+    if branch_opacity_needs_runtime(collapse, element_tag, config) {
+        return None;
+    }
+
     let mut rules = Vec::new();
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
 
