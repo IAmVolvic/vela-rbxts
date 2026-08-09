@@ -140,9 +140,9 @@ async function main() {
 			"@vela-rbxts/ir",
 			"@vela-rbxts/core",
 			"@vela-rbxts/rbxtsc-host",
-			// The compiler inlines this source into every emitted file, so a
-			// break here breaks all of them. It compiles before the release.
-			"@vela-rbxts/runtime",
+			// Every transformed module imports this, so a break here breaks all
+			// of them. It compiles before the release.
+			"@rbxts/vela-runtime",
 			// Wasm build of the compiler crate, so a missing wasm toolchain
 			// fails here beside the native targets rather than at pack time.
 			"@vela-rbxts/compiler-wasm",

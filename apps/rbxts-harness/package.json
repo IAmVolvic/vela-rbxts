@@ -3,11 +3,11 @@
 	"version": "0.2.0",
 	"private": true,
 	"scripts": {
-		"prebuild": "pnpm --filter vela-rbxts build && node ./scripts/materialize-rbxts-modules.cjs",
+		"prebuild": "node ./scripts/materialize-rbxts-modules.cjs",
 		"build": "rbxtsc -p tsconfig.json",
-		"predev": "pnpm --filter vela-rbxts build && node ./scripts/materialize-rbxts-modules.cjs",
+		"predev": "node ./scripts/materialize-rbxts-modules.cjs",
 		"dev": "rbxtsc -w -p tsconfig.json",
-		"test": "pnpm --filter vela-rbxts build && node ./scripts/materialize-rbxts-modules.cjs && node scripts/verify-rbxtsc-output.cjs",
+		"test": "node ./scripts/materialize-rbxts-modules.cjs && node scripts/verify-rbxtsc-output.cjs",
 		"pretypecheck": "node ./scripts/materialize-rbxts-modules.cjs",
 		"typecheck": "tsc --noEmit -p tsconfig.json",
 		"lint": "biome check .",
@@ -23,6 +23,7 @@
 	"devDependencies": {
 		"@rbxts/compiler-types": "^3.0.0-types.0",
 		"@rbxts/types": "^1.0.935",
+		"@rbxts/vela-runtime": "workspace:*",
 		"roblox-ts": "^3.0.0",
 		"typescript": "5.9.3"
 	}

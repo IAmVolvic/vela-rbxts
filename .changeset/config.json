@@ -6,7 +6,8 @@
     [
       "vela-rbxts",
       "vela-rbxts-lsp",
-      "@vela-rbxts/*"
+      "@vela-rbxts/*",
+      "@rbxts/vela-runtime"
     ]
   ],
   "linked": [],

@@ -1,5 +1,10 @@
 import { discoverWorkspacePackages, type WorkspacePackage } from "./utils/package-json";
 
+/// The runtime lives under the `@rbxts` scope so a consumer's stock roblox-ts
+/// tsconfig and Rojo project already reach it — roblox-ts only resolves a
+/// package whose scope directory is one of the configured `typeRoots`.
+export const RUNTIME_PACKAGE_NAME = "@rbxts/vela-runtime";
+
 export const RELEASE_TAGS = ["next", "latest"] as const;
 export type ReleaseTag = (typeof RELEASE_TAGS)[number];
 
@@ -18,6 +23,7 @@ export type ReleaseUnit = {
 
 export const EXPECTED_PUBLIC_RELEASE_NAMES = [
   "vela-rbxts",
+  "@rbxts/vela-runtime",
   "@vela-rbxts/compiler",
   "@vela-rbxts/compiler-wasm",
   "@vela-rbxts/config",
@@ -30,6 +36,7 @@ export const EXPECTED_PUBLIC_RELEASE_NAMES = [
 ] as const;
 
 export const WORKSPACE_PUBLISH_PRIORITY = [
+  "@rbxts/vela-runtime",
   "@vela-rbxts/types",
   "@vela-rbxts/config",
   "@vela-rbxts/ir",
@@ -133,7 +140,11 @@ function classifyPackageKind(path: string, packageName: string): ReleaseKind | u
     return "lsp";
   }
 
-  if (packageName === "vela-rbxts" || packageName.startsWith("@vela-rbxts/")) {
+  if (
+    packageName === "vela-rbxts" ||
+    packageName === RUNTIME_PACKAGE_NAME ||
+    packageName.startsWith("@vela-rbxts/")
+  ) {
     return "npm";
   }
 
@@ -151,9 +162,13 @@ function validateReleaseUnitNames(releaseUnits: readonly ReleaseUnit[]) {
       continue;
     }
 
-    if (unit.name !== "vela-rbxts" && !unit.name.startsWith("@vela-rbxts/")) {
+    if (
+      unit.name !== "vela-rbxts" &&
+      unit.name !== RUNTIME_PACKAGE_NAME &&
+      !unit.name.startsWith("@vela-rbxts/")
+    ) {
       throw new Error(
-        `Unexpected package name "${unit.name}" at ${unit.path}. Expected "vela-rbxts" or "@vela-rbxts/*".`,
+        `Unexpected package name "${unit.name}" at ${unit.path}. Expected "vela-rbxts", "${RUNTIME_PACKAGE_NAME}" or "@vela-rbxts/*".`,
       );
     }
   }

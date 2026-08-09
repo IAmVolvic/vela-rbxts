@@ -15,19 +15,24 @@ const KEEP_TEMP_DIR_ENV = "VELA_KEEP_PACKED_CONSUMER";
 
 const REQUIRED_OUTPUT_FRAGMENTS = [
 	"BackgroundColor3 = Color3.fromRGB(49, 65, 88)",
-	"Size = UDim2.fromOffset(320, 108)",
-	"CornerRadius = UDim.new(0, 6)",
+	// Offsets follow the viewport, so a statically lowered one leaves as a rem
+	// binding rather than as a literal.
+	"Size = __VelaRem.scale(UDim2.fromOffset(320, 108), ",
+	"CornerRadius = __VelaRem.scale(UDim.new(0, 6), ",
 	"uistroke",
-	"Thickness = 1",
-	"Thickness = 2",
+	"Thickness = __VelaRem.scale(1, ",
+	"Thickness = __VelaRem.scale(2, ",
 	"Color = Color3.fromRGB(98, 116, 142)",
 	"Color3.fromRGB(21, 93, 252)",
-	"PaddingLeft = UDim.new(0, 16)",
-	"PaddingRight = UDim.new(0, 16)",
-	"PaddingTop = UDim.new(0, 12)",
-	"PaddingBottom = UDim.new(0, 12)",
-	"Padding = UDim.new(0, 16)",
-	"local VelaRuntimeHost = (function()",
+	"PaddingLeft = __VelaRem.scale(UDim.new(0, 16), ",
+	"PaddingRight = __VelaRem.scale(UDim.new(0, 16), ",
+	"PaddingTop = __VelaRem.scale(UDim.new(0, 12), ",
+	"PaddingBottom = __VelaRem.scale(UDim.new(0, 12), ",
+	"Padding = __VelaRem.scale(UDim.new(0, 16), ",
+	// The runtime is one ModuleScript the place shares, reached from a package
+	// the consumer never installed by hand.
+	'"node_modules", "@rbxts", "vela-runtime"',
+	"local VelaRuntimeHost = createVelaRuntimeHost(",
 	"React.createElement(VelaRuntimeHost",
 	"__velaRules",
 	"__velaTag",
@@ -319,7 +324,11 @@ function buildPackedConsumerPackageJson(
 
 // pnpm 11 ignores package.json "pnpm.overrides"; both files are written so either version resolves the tarballs.
 function buildPackedConsumerWorkspaceYaml(overrides: Record<string, string>) {
-	const lines = ["packages: []", "overrides:"];
+	// roblox-ts and Rojo walk real directories, and the runtime arrives as a
+	// transitive dependency of vela-rbxts — the symlinked default layout would
+	// leave it out of the consumer's own `node_modules/@rbxts`, which is the
+	// only place either of them looks.
+	const lines = ["packages: []", "nodeLinker: hoisted", "overrides:"];
 	for (const [name, specifier] of Object.entries(overrides)) {
 		lines.push(`  ${JSON.stringify(name)}: ${JSON.stringify(specifier)}`);
 	}
