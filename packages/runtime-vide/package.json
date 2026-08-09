@@ -1,0 +1,60 @@
+{
+	"name": "@rbxts/vela-runtime-vide",
+	"version": "0.11.0",
+	"description": "The Vide host runtime behind vela-rbxts. Transformed modules import it when the project targets Vide; it builds on @rbxts/vela-runtime-core.",
+	"main": "out/init.luau",
+	"types": "out/index.d.ts",
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"out",
+		"default.project.json"
+	],
+	"license": "MIT",
+	"author": "astra-void",
+	"keywords": [
+		"roblox",
+		"roblox-ts",
+		"rbxts",
+		"tailwind",
+		"tailwindcss",
+		"vela",
+		"classname",
+		"runtime",
+		"vide"
+	],
+	"homepage": "https://github.com/astra-void/vela-rbxts#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/astra-void/vela-rbxts.git",
+		"directory": "packages/runtime-core"
+	},
+	"bugs": {
+		"url": "https://github.com/astra-void/vela-rbxts/issues"
+	},
+	"scripts": {
+		"prebuild": "node ./scripts/materialize-rbxts-modules.cjs",
+		"build": "rbxtsc -p tsconfig.json",
+		"postbuild": "node ./scripts/clean-rbxts-modules.cjs",
+		"pretypecheck": "node ./scripts/materialize-rbxts-modules.cjs",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --fix --unsafe",
+		"clean": "node -e \"const fs=require('node:fs');fs.rmSync('out',{recursive:true,force:true});\""
+	},
+	"dependencies": {
+		"@rbxts/services": "^1.6.0",
+		"@rbxts/vela-runtime-core": "workspace:*"
+	},
+	"devDependencies": {
+		"@rbxts/compiler-types": "^3.0.0-types.0",
+		"@rbxts/types": "^1.0.935",
+		"roblox-ts": "^3.0.0",
+		"typescript": "5.9.3",
+		"@rbxts/vide": "^0.6.1"
+	},
+	"peerDependencies": {
+		"@rbxts/vide": "^0.6.1"
+	}
+}

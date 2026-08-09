@@ -143,6 +143,9 @@ importers:
       '@rbxts/services':
         specifier: ^1.6.0
         version: 1.6.0
+      '@rbxts/vela-runtime-vide':
+        specifier: workspace:*
+        version: link:../../packages/runtime-vide
       '@rbxts/vide':
         specifier: ^0.6.1
         version: 0.6.1
@@ -252,6 +255,31 @@ importers:
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
+      roblox-ts:
+        specifier: ^3.0.0
+        version: 3.0.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/runtime-vide:
+    dependencies:
+      '@rbxts/services':
+        specifier: ^1.6.0
+        version: 1.6.0
+      '@rbxts/vela-runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
+    devDependencies:
+      '@rbxts/compiler-types':
+        specifier: ^3.0.0-types.0
+        version: 3.0.0-types.0
+      '@rbxts/types':
+        specifier: ^1.0.935
+        version: 1.0.935
+      '@rbxts/vide':
+        specifier: ^0.6.1
+        version: 0.6.1
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
