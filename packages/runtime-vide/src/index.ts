@@ -71,6 +71,10 @@ namespace __VelaEnvSource {
 		state(read());
 	}
 
+	/// Every consumer re-derives off a set, so a resize goes through the
+	/// debounce rather than landing a frame's worth of intermediate sizes.
+	const viewport = __VelaEnvCore.debounceViewport(refresh);
+
 	function watchCamera() {
 		cameraConnection?.Disconnect();
 
@@ -78,12 +82,14 @@ namespace __VelaEnvSource {
 		cameraConnection =
 			camera === undefined
 				? undefined
-				: camera.GetPropertyChangedSignal("ViewportSize").Connect(refresh);
+				: camera
+						.GetPropertyChangedSignal("ViewportSize")
+						.Connect(viewport.call);
 	}
 
 	__VelaWorkspace.GetPropertyChangedSignal("CurrentCamera").Connect(() => {
 		watchCamera();
-		refresh();
+		viewport.call();
 	});
 	watchCamera();
 

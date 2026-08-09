@@ -130,6 +130,8 @@ namespace __VelaRem {
 		}
 	}
 
+	const viewport = __VelaEnvCore.debounceViewport(refresh);
+
 	/// One camera subscription, set up the first time an offset asks for a
 	/// binding rather than at module load, so a game that never scales an offset
 	/// never listens.
@@ -141,7 +143,7 @@ namespace __VelaRem {
 		connected = true;
 		__VelaWorkspace.GetPropertyChangedSignal("CurrentCamera").Connect(() => {
 			watchCamera();
-			refresh();
+			viewport.call();
 		});
 		watchCamera();
 		refresh();
@@ -154,7 +156,9 @@ namespace __VelaRem {
 		cameraConnection =
 			camera === undefined
 				? undefined
-				: camera.GetPropertyChangedSignal("ViewportSize").Connect(refresh);
+				: camera
+						.GetPropertyChangedSignal("ViewportSize")
+						.Connect(viewport.call);
 	}
 
 	__VelaRemCore.whenConfigured(() => {
@@ -446,15 +450,17 @@ namespace __VelaEnv {
 
 			// ViewportSize stays 1x1 until the first frame renders, so breakpoints have
 			// to follow the signal instead of the mount-time read.
+			const viewport = __VelaEnvCore.debounceViewport(updateEnvironment);
 			if (camera !== undefined) {
 				connections.push(
 					camera
 						.GetPropertyChangedSignal("ViewportSize")
-						.Connect(updateEnvironment),
+						.Connect(viewport.call),
 				);
 			}
 
 			return () => {
+				viewport.cancel();
 				for (const connection of connections) {
 					connection.Disconnect();
 				}

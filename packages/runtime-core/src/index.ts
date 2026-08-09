@@ -891,6 +891,52 @@ export namespace __VelaEnv {
 		};
 	}
 
+	/// A drag walks the viewport through every intermediate size, and each step
+	/// would re-resolve the rem curve and rewrite every offset hanging off it.
+	const VIEWPORT_DEBOUNCE = 0.2;
+
+	export type DebouncedRefresh = {
+		call: () => void;
+		cancel: () => void;
+	};
+
+	/// A lone change stays instant — the leading edge runs it — and a storm
+	/// collapses into one more call once the viewport settles.
+	export function debounceViewport(refresh: () => void): DebouncedRefresh {
+		let timer: thread | undefined;
+		let queued = false;
+
+		function expire() {
+			timer = undefined;
+
+			if (queued) {
+				queued = false;
+				refresh();
+			}
+		}
+
+		return {
+			call: () => {
+				if (timer === undefined) {
+					refresh();
+				} else {
+					task.cancel(timer);
+					queued = true;
+				}
+
+				timer = task.delay(VIEWPORT_DEBOUNCE, expire);
+			},
+			cancel: () => {
+				if (timer !== undefined) {
+					task.cancel(timer);
+					timer = undefined;
+				}
+
+				queued = false;
+			},
+		};
+	}
+
 	/// Roblox exposes no color scheme to a running game, so the app owns the
 	/// choice: `dark:` reads this attribute off the local player, which the server
 	/// can also set per player.
