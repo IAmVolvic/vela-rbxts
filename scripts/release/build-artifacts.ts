@@ -145,6 +145,7 @@ async function main() {
 			// on compiles before it.
 			"@rbxts/vela-runtime-core",
 			"@rbxts/vela-runtime",
+			"@rbxts/vela-runtime-vide",
 			// Wasm build of the compiler crate, so a missing wasm toolchain
 			// fails here beside the native targets rather than at pack time.
 			"@vela-rbxts/compiler-wasm",

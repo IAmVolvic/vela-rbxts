@@ -11,6 +11,16 @@ export const RUNTIME_PACKAGE_NAME = "@rbxts/vela-runtime";
 /// mapping of its own.
 export const RUNTIME_CORE_PACKAGE_NAME = "@rbxts/vela-runtime-core";
 
+/// The Vide host runtime. A project installs whichever host its `framework`
+/// names; both are built on the core.
+export const RUNTIME_VIDE_PACKAGE_NAME = "@rbxts/vela-runtime-vide";
+
+const RUNTIME_PACKAGE_NAMES = [
+  RUNTIME_PACKAGE_NAME,
+  RUNTIME_CORE_PACKAGE_NAME,
+  RUNTIME_VIDE_PACKAGE_NAME,
+] as const;
+
 export const RELEASE_TAGS = ["next", "latest"] as const;
 export type ReleaseTag = (typeof RELEASE_TAGS)[number];
 
@@ -31,6 +41,7 @@ export const EXPECTED_PUBLIC_RELEASE_NAMES = [
   "vela-rbxts",
   "@rbxts/vela-runtime",
   "@rbxts/vela-runtime-core",
+  "@rbxts/vela-runtime-vide",
   "@vela-rbxts/compiler",
   "@vela-rbxts/compiler-wasm",
   "@vela-rbxts/config",
@@ -45,6 +56,7 @@ export const EXPECTED_PUBLIC_RELEASE_NAMES = [
 export const WORKSPACE_PUBLISH_PRIORITY = [
   "@rbxts/vela-runtime-core",
   "@rbxts/vela-runtime",
+  "@rbxts/vela-runtime-vide",
   "@vela-rbxts/types",
   "@vela-rbxts/config",
   "@vela-rbxts/ir",
@@ -150,8 +162,7 @@ function classifyPackageKind(path: string, packageName: string): ReleaseKind | u
 
   if (
     packageName === "vela-rbxts" ||
-    packageName === RUNTIME_PACKAGE_NAME ||
-    packageName === RUNTIME_CORE_PACKAGE_NAME ||
+    RUNTIME_PACKAGE_NAMES.includes(packageName as never) ||
     packageName.startsWith("@vela-rbxts/")
   ) {
     return "npm";
@@ -173,12 +184,11 @@ function validateReleaseUnitNames(releaseUnits: readonly ReleaseUnit[]) {
 
     if (
       unit.name !== "vela-rbxts" &&
-      unit.name !== RUNTIME_PACKAGE_NAME &&
-      unit.name !== RUNTIME_CORE_PACKAGE_NAME &&
+      !RUNTIME_PACKAGE_NAMES.includes(unit.name as never) &&
       !unit.name.startsWith("@vela-rbxts/")
     ) {
       throw new Error(
-        `Unexpected package name "${unit.name}" at ${unit.path}. Expected "vela-rbxts", "${RUNTIME_PACKAGE_NAME}", "${RUNTIME_CORE_PACKAGE_NAME}" or "@vela-rbxts/*".`,
+        `Unexpected package name "${unit.name}" at ${unit.path}. Expected "vela-rbxts", ${RUNTIME_PACKAGE_NAMES.map((name) => `"${name}"`).join(", ")} or "@vela-rbxts/*".`,
       );
     }
   }
