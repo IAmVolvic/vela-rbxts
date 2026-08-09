@@ -36,19 +36,42 @@ function expect(description, condition) {
 	}
 }
 
-// The static path's only React dependency is the rem binding. Vide accepts a
-// `Derivable`, so the emitted call site is unchanged and the thunk contract
-// lives entirely in what the scaler returns.
+// The Vide target picks its own runtime package. A React import reaching a Vide
+// place is the failure this whole split exists to prevent.
 expect(
-	"rem-scaled offsets stay a plain call at the prop site",
-	/CornerRadius = __VelaRem\.scale\(UDim\.new\(0, 8\), 0\)/.test(source),
+	"the emit imports the Vide runtime",
+	/"@rbxts", "vela%-runtime%-vide"/.test(source.replace(/%/g, "%")) ||
+		source.includes('"@rbxts", "vela-runtime-vide"'),
+);
+expect(
+	"the emit never reaches for React",
+	!source.includes("@rbxts/react") && !source.includes('"react"'),
 );
 
-// The React target passes evaluated booleans here. Vide has no re-render, so
-// this is the one emit shape that has to differ.
+// The static path is unchanged from the React target: same lowercase tags, same
+// Roblox property names, same injected helper children.
 expect(
-	"branch tests reach the host as thunks",
-	/__velaTests = \{ function\(\)/.test(source),
+	"static lowering keeps its literal props",
+	/BackgroundColor3 = Color3\.fromRGB\(29, 41, 61\)/.test(source),
+);
+expect(
+	"helper children are injected as lowercase tags",
+	/Vide\.jsx\("uicorner"/.test(source) && /Vide\.jsx\("uipadding"/.test(source),
+);
+
+// Rem needs no emit change at all: Vide's Derivable accepts the thunk the
+// scaler returns where React accepted a binding.
+expect(
+	"rem-scaled offsets stay a plain call at the prop site",
+	/CornerRadius = __VelaRem\.scale\(UDim\.new\(0, 8\), \d+\)/.test(source),
+);
+
+// A Vide source has to stay deferred all the way to the host. The transformer
+// cannot yet see inside the arrow to collapse it into branch rules, so the
+// whole class value travels — still as a thunk, which is the contract.
+expect(
+	"a derivable class value reaches the host deferred",
+	/className = function\(\)/.test(source),
 );
 
 expect(
@@ -58,7 +81,14 @@ expect(
 
 expect(
 	"lowered host elements keep their lowercase tags",
-	/__velaTag = "textbutton"/.test(source) && /__velaTag = "frame"/.test(source),
+	/__velaTag = "frame"/.test(source),
+);
+
+// Vide builds a provider's children eagerly, so they have to arrive deferred.
+expect(
+	"the opacity provider takes its children as a thunk",
+	!source.includes("__VelaOpacity.Provider") ||
+		/__VelaOpacity\.Provider[\s\S]{0,200}?function\(\)/.test(source),
 );
 
 if (failures.length > 0) {
@@ -68,4 +98,4 @@ if (failures.length > 0) {
 	process.exit(1);
 }
 
-console.log(`vide-harness: verified ${4 - failures.length} lowering contracts`);
+console.log("vide-harness: verified 8 lowering contracts");

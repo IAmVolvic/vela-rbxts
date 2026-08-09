@@ -108,3 +108,30 @@ if (
 		`materialize-rbxts-modules: copied ${required.join(", ")} into ${targetDir}`,
 	);
 }
+
+// The runtime packages are workspace packages, so pnpm links them under the
+// dependent rather than hoisting them to the root scope the copy above reads,
+// and the wipe takes those links with it. Their versions stand still while
+// their builds change, so these are refreshed every run.
+for (const name of ["runtime-core", "runtime-vide"]) {
+	const sourceRoot = path.join(projectRoot, "..", "..", "packages", name);
+	const target = path.join(targetDir, `vela-${name}`);
+	const build = path.join(sourceRoot, "out", "init.luau");
+
+	if (!fs.existsSync(build)) {
+		console.error(
+			`materialize-rbxts-modules: missing ${build}; build @rbxts/vela-${name} first.`,
+		);
+		process.exit(1);
+	}
+
+	fs.rmSync(target, { recursive: true, force: true });
+	fs.mkdirSync(target, { recursive: true });
+
+	for (const entry of ["out", "default.project.json", "package.json"]) {
+		fs.cpSync(path.join(sourceRoot, entry), path.join(target, entry), {
+			recursive: true,
+			dereference: true,
+		});
+	}
+}

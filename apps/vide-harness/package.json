@@ -17,7 +17,8 @@
 	"dependencies": {
 		"@rbxts/services": "^1.6.0",
 		"@rbxts/vide": "^0.6.1",
-		"vela-rbxts": "workspace:*"
+		"vela-rbxts": "workspace:*",
+		"@rbxts/vela-runtime-vide": "workspace:*"
 	},
 	"devDependencies": {
 		"@rbxts/compiler-types": "^3.0.0-types.0",
