@@ -11,6 +11,12 @@ const FadedLabel = (props: { text: string }) => (
 	/>
 );
 
+// A class list that only exists behind a call is the one shape this pass cannot
+// read, so it is what keeps the runtime resolver — and the plugin table it reads
+// — in the emit at all. Everything else here resolves at compile time.
+const surfaceClass = (active: boolean) =>
+	active ? "harness-card" : "harness-plate";
+
 // The same shape one level deeper, and behind a recipe rather than a literal.
 const FadedCard = (props: { active: boolean; children?: React.Element }) => (
 	<frame className={["bg-slate-700 size-8", props.active && "rounded-md"]}>
@@ -45,7 +51,7 @@ export const App = () => {
 			<frame
 				AnchorPoint={new Vector2(0.5, 0.5)}
 				Position={UDim2.fromScale(0.5, 0.5)}
-				className="rounded-md bg-slate-700 border border-slate-500 px-4 py-3 w-80 h-27 gap-4"
+				className="grid rounded-md bg-slate-700 border border-slate-500 px-4 py-3 w-80 h-27 gap-4"
 			>
 				<textlabel
 					BackgroundTransparency={1}
@@ -77,8 +83,10 @@ export const App = () => {
 				<frame BackgroundTransparency={1} className="rounded" />
 				<frame
 					BackgroundTransparency={1}
-					className="tracking-wide checked:px-4 bg-[oops] from-blue-600/50 blorb-2"
+					className="tracking-wide checked:px-4 bg-[oops] blorb-2"
 				/>
+				<textbox BackgroundTransparency={1} className="placeholder-white/50" />
+				<frame className="bg-gradient-to-r from-blue-600/50 to-rose-500 size-6" />
 				<frame
 					BackgroundTransparency={1}
 					className="right-4 bottom-2 order-2 self-center content-between"
@@ -162,6 +170,7 @@ export const App = () => {
 				<frame
 					className={["size-8", active ? "harness-card" : "harness-plate"]}
 				/>
+				<frame className={["size-8", surfaceClass(active)]} />
 				<scrollingframe className="scroll-y scrollbar-w-2 scrollbar-slate-500 canvas-auto-y w-20 h-12">
 					<frame BackgroundTransparency={1} />
 				</scrollingframe>

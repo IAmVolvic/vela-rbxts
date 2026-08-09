@@ -36,6 +36,25 @@ if (build.status !== 0) {
 const appLuauPath = path.join(projectRoot, "out", "client", "App.luau");
 const source = fs.readFileSync(appLuauPath, "utf8");
 
+// The runtime is one ModuleScript the whole place shares, so what it lowers to
+// is checked where it lives rather than in every file that reaches it.
+const runtimeLuauPath = path.join(
+	projectRoot,
+	"node_modules",
+	"@rbxts",
+	"vela-runtime",
+	"out",
+	"init.luau",
+);
+const runtimeSource = fs.readFileSync(runtimeLuauPath, "utf8");
+
+// The default theme rides along with the runtime as its own module, so no
+// emitted file has to carry a palette it did not change.
+const runtimeDefaults = fs.readFileSync(
+	path.join(path.dirname(runtimeLuauPath), "config-defaults.json"),
+	"utf8",
+);
+
 const requiredDiagnostics = [
 	'Tailwind "tracking" utilities have no Roblox equivalent, so "tracking-wide" is ignored.',
 	'Unknown variant "checked" in "checked:px-4"',
@@ -48,35 +67,23 @@ const requiredDiagnostics = [
 const forbiddenDiagnostics = ['"DEFAULT"', "unknown-theme-key"];
 
 const requiredFragments = [
-	"CornerRadius = UDim.new(0, 4)",
+	"CornerRadius = __VelaRem.scale(UDim.new(0, 4), ",
 	"Color3.fromRGB(255, 0, 0)",
 	"BackgroundTransparency = 0.5",
 	'kind = "hover"',
 	'kind = "active"',
 	'kind = "color-scheme"',
-	"VelaColorScheme",
 	'kind = "focus"',
-	"attachHoverTracking",
-	"attachActiveTracking",
-	"attachFocusTracking",
-	"MouseEnter",
-	"InputBegan",
-	"SelectionGained",
-	"GetAttributeChangedSignal",
-	// Held tween values seed from the merged props. Narrowing this back to
-	// resolution.props loses every statically lowered base value, and a
-	// variant then has nothing to tween from.
-	"for name, value in pairs(hostProps) do",
-	"Position = UDim2.new(1, -16, 1, -8)",
+	"Position = __VelaRem.scale(UDim2.new(1, -16, 1, -8), ",
 	"SortOrder = Enum.SortOrder.LayoutOrder",
 	"FillDirectionMaxCells = 3",
-	"CellPadding = UDim2.fromOffset(8, 8)",
+	"CellPadding = __VelaRem.scale(UDim2.fromOffset(8, 8), ",
 	"AnchorPoint = Vector2.new(0.5, 0.5)",
 	"Position = UDim2.fromScale(0.5, 0.5)",
 	"Size = UDim2.fromScale(0.5, 0)",
 	"AnchorPoint = Vector2.new(0.5, 0)",
 	"Interactable = false",
-	"Padding = UDim.new(0, 8)",
+	"Padding = __VelaRem.scale(UDim.new(0, 8), ",
 	"FillDirection = Enum.FillDirection.Vertical",
 	"ApplyStrokeMode = Enum.ApplyStrokeMode.Border",
 	"ScaleType = Enum.ScaleType.Crop",
@@ -88,27 +95,32 @@ const requiredFragments = [
 	'Font.new("rbxasset://fonts/families/RobotoMono.json", Enum.FontWeight.Regular)',
 	"GroupTransparency = 0.5",
 	"ScrollingDirection = Enum.ScrollingDirection.Y",
-	"ScrollBarThickness = 8",
+	"ScrollBarThickness = __VelaRem.scale(8, ",
 	"ScrollBarImageColor3 = Color3.fromRGB(98, 116, 142)",
 	"AutomaticCanvasSize = Enum.AutomaticSize.Y",
+	"Transparency = NumberSequence.new(0.5, 0)",
 	"Enum.FontStyle.Italic",
 	"BackgroundColor3 = Color3.fromRGB(49, 65, 88)",
-	"Size = UDim2.fromOffset(320, 108)",
-	"CornerRadius = UDim.new(0, 6)",
+	"Size = __VelaRem.scale(UDim2.fromOffset(320, 108), ",
+	"CornerRadius = __VelaRem.scale(UDim.new(0, 6), ",
 	"uistroke",
-	"Thickness = 1",
-	"Thickness = 2",
+	"Thickness = __VelaRem.scale(1, ",
+	"Thickness = __VelaRem.scale(2, ",
 	"Color = Color3.fromRGB(98, 116, 142)",
 	"Color3.fromRGB(21, 93, 252)",
-	"PaddingLeft = UDim.new(0, 16)",
-	"PaddingRight = UDim.new(0, 16)",
-	"PaddingTop = UDim.new(0, 12)",
-	"PaddingBottom = UDim.new(0, 12)",
-	"Padding = UDim.new(0, 16)",
-	"Size = UDim2.new(0, 120, 0.5, 0)",
-	"PaddingTop = UDim.new(0, 7)",
-	"CornerRadius = UDim.new(0, 10)",
-	"TextSize = 13",
+	"PaddingLeft = __VelaRem.scale(UDim.new(0, 16), ",
+	"PaddingRight = __VelaRem.scale(UDim.new(0, 16), ",
+	"PaddingTop = __VelaRem.scale(UDim.new(0, 12), ",
+	"PaddingBottom = __VelaRem.scale(UDim.new(0, 12), ",
+	"Padding = __VelaRem.scale(UDim.new(0, 16), ",
+	"Size = __VelaRem.scale(UDim2.new(0, 120, 0.5, 0), ",
+	"PaddingTop = __VelaRem.scale(UDim.new(0, 7), ",
+	"CornerRadius = __VelaRem.scale(UDim.new(0, 10), ",
+	"TextSize = __VelaRem.scaleText(13, ",
+	// Offsets follow the viewport: a statically lowered element takes the rem
+	// binding, and a runtime host is named the props it should scale itself.
+	"local __VelaRem = createVelaRemScaler(",
+	'__velaRem = { "Size" }',
 	"LineHeight = 1.6",
 	"ZIndex = 15",
 	// Plugin utilities: the class list expands statically and the property map
@@ -116,39 +128,58 @@ const requiredFragments = [
 	"BackgroundColor3 = (Color3.fromRGB(29, 41, 61))",
 	"BackgroundColor3 = Color3.fromRGB(69, 85, 108)",
 	"LayoutOrder = 7",
-	// The configured motion driver is imported and drives transitions; the
-	// preset animations it does not implement stay on the built-in path.
+	// The configured motion driver is imported here and handed to the runtime,
+	// so the specifier never has to resolve from inside the package.
 	"harnessMotionDriver",
 	'TS.import(script, script.Parent, "motion").harnessMotionDriver',
-	"__VelaMotion.setDriver(motionDriver)",
-	// A driver's methods carry an implicit `self`, so the call has to stay a
-	// method call — detached, every argument lands one place to the left.
-	"driver:transition(instance, goal, spec)",
-	"driver:animate(instance, animation)",
-	// The runtime resolver reads the same plugin table for a dynamic className.
-	"pluginUtilities",
+	// The plugin table is only read while parsing a class value, and it is
+	// pruned out of a file that hands the host none. This one still has
+	// `surfaceClass(active)`, so it survives here.
 	'["harness-card"] = "bg-slate-800 rounded-lg p-2 hover:bg-slate-700"',
-	"local function createVelaRuntimeHost(config, motionDriver)",
 	"React.createElement(VelaRuntimeHost",
 	"__velaRules",
 	"__velaTag",
 	"__velaTransition",
-	"TweenService",
 	'property = "colors"',
-	"transitionCoversProp",
 	'__velaAnimation = "spin"',
-	"startPresetAnimation",
 	'Text = "<u>STATIC &amp; &lt;STYLED&gt;</u>"',
 	"RichText = true",
 	"__velaText",
 	'transform = "capitalize"',
 	'decoration = "strike"',
-	"applyTextConfig",
 	"__velaMargin",
-	"prepareMarginWrapper",
-	"renderMarginWrapper",
 	"__velaDivide",
 	'axis = "y"',
+];
+
+// The runtime is imported, not copied, so every consumer reaches the same one.
+const requiredRuntimeFragments = [
+	"local function createVelaRuntimeHost(config, motionDriver)",
+	"local function createVelaRemScaler(config)",
+	"VelaColorScheme",
+	"attachHoverTracking",
+	"attachActiveTracking",
+	"attachFocusTracking",
+	"MouseEnter",
+	"InputBegan",
+	"SelectionGained",
+	"GetAttributeChangedSignal",
+	// Held tween values seed from the merged props. Narrowing this back to
+	// resolution.props loses every statically lowered base value, and a
+	// variant then has nothing to tween from.
+	"for name, value in pairs(hostProps) do",
+	"__VelaMotion.setDriver(motionDriver)",
+	// A driver's methods carry an implicit `self`, so the call has to stay a
+	// method call — detached, every argument lands one place to the left.
+	"driver:transition(instance, goal, spec)",
+	"driver:animate(instance, animation)",
+	"pluginUtilities",
+	"TweenService",
+	"transitionCoversProp",
+	"startPresetAnimation",
+	"applyTextConfig",
+	"prepareMarginWrapper",
+	"renderMarginWrapper",
 	"interleaveDivideSeparators",
 ];
 
@@ -168,6 +199,11 @@ const forbiddenFragments = [
 	'className = { "bg-blue-600", active and "rounded-md" }',
 	"@vela-rbxts/runtime",
 	"vela-rbxts/runtime",
+	// The default palette is the runtime's, not this file's. It is the same
+	// table in every module that would have carried it, and most of what a
+	// theme weighs.
+	"slate = {",
+	"Color3.fromRGB(255, 251, 235)",
 	"__vela__",
 	"runtime-host",
 	'"node_modules", "@vela-rbxts"',
@@ -176,8 +212,9 @@ const forbiddenFragments = [
 
 const requiredPatterns = [
 	{
-		description: "runtime helper is inlined, scoped inside one initializer",
-		pattern: /local VelaRuntimeHost = \(function\(\)/,
+		description: "the runtime arrives as an import, not as a copy",
+		pattern:
+			/TS\.import\([^\n]*"node_modules", "@rbxts", "vela-runtime"\)[\s\S]{0,240}?local VelaRuntimeHost = createVelaRuntimeHost\(/,
 	},
 	{
 		description: "transition config reaches the runtime host element",
@@ -188,35 +225,44 @@ const requiredPatterns = [
 		pattern: /__velaTransition\s*=\s*\{[\s\S]{0,160}?direction\s*=\s*"Out"/,
 	},
 	{
-		description: "runtime className keeps dynamic rounded-md condition",
-		pattern: /className\s*=\s*[^\n]*rounded-md/,
+		description: "an undecided branch lowers to a rule the test decides",
+		pattern:
+			/kind = "test",\s*index = 0,\s*expected = true,\s*\},\s*effects = \{[\s\S]{0,200}?tag = "uicorner"/,
 	},
 	{
-		description: "runtime className map keeps px-4 key",
-		pattern: /\["px-4"\]\s*=/,
+		description: "the branch's test is narrowed where it is written",
+		pattern: /__velaTests = \{ if props\.active then true else false \}/,
 	},
 	{
-		description: "runtime className map keeps px-2 key",
-		pattern: /\["px-2"\]\s*=/,
+		description: "an object map's values become one test each",
+		pattern:
+			/__velaTests = \{ if roomy then true else false, if not roomy then true else false \}/,
 	},
 	{
-		description: "runtime helper aliases string.len locally",
+		description: "an object map's keys are resolved rather than forwarded",
+		pattern: /kind = "test",\s*index = 1,\s*expected = true/,
+	},
+];
+
+const requiredRuntimePatterns = [
+	{
+		description: "runtime aliases string.len locally",
 		pattern: /local __velaStringLen = string\.len/,
 	},
 	{
-		description: "runtime helper aliases string.sub locally",
+		description: "runtime aliases string.sub locally",
 		pattern: /local __velaStringSub = string\.sub/,
 	},
 	{
-		description: "runtime helper calls the string len alias",
+		description: "runtime calls the string len alias",
 		pattern: /__velaStringLen\([^)]*\)/,
 	},
 	{
-		description: "runtime helper calls the string sub alias",
+		description: "runtime calls the string sub alias",
 		pattern: /__velaStringSub\([^)]*\)/,
 	},
 	{
-		description: "runtime helper lowers array size to the # operator",
+		description: "runtime lowers array size to the # operator",
 		pattern: /function arraySize\(value\)\s*return #value\s*end/,
 	},
 ];
@@ -226,32 +272,37 @@ const forbiddenPatterns = [
 		description: "legacy className array literal should not remain",
 		pattern: /className\s*=\s*\{\s*"bg-blue-600"\s*,/,
 	},
+];
+
+// Luau has no `string` methods on a value and no `.length`; roblox-ts lowers
+// both, and an unlowered one is a runtime error rather than a compile error.
+const forbiddenLoweringPatterns = [
 	{
-		description: "runtime helper must not call string.len as a method",
+		description: "must not call string.len as a method",
 		pattern: /string:len\s*\(/,
 	},
 	{
-		description: "runtime helper must not call string.sub as a method",
+		description: "must not call string.sub as a method",
 		pattern: /string:sub\s*\(/,
 	},
 	{
-		description: "runtime helper must not call string.len directly",
+		description: "must not call string.len directly",
 		pattern: /string\.len\s*\(/,
 	},
 	{
-		description: "runtime helper must not call string.sub directly",
+		description: "must not call string.sub directly",
 		pattern: /string\.sub\s*\(/,
 	},
 	{
-		description: "runtime helper must not use the deprecated table.getn",
+		description: "must not use the deprecated table.getn",
 		pattern: /table\s*[.:]\s*getn\b/,
 	},
 	{
-		description: "runtime helper must not call an unlowered size method",
+		description: "must not call an unlowered size method",
 		pattern: /[:.]size\s*\(/,
 	},
 	{
-		description: "runtime helper must not use emitted length property",
+		description: "must not use emitted length property",
 		pattern: /\.length\b/,
 	},
 ];
@@ -304,16 +355,53 @@ for (const check of forbiddenPatterns) {
 	}
 }
 
-// Luau refuses to compile a function that needs more than 200 live locals, and
-// the inlined runtime shares the module's register file with the consumer's own
-// code. The budget is the ceiling minus the room a real component needs.
-const REGISTER_BUDGET = 120;
-const peak = peakLocalRegisters(source);
+for (const fragment of requiredRuntimeFragments) {
+	if (!runtimeSource.includes(fragment)) {
+		failures.push(`the runtime module is missing ${fragment}`);
+	}
+}
 
-if (peak.registers > REGISTER_BUDGET) {
-	failures.push(
-		`emitted Luau spends ${peak.registers} local registers in ${peak.name} (line ${peak.line}), over the ${REGISTER_BUDGET} budget`,
-	);
+for (const fragment of ["slate", "Color3.fromRGB(255, 251, 235)"]) {
+	if (!runtimeDefaults.includes(fragment)) {
+		failures.push(`the runtime's default theme is missing ${fragment}`);
+	}
+}
+
+for (const check of requiredRuntimePatterns) {
+	if (!check.pattern.test(runtimeSource)) {
+		failures.push(
+			`the runtime module is missing expected pattern: ${check.description}`,
+		);
+	}
+}
+
+for (const [label, text] of [
+	["emitted Luau", source],
+	["the runtime module", runtimeSource],
+]) {
+	for (const check of forbiddenLoweringPatterns) {
+		if (check.pattern.test(text)) {
+			failures.push(`${label} ${check.description}`);
+		}
+	}
+}
+
+// Luau refuses to compile a function that needs more than 200 live locals. The
+// runtime no longer shares a register file with the file that reaches it, but
+// each still has to fit on its own.
+const REGISTER_BUDGET = 120;
+
+for (const [label, text] of [
+	["emitted Luau", source],
+	["the runtime module", runtimeSource],
+]) {
+	const peak = peakLocalRegisters(text);
+
+	if (peak.registers > REGISTER_BUDGET) {
+		failures.push(
+			`${label} spends ${peak.registers} local registers in ${peak.name} (line ${peak.line}), over the ${REGISTER_BUDGET} budget`,
+		);
+	}
 }
 
 if (failures.length > 0) {

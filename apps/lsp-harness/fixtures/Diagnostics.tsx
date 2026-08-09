@@ -19,6 +19,7 @@ export const Diagnostics = () => (
 		]}
 	>
 		<frame className={{ "px-4": roomy, "checked:px-2": !roomy }} />
+		<textbox className="placeholder-white/50" />
 		<scrollingframe className="scroll-y scrollbar-w-2 scrollbar-slate-500 canvas-auto scroll-smooth" />
 		<textlabel
 			Text="hello"

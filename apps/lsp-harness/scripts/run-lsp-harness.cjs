@@ -204,7 +204,7 @@ async function main() {
 		["tracking-wide", "no-roblox-equivalent"],
 		["md:rounded-mdd", "unknown-theme-key"],
 		["bg-[oops]", "unsupported-arbitrary-value"],
-		["from-blue-600/50", "unsupported-opacity-modifier"],
+		["placeholder-white/50", "unsupported-opacity-modifier"],
 		["blorb-2", "unsupported-utility-family"],
 		["checked:px-2", "unknown-variant"],
 		["duration-fast", "unsupported-transition-value"],
@@ -236,6 +236,10 @@ async function main() {
 	check(
 		!diagnosticFor(diagnostics, "bg-slate-700"),
 		'"bg-slate-700" should resolve without diagnostics',
+	);
+	check(
+		!diagnosticFor(diagnostics, "from-blue-600/50"),
+		'"from-blue-600/50" should lower its opacity modifier without diagnostics',
 	);
 	check(
 		!diagnosticFor(diagnostics, "px-4"),
