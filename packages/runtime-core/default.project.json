@@ -1,0 +1,6 @@
+{
+	"name": "vela-runtime-core",
+	"tree": {
+		"$path": "out"
+	}
+}
