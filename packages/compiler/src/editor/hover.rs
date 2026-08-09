@@ -1,6 +1,7 @@
 use crate::api::{HoverContent, HoverRequest, HoverResponse};
 use crate::editor::{
-    class_name_context_at_position, token_at_position, tokenize_class_name_with_ranges,
+    class_name_context_at_position, offset_value_text, px_length_text, token_at_position,
+    tokenize_class_name_with_ranges,
 };
 use crate::ir::model::SizeAxisValue;
 use crate::semantic::{
@@ -139,7 +140,8 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> UICorner.CornerRadius"),
                 documentation: format!(
-                    "{variant_prefix}Sets `UICorner.CornerRadius` to `{value}`."
+                    "{variant_prefix}Sets `UICorner.CornerRadius` to {}.",
+                    udim_value_text(config, &value)
                 ),
             })
         }
@@ -158,7 +160,10 @@ fn describe_token(
             let value = resolve_spacing_value(config, spacing_key)?;
             Some(HoverContent {
                 display: format!("`{token}` -> {target}"),
-                documentation: format!("{variant_prefix}Sets `{target}` to `{value}`."),
+                documentation: format!(
+                    "{variant_prefix}Sets `{target}` to {}.",
+                    udim_value_text(config, &value)
+                ),
             })
         }
         UtilityKind::Gap => {
@@ -166,7 +171,10 @@ fn describe_token(
             let value = resolve_spacing_value(config, spacing_key)?;
             Some(HoverContent {
                 display: format!("`{token}` -> UIListLayout.Padding"),
-                documentation: format!("{variant_prefix}Sets `UIListLayout.Padding` to `{value}`."),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.Padding` to {}.",
+                    udim_value_text(config, &value)
+                ),
             })
         }
         UtilityKind::GridAutoRows | UtilityKind::GridAutoColumns => {
@@ -179,7 +187,8 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> UIGridLayout.CellSize.{axis}"),
                 documentation: format!(
-                    "{variant_prefix}Sets the cross axis of `UIGridLayout.CellSize` to `{value}`. `grid-cols-*`/`grid-rows-*` size the axis they fill; this names the other one."
+                    "{variant_prefix}Sets the cross axis of `UIGridLayout.CellSize` to {}. `grid-cols-*`/`grid-rows-*` size the axis they fill; this names the other one.",
+                    udim_value_text(config, &value)
                 ),
             })
         }
@@ -214,7 +223,7 @@ fn describe_token(
                 size_key,
                 &analysis.parsed.utility.raw,
             )?;
-            let resolved = describe_size_axis_value(&value);
+            let resolved = describe_size_axis_value(config, &value);
 
             Some(HoverContent {
                 display: format!("`{token}` -> Roblox {target}"),
@@ -340,7 +349,7 @@ fn describe_token(
                 &analysis.parsed.utility.raw,
                 negative,
             )?;
-            let resolved = describe_size_axis_value(&value);
+            let resolved = describe_size_axis_value(config, &value);
 
             Some(HoverContent {
                 display: format!("`{token}` -> Roblox {target}"),
@@ -371,7 +380,7 @@ fn describe_token(
                 &analysis.parsed.utility.raw,
                 negative,
             )?);
-            let resolved = describe_size_axis_value(&value);
+            let resolved = describe_size_axis_value(config, &value);
 
             Some(HoverContent {
                 display: format!("`{token}` -> Roblox {target}"),
@@ -479,11 +488,11 @@ fn describe_token(
                 UtilityKind::DivideX => "vertical",
                 _ => "horizontal",
             };
-            let thickness = analysis.payload().unwrap_or("1");
+            let thickness = px_length_text(config, analysis.payload().unwrap_or("1"));
             Some(HoverContent {
                 display: format!("`{token}` -> child separators"),
                 documentation: format!(
-                    "{variant_prefix}Inserts a {thickness}px {axis} separator frame between the element's children. Not compatible with children that set an explicit `LayoutOrder`."
+                    "{variant_prefix}Inserts a {thickness} {axis} separator frame between the element's children. Not compatible with children that set an explicit `LayoutOrder`."
                 ),
             })
         }
@@ -529,12 +538,17 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> margin box"),
                 documentation: if negative {
+                    let shift = spacing_value_to_offset(&value)
+                        .and_then(|offset| offset.parse::<f64>().ok())
+                        .and_then(|px| crate::editor::rem_offset_label(config, -px))
+                        .unwrap_or_else(|| format!("`-{value}`"));
                     format!(
-                        "{variant_prefix}Shifts `Position` by `-{value}` (negative margins pull from the top/left edge)."
+                        "{variant_prefix}Shifts `Position` by {shift} (negative margins pull from the top/left edge)."
                     )
                 } else {
                     format!(
-                        "{variant_prefix}Wraps the element in a transparent margin box padded by `{value}` on {sides}."
+                        "{variant_prefix}Wraps the element in a transparent margin box padded by {} on {sides}.",
+                        udim_value_text(config, &value)
                     )
                 },
             })
@@ -602,7 +616,8 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> UIListLayout.Padding"),
                 documentation: format!(
-                    "{variant_prefix}Sets `UIListLayout.Padding` to `{value}` with `FillDirection = Enum.FillDirection.{direction}`."
+                    "{variant_prefix}Sets `UIListLayout.Padding` to {} with `FillDirection = Enum.FillDirection.{direction}`.",
+                    udim_value_text(config, &value)
                 ),
             })
         }
@@ -651,7 +666,8 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> ScrollBarThickness"),
                 documentation: format!(
-                    "{variant_prefix}Sets `ScrollBarThickness` to `{thickness}`."
+                    "{variant_prefix}Sets `ScrollBarThickness` to {}.",
+                    offset_value_text(config, &thickness)
                 ),
             })
         }
@@ -681,12 +697,14 @@ fn describe_token(
                 None => {
                     let thickness = if family == "ring" { "3" } else { "2" };
                     format!(
-                        "{variant_prefix}Sets `UIStroke.Thickness` to `{thickness}` with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`."
+                        "{variant_prefix}Sets `UIStroke.Thickness` to {} with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`.",
+                        offset_value_text(config, thickness)
                     )
                 }
                 Some(payload) => match classify_stroke_payload(&analysis.utility, payload) {
                     StrokePayload::Thickness(thickness) => format!(
-                        "{variant_prefix}Sets `UIStroke.Thickness` to `{thickness}` with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`."
+                        "{variant_prefix}Sets `UIStroke.Thickness` to {} with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`.",
+                        offset_value_text(config, &thickness)
                     ),
                     StrokePayload::Unsupported => return None,
                     StrokePayload::Color => {
@@ -763,7 +781,7 @@ fn describe_token(
             let mut diagnostics = Vec::new();
             let value =
                 resolve_size_axis_value(config, &mut diagnostics, size_key, &analysis.parsed.raw)?;
-            let resolved = describe_size_axis_value(&value);
+            let resolved = describe_size_axis_value(config, &value);
             Some(HoverContent {
                 display: format!("`{token}` -> Roblox Size.X"),
                 documentation: format!(
@@ -798,10 +816,20 @@ fn describe_token(
                     value.scale
                 )
             } else {
-                format!(
-                    "{variant_prefix}Shifts `Position.{axis}` by `{}` pixels.",
-                    value.offset
-                )
+                match value
+                    .offset
+                    .parse::<f64>()
+                    .ok()
+                    .and_then(|px| crate::editor::rem_offset_label(config, px))
+                {
+                    Some(shift) => {
+                        format!("{variant_prefix}Shifts `Position.{axis}` by {shift}.")
+                    }
+                    None => format!(
+                        "{variant_prefix}Shifts `Position.{axis}` by `{}` pixels.",
+                        value.offset
+                    ),
+                }
             };
             Some(HoverContent {
                 display: format!("`{token}` -> Roblox transform"),
@@ -821,7 +849,10 @@ fn describe_token(
             let value = resolve_text_size_value(size_key)?;
             Some(HoverContent {
                 display: format!("`{token}` -> TextSize"),
-                documentation: format!("{variant_prefix}Sets `TextSize` to `{value}`."),
+                documentation: format!(
+                    "{variant_prefix}Sets `TextSize` to {}.",
+                    offset_value_text(config, &value)
+                ),
             })
         }
         UtilityKind::FontWeight => {
@@ -912,7 +943,10 @@ fn describe_token(
             )?;
             Some(HoverContent {
                 display: format!("`{token}` -> {target}"),
-                documentation: format!("{variant_prefix}Sets `{target}` to `{value}`."),
+                documentation: format!(
+                    "{variant_prefix}Sets `{target}` to {}.",
+                    offset_value_text(config, &value)
+                ),
             })
         }
         UtilityKind::ShadowSize => {
@@ -930,10 +964,15 @@ fn describe_token(
                 }),
                 _ => {
                     let preset = resolve_shadow_preset(key)?;
+                    let scaling = if config.theme.rem.is_static() {
+                        ""
+                    } else {
+                        " `BlurRadius` scales with the viewport rem."
+                    };
                     Some(HoverContent {
                         display: format!("`{token}` -> UIShadow"),
                         documentation: format!(
-                            "{variant_prefix}Creates a Roblox UIShadow with `BlurRadius = {}`, `Offset = (0, {})`, and `Transparency = {}`.",
+                            "{variant_prefix}Creates a Roblox UIShadow with `BlurRadius = {}`, `Offset = (0, {})`, and `Transparency = {}`.{scaling}",
                             preset.blur, preset.offset_y, preset.transparency
                         ),
                     })
@@ -1069,7 +1108,8 @@ fn describe_border_token(
         return Some(HoverContent {
             display: format!("`{token}` -> UIStroke.Thickness"),
             documentation: format!(
-                "{variant_prefix}Creates a Roblox UIStroke with `Thickness = 1`."
+                "{variant_prefix}Creates a Roblox UIStroke with `Thickness` set to {}.",
+                offset_value_text(config, "1")
             ),
         });
     };
@@ -1077,7 +1117,10 @@ fn describe_border_token(
     if let Some(thickness) = resolve_border_thickness_value(Some(border_key)) {
         return Some(HoverContent {
             display: format!("`{token}` -> UIStroke.Thickness"),
-            documentation: format!("{variant_prefix}Sets `UIStroke.Thickness` to `{thickness}`."),
+            documentation: format!(
+                "{variant_prefix}Sets `UIStroke.Thickness` to {}.",
+                offset_value_text(config, &thickness)
+            ),
         });
     }
 
@@ -1134,14 +1177,32 @@ fn describe_border_token(
     })
 }
 
-fn describe_size_axis_value(value: &SizeAxisValue) -> String {
+fn describe_size_axis_value(
+    config: &crate::config::model::TailwindConfig,
+    value: &SizeAxisValue,
+) -> String {
+    let offset = || {
+        value
+            .offset
+            .parse::<f64>()
+            .ok()
+            .and_then(|px| crate::editor::rem_offset_label(config, px))
+            .unwrap_or_else(|| value.offset.clone())
+    };
     if value.scale == "0" {
-        format!("offset {}", value.offset)
+        format!("offset {}", offset())
     } else if value.offset == "0" {
         format!("scale {}", value.scale)
     } else {
-        format!("scale {} plus offset {}", value.scale, value.offset)
+        format!("scale {} plus offset {}", value.scale, offset())
     }
+}
+
+fn udim_value_text(config: &crate::config::model::TailwindConfig, value: &str) -> String {
+    spacing_value_to_offset(value)
+        .and_then(|offset| offset.parse::<f64>().ok())
+        .and_then(|px| crate::editor::rem_offset_label(config, px))
+        .unwrap_or_else(|| format!("`{value}`"))
 }
 
 fn padding_target(axis: &PaddingKind) -> &'static str {

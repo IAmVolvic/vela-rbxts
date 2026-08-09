@@ -381,7 +381,9 @@ test("hovers known tokens with Roblox lowering details", () => {
 	).toEqual(
 		expect.objectContaining({
 			display: "`rounded-md` -> UICorner.CornerRadius",
-			documentation: expect.stringContaining("new UDim(0, 6)"),
+			documentation: expect.stringContaining(
+				"`0.375rem` (6px at the base viewport)",
+			),
 		}),
 	);
 
@@ -501,6 +503,51 @@ test("hovers include resolved config values when available", () => {
 
 	expect(hover.contents?.display).toBe("`bg-brand` -> BackgroundColor3");
 	expect(hover.contents?.documentation).toContain("Color3.fromRGB(1, 2, 3)");
+});
+
+test("hovers keep plain pixel offsets when rem is pinned static", () => {
+	const source = '<frame className="rounded-md p-4" />';
+	const config = defineConfig({
+		theme: { rem: { min: 16, max: 16 } },
+	});
+	const options = { configJson: JSON.stringify(config) };
+
+	expect(
+		getHover({
+			source,
+			position: positionAfter(source, "rounded-md") - 2,
+			options,
+		}).contents?.documentation,
+	).toContain("new UDim(0, 6)");
+
+	expect(
+		getHover({ source, position: positionAfter(source, "p-4") - 1, options })
+			.contents?.documentation,
+	).toContain("new UDim(0, 16)");
+});
+
+test("hovers read viewport-scaled offsets as rem values", () => {
+	const source = '<frame className="p-4 w-80 -translate-y-2 border-2" />';
+
+	expect(
+		getHover({ source, position: positionAfter(source, "p-4") - 1 }).contents
+			?.documentation,
+	).toContain("`1rem` (16px at the base viewport)");
+
+	expect(
+		getHover({ source, position: positionAfter(source, "w-80") - 1 }).contents
+			?.documentation,
+	).toContain("offset `20rem` (320px at the base viewport)");
+
+	expect(
+		getHover({ source, position: positionAfter(source, "-translate-y-2") - 1 })
+			.contents?.documentation,
+	).toContain("`-0.5rem` (-8px at the base viewport)");
+
+	expect(
+		getHover({ source, position: positionAfter(source, "border-2") - 1 })
+			.contents?.documentation,
+	).toContain("`0.125rem` (2px at the base viewport)");
 });
 
 test("reports editor diagnostics for unknown keys but not supported utilities", () => {
@@ -1147,7 +1194,7 @@ test("hovers scrolling frame utilities with their Roblox targets", () => {
 	expect(
 		getHover({ source, position: positionAfter(source, "scrollbar-w-") })
 			.contents?.documentation,
-	).toContain("`8`");
+	).toContain("`0.5rem` (8px at the base viewport)");
 	expect(
 		getHover({ source, position: positionAfter(source, "scrollbar-slate-") })
 			.contents?.documentation,

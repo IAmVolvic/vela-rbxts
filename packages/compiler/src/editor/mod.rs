@@ -183,6 +183,47 @@ pub(crate) fn parse_editor_config(
     crate::config::resolve::parse_editor_config(options)
 }
 
+/// With rem scaling active an emitted offset is only what renders at
+/// `baseResolution`, so descriptions lead with the rem value instead.
+pub(crate) fn rem_offset_label(
+    config: &crate::config::model::TailwindConfig,
+    offset_px: f64,
+) -> Option<String> {
+    let rem = &config.theme.rem;
+    if rem.is_static() || rem.base <= 0.0 || offset_px == 0.0 || !offset_px.is_finite() {
+        return None;
+    }
+
+    let rems = (offset_px / rem.base * 1e4).round() / 1e4;
+    Some(format!(
+        "`{}rem` ({}px at the base viewport)",
+        crate::semantic::utility::format_number(rems),
+        crate::semantic::utility::format_number(offset_px)
+    ))
+}
+
+pub(crate) fn offset_value_text(
+    config: &crate::config::model::TailwindConfig,
+    offset: &str,
+) -> String {
+    offset
+        .parse::<f64>()
+        .ok()
+        .and_then(|px| rem_offset_label(config, px))
+        .unwrap_or_else(|| format!("`{offset}`"))
+}
+
+pub(crate) fn px_length_text(
+    config: &crate::config::model::TailwindConfig,
+    length: &str,
+) -> String {
+    length
+        .parse::<f64>()
+        .ok()
+        .and_then(|px| rem_offset_label(config, px))
+        .unwrap_or_else(|| format!("{length}px"))
+}
+
 pub(crate) fn class_name_context_at_position(
     source: &str,
     position: u32,

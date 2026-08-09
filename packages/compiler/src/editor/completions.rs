@@ -282,7 +282,10 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
             insert_text: "border".to_owned(),
             kind: "utility".to_owned(),
             category: "border".to_owned(),
-            documentation: "Create a Roblox UIStroke with `Thickness = 1`.".to_owned(),
+            documentation: format!(
+                "Create a Roblox UIStroke with `Thickness` set to {}.",
+                crate::editor::offset_value_text(config, "1")
+            ),
             replacement: None,
             color: None,
             sort_text: None,
@@ -297,7 +300,10 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 insert_text: format!("border-{thickness}"),
                 kind: "utility".to_owned(),
                 category: "border".to_owned(),
-                documentation: format!("Set Roblox UIStroke.Thickness to `{thickness}`."),
+                documentation: format!(
+                    "Set Roblox UIStroke.Thickness to {}.",
+                    crate::editor::offset_value_text(config, thickness)
+                ),
                 replacement: None,
                 color: None,
                 sort_text: None,
@@ -843,7 +849,10 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                     insert_text: format!("{family}-{thickness}"),
                     kind: "utility".to_owned(),
                     category: "effects".to_owned(),
-                    documentation: format!("Set UIStroke.Thickness to `{thickness}`."),
+                    documentation: format!(
+                        "Set UIStroke.Thickness to {}.",
+                        crate::editor::offset_value_text(config, thickness)
+                    ),
                     replacement: None,
                     color: None,
                     sort_text: None,
@@ -960,7 +969,8 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 kind: "utility".to_owned(),
                 category: "layout".to_owned(),
                 documentation: format!(
-                    "Insert a 1px {axis} separator frame between children (not for LayoutOrder lists)."
+                    "Insert a {} {axis} separator frame between children (not for LayoutOrder lists).",
+                    crate::editor::px_length_text(config, "1")
                 ),
                 replacement: None,
                 color: None,
@@ -977,7 +987,8 @@ fn base_utility_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                     kind: "utility".to_owned(),
                     category: "layout".to_owned(),
                     documentation: format!(
-                        "Insert a {thickness}px {axis} separator frame between children."
+                        "Insert a {} {axis} separator frame between children.",
+                        crate::editor::px_length_text(config, thickness)
                     ),
                     replacement: None,
                     color: None,
