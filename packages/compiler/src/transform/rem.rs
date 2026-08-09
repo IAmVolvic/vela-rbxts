@@ -41,6 +41,10 @@ pub(crate) fn scales_prop(name: &str) -> bool {
     SCALED_PROPS.contains(&name)
 }
 
+fn scales_helper_prop(tag: &str, name: &str) -> bool {
+    scales_prop(name) || (tag == "uishadow" && name == "Offset")
+}
+
 /// Roblox stops honoring `TextSize` past 100, so that one prop takes a scale
 /// that caps rather than the plain one.
 const TEXT_SIZE_PROP: &str = "TextSize";
@@ -70,7 +74,19 @@ pub(crate) struct RemScaler {
 
 impl RemScaler {
     pub(crate) fn prop(&mut self, prop: PropEntry) -> PropEntry {
-        if !scales_prop(&prop.name) || !carries_offset(&prop.value) {
+        self.maybe_scale(prop, scales_prop)
+    }
+
+    fn helper_prop(&mut self, tag: &str, prop: PropEntry) -> PropEntry {
+        self.maybe_scale(prop, |name| scales_helper_prop(tag, name))
+    }
+
+    fn maybe_scale(
+        &mut self,
+        prop: PropEntry,
+        should_scale: impl FnOnce(&str) -> bool,
+    ) -> PropEntry {
+        if !should_scale(&prop.name) || !carries_offset(&prop.value) {
             return prop;
         }
 
@@ -83,12 +99,13 @@ impl RemScaler {
     }
 
     pub(crate) fn helper(&mut self, helper: HelperEntry) -> HelperEntry {
+        let tag = helper.tag;
         HelperEntry {
-            tag: helper.tag,
+            tag,
             props: helper
                 .props
                 .into_iter()
-                .map(|prop| self.prop(prop))
+                .map(|prop| self.helper_prop(tag, prop))
                 .collect(),
         }
     }
@@ -209,6 +226,29 @@ mod tests {
 
         assert_eq!(prop.value, "__VelaRem.scale(UDim2.fromOffset(8, 8), 0)");
         assert!(scaled);
+    }
+
+    #[test]
+    fn only_a_shadow_helper_scales_offset() {
+        let offset = || PropEntry {
+            name: "Offset".into(),
+            value: "UDim2.fromOffset(0, 8)".to_owned(),
+        };
+        let mut scaler = RemScaler::default();
+        let shadow = scaler.helper(HelperEntry {
+            tag: "uishadow",
+            props: vec![offset()],
+        });
+        let gradient = scaler.helper(HelperEntry {
+            tag: "uigradient",
+            props: vec![offset()],
+        });
+
+        assert_eq!(
+            shadow.props[0].value,
+            "__VelaRem.scale(UDim2.fromOffset(0, 8), 0)"
+        );
+        assert_eq!(gradient.props[0].value, "UDim2.fromOffset(0, 8)");
     }
 
     /// A slot is what keeps two offsets in one file from sharing a binding, so

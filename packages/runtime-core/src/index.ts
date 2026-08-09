@@ -192,6 +192,10 @@ export namespace __VelaRem {
 		return SCALED_PROPS[name] === true;
 	}
 
+	export function scalesHelperProp(tag: string, name: string): boolean {
+		return scalesProp(name) || (tag === "uishadow" && name === "Offset");
+	}
+
 	export function apply(
 		value: RuntimePropValue,
 		remRatio: number,
@@ -4118,6 +4122,7 @@ export namespace __VelaApply {
 				helper.props.map((prop) => ({
 					name: prop.name,
 					value: scaleHelperProp(
+						helper.tag,
 						prop.name,
 						parseRuntimePropValue(prop.value),
 						resolution,
@@ -4141,7 +4146,7 @@ export namespace __VelaApply {
 				helper.tag,
 				helper.props.map((prop) => ({
 					name: prop.name,
-					value: scaleHelperProp(prop.name, prop.value, resolution),
+					value: scaleHelperProp(helper.tag, prop.name, prop.value, resolution),
 				})),
 			);
 		}
@@ -4151,13 +4156,14 @@ export namespace __VelaApply {
 	/// the composition steps below write is derived from resolution fields that
 	/// were already scaled on the way in.
 	function scaleHelperProp(
+		tag: string,
 		name: string,
 		value: RuntimePropValue,
 		resolution: RuntimeResolution,
 	): RuntimePropValue {
 		const remRatio = resolution.remRatio ?? 1;
 
-		return remRatio !== 1 && __VelaRem.scalesProp(name)
+		return remRatio !== 1 && __VelaRem.scalesHelperProp(tag, name)
 			? __VelaRem.apply(value, remRatio)
 			: value;
 	}

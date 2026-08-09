@@ -4545,6 +4545,17 @@ test("a scaled text size caps at the ceiling Roblox honors", () => {
 	expect(host.code).toContain("TextSize={(60 as never)}");
 });
 
+test("scales a shadow offset with its other pixel dimensions", () => {
+	const result = transform('<frame className="shadow-lg" />');
+
+	expect(result.code).toMatch(
+		/Offset=\{__VelaRem\.scale\(UDim2\.fromOffset\(0, 10\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/BlurRadius=\{__VelaRem\.scale\(new UDim\(0, 15\), \d+\)\}/,
+	);
+});
+
 test("an inverted rem clamp collapses onto min instead of reaching the runtime", () => {
 	const result = transform('<frame className="w-4 hover:w-8" />', {
 		configJson: JSON.stringify({
