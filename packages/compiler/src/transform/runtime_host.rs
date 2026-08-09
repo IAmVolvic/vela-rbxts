@@ -3,11 +3,12 @@ use crate::swc::parse::parse_module_items;
 use crate::transform::rem::REM_NAMESPACE;
 use swc_core::ecma::ast::ModuleItem;
 
-/// The runtime ships under the `@rbxts` scope because roblox-ts only resolves a
+/// The runtimes ship under the `@rbxts` scope because roblox-ts only resolves a
 /// package whose scope directory is one of the project's `typeRoots`, and that
-/// is the one every roblox-ts project already lists. A consumer installs it
+/// is the one every roblox-ts project already lists. A consumer installs one
 /// through `vela-rbxts` and maps nothing new.
-const RUNTIME_MODULE: &str = "@rbxts/vela-runtime";
+pub(crate) const REACT_RUNTIME_MODULE: &str = "@rbxts/vela-runtime";
+pub(crate) const VIDE_RUNTIME_MODULE: &str = "@rbxts/vela-runtime-vide";
 
 /// What a transformed module reaches for. A file can need any combination: a
 /// host to resolve class values, a rem scaler for statically lowered offsets,
@@ -27,9 +28,12 @@ impl RuntimeNeeds<'_> {
     }
 }
 
+/// Both host runtimes expose the same three entry points, so the preamble is
+/// shared and only the specifier it imports from differs.
 pub(crate) fn create_runtime_module_items(
     config: &TailwindConfig,
     needs: &RuntimeNeeds<'_>,
+    runtime_module: &str,
 ) -> Vec<ModuleItem> {
     if needs.is_empty() {
         return Vec::new();
@@ -67,13 +71,13 @@ pub(crate) fn create_runtime_module_items(
     }
 
     source.push_str(&format!(
-        "import {{ {} }} from \"{RUNTIME_MODULE}\";\n",
+        "import {{ {} }} from \"{runtime_module}\";\n",
         values.join(", ")
     ));
 
     if !types.is_empty() {
         source.push_str(&format!(
-            "import type {{ {} }} from \"{RUNTIME_MODULE}\";\n",
+            "import type {{ {} }} from \"{runtime_module}\";\n",
             types.join(", ")
         ));
     }
@@ -96,8 +100,10 @@ fn host_config_json(config: &TailwindConfig, resolves_class_values: bool) -> Str
     let mut config = config.clone();
 
     // Where the driver is imported from is answered above, at compile time. The
-    // runtime is handed the driver itself and never reads the specifier.
+    // runtime is handed the driver itself and never reads the specifier, and
+    // which runtime this is has likewise already been decided by the import.
     config.plugins.motion = None;
+    config.framework = crate::config::model::Framework::default();
 
     if resolves_class_values {
         keep_theme_changes(&mut config.theme);

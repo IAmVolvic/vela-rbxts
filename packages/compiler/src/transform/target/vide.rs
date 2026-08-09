@@ -1,0 +1,169 @@
+use crate::config::model::TailwindConfig;
+use crate::swc::builders::{OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression};
+use crate::transform::runtime_host::{
+    RuntimeNeeds, VIDE_RUNTIME_MODULE, create_runtime_module_items,
+};
+use crate::transform::target::EmitTarget;
+use swc_core::{
+    common::DUMMY_SP,
+    ecma::ast::{
+        ArrayLit, ArrowExpr, BlockStmtOrExpr, Bool, CondExpr, Expr, ExprOrSpread, Ident, IdentName,
+        JSXAttrOrSpread, JSXClosingElement, JSXElement, JSXElementChild, JSXElementName, JSXExpr,
+        JSXExprContainer, JSXMemberExpr, JSXObject, JSXOpeningElement, Lit, ModuleItem,
+    },
+};
+
+pub(crate) struct VideTarget;
+
+/// Vide reads a `Derivable<T>`: a function value on a non-event property
+/// becomes an effect. Wrapping is what keeps an expression re-readable, since
+/// nothing here re-renders to read it again.
+fn thunk(expr: Expr) -> Expr {
+    Expr::Arrow(ArrowExpr {
+        span: DUMMY_SP,
+        params: Vec::new(),
+        body: Box::new(BlockStmtOrExpr::Expr(Box::new(expr))),
+        is_async: false,
+        is_generator: false,
+        type_params: None,
+        return_type: None,
+        ctxt: Default::default(),
+    })
+}
+
+impl EmitTarget for VideTarget {
+    fn runtime_module_items(
+        &self,
+        config: &TailwindConfig,
+        needs: &RuntimeNeeds<'_>,
+    ) -> Vec<ModuleItem> {
+        create_runtime_module_items(config, needs, VIDE_RUNTIME_MODULE)
+    }
+
+    fn host_element_name(&self) -> &'static str {
+        "VelaRuntimeHost"
+    }
+
+    /// The React target can hand the host a boolean, because a re-render brings
+    /// the next one. A Vide component body runs once, so a test that arrived
+    /// evaluated would pin its rule to whatever was true at creation.
+    fn tests_attr(&self, tests: Vec<Expr>) -> JSXAttrOrSpread {
+        let elems = tests
+            .into_iter()
+            .map(|test| {
+                Some(ExprOrSpread {
+                    spread: None,
+                    expr: Box::new(thunk(Expr::Cond(CondExpr {
+                        span: DUMMY_SP,
+                        test: Box::new(test),
+                        cons: Box::new(Expr::Lit(Lit::Bool(Bool {
+                            span: DUMMY_SP,
+                            value: true,
+                        }))),
+                        alt: Box::new(Expr::Lit(Lit::Bool(Bool {
+                            span: DUMMY_SP,
+                            value: false,
+                        }))),
+                    }))),
+                })
+            })
+            .collect();
+
+        create_prop_attr_with_expr(
+            "__velaTests".to_owned(),
+            Box::new(Expr::Array(ArrayLit {
+                span: DUMMY_SP,
+                elems,
+            })),
+        )
+    }
+
+    fn opacity_provider(&self, alpha: f64, children: Vec<JSXElementChild>) -> Box<JSXElement> {
+        provider_element(opacity_member("Provider"), alpha, children)
+    }
+
+    /// Vide builds a child eagerly, so by the time the provider runs the
+    /// instances that should have read its value already exist. A thunk is what
+    /// defers them into the scope that holds it.
+    fn opacity_provider_child(&self, child: JSXElementChild) -> JSXElementChild {
+        let body = match child {
+            JSXElementChild::JSXElement(element) => Expr::JSXElement(element),
+            JSXElementChild::JSXFragment(fragment) => Expr::JSXFragment(fragment),
+            JSXElementChild::JSXExprContainer(JSXExprContainer {
+                expr: JSXExpr::Expr(expr),
+                ..
+            }) => *expr,
+            other => return other,
+        };
+
+        JSXElementChild::JSXExprContainer(JSXExprContainer {
+            span: DUMMY_SP,
+            expr: JSXExpr::Expr(Box::new(thunk(body))),
+        })
+    }
+
+    /// The instance already exists by the time this runs, so the consumer
+    /// applies the alpha rather than cloning an element around it. The emitted
+    /// shape is the same either way.
+    fn fade_element(&self, child: Expr) -> Box<JSXElement> {
+        let name = opacity_member("Fade");
+
+        let child = match child {
+            Expr::JSXElement(element) => JSXElementChild::JSXElement(element),
+            Expr::JSXFragment(fragment) => JSXElementChild::JSXFragment(fragment),
+            other => JSXElementChild::JSXExprContainer(JSXExprContainer {
+                span: DUMMY_SP,
+                expr: JSXExpr::Expr(Box::new(other)),
+            }),
+        };
+
+        Box::new(JSXElement {
+            span: DUMMY_SP,
+            opening: JSXOpeningElement {
+                name: name.clone(),
+                span: DUMMY_SP,
+                attrs: Vec::new(),
+                self_closing: false,
+                type_args: None,
+            },
+            children: vec![child],
+            closing: Some(JSXClosingElement {
+                span: DUMMY_SP,
+                name,
+            }),
+        })
+    }
+}
+
+fn provider_element(
+    name: JSXElementName,
+    alpha: f64,
+    children: Vec<JSXElementChild>,
+) -> Box<JSXElement> {
+    Box::new(JSXElement {
+        span: DUMMY_SP,
+        opening: JSXOpeningElement {
+            name: name.clone(),
+            span: DUMMY_SP,
+            attrs: vec![create_prop_attr_with_expr(
+                "value".to_owned(),
+                parse_expression(&alpha.to_string()),
+            )],
+            self_closing: false,
+            type_args: None,
+        },
+        children,
+        closing: Some(JSXClosingElement {
+            span: DUMMY_SP,
+            name,
+        }),
+    })
+}
+
+fn opacity_member(prop: &str) -> JSXElementName {
+    JSXElementName::JSXMemberExpr(JSXMemberExpr {
+        span: DUMMY_SP,
+        obj: JSXObject::Ident(Ident::new_no_ctxt(OPACITY_NAMESPACE.into(), DUMMY_SP)),
+        prop: IdentName::new(prop.into(), DUMMY_SP),
+    })
+}

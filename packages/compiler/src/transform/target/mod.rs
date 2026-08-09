@@ -1,4 +1,5 @@
 pub(crate) mod react;
+pub(crate) mod vide;
 
 use crate::config::model::TailwindConfig;
 use crate::transform::runtime_host::RuntimeNeeds;
@@ -31,6 +32,12 @@ pub(crate) trait EmitTarget {
     /// could not reach.
     fn opacity_provider(&self, alpha: f64, children: Vec<JSXElementChild>) -> Box<JSXElement>;
 
+    /// What a provider's child has to look like by the time it is placed. React
+    /// reads the context during the child's own render, so the child travels as
+    /// it is; Vide builds a child eagerly, before the provider that would have
+    /// scoped it ever runs, so it travels as a thunk instead.
+    fn opacity_provider_child(&self, child: JSXElementChild) -> JSXElementChild;
+
     /// The runtime's fade consumer, wrapped around what a component returns.
     fn fade_element(&self, child: Expr) -> Box<JSXElement>;
 }
@@ -38,4 +45,16 @@ pub(crate) trait EmitTarget {
 pub(crate) fn react_target() -> &'static dyn EmitTarget {
     static TARGET: react::ReactTarget = react::ReactTarget;
     &TARGET
+}
+
+pub(crate) fn vide_target() -> &'static dyn EmitTarget {
+    static TARGET: vide::VideTarget = vide::VideTarget;
+    &TARGET
+}
+
+pub(crate) fn target_for(framework: crate::config::model::Framework) -> &'static dyn EmitTarget {
+    match framework {
+        crate::config::model::Framework::React => react_target(),
+        crate::config::model::Framework::Vide => vide_target(),
+    }
 }

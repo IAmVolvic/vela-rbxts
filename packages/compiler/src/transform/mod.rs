@@ -94,10 +94,11 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
         };
     }
 
+    let target = crate::transform::target::target_for(config.framework);
     let mut transformer = VelaTransformer {
         changed: false,
         config,
-        target: crate::transform::target::react_target(),
+        target,
         diagnostics,
         ir: Vec::new(),
         runtime_host_needed: false,
@@ -349,6 +350,62 @@ mod tests {
             "the lowered element must be retagged to `{host}`: {}",
             result.code
         );
+    }
+
+    fn vide_config_json() -> String {
+        let mut config = crate::config::defaults::default_config();
+        config.framework = crate::config::model::Framework::Vide;
+        serde_json::to_string(&config).expect("config must serialize to JSON")
+    }
+
+    /// The one emit shape the two targets cannot share. A React host is handed
+    /// the boolean because a re-render brings the next one; a Vide component
+    /// body runs once, so a test that arrived evaluated would pin its rule to
+    /// whatever happened to be true at creation.
+    #[test]
+    fn the_vide_target_defers_branch_tests_and_react_does_not() {
+        let source = "const ui = <frame className={active ? \"bg-red-500\" : \"bg-blue-500\"} />;"
+            .to_owned();
+
+        let react = transform_impl(source.clone(), None);
+        let vide = transform_impl(
+            source,
+            Some(TransformOptions {
+                config_json: Some(vide_config_json()),
+            }),
+        );
+
+        let flatten = |code: &str| code.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            flatten(&react.code).contains("__velaTests={[ active ? true : false ]}"),
+            "react must hand the host the evaluated test: {}",
+            react.code
+        );
+        assert!(
+            flatten(&vide.code).contains("__velaTests={[ ()=>active ? true : false ]}"),
+            "vide must hand the host a thunk: {}",
+            vide.code
+        );
+    }
+
+    /// A Vide place must never resolve the React runtime, which is the whole
+    /// reason the two ship as separate packages.
+    #[test]
+    fn each_target_imports_only_its_own_runtime() {
+        let source = "const ui = <frame className=\"hover:bg-red-500\" />;".to_owned();
+
+        let react = transform_impl(source.clone(), None);
+        let vide = transform_impl(
+            source,
+            Some(TransformOptions {
+                config_json: Some(vide_config_json()),
+            }),
+        );
+
+        assert!(react.code.contains("from \"@rbxts/vela-runtime\""));
+        assert!(!react.code.contains("vela-runtime-vide"));
+        assert!(vide.code.contains("from \"@rbxts/vela-runtime-vide\""));
     }
 
     #[test]

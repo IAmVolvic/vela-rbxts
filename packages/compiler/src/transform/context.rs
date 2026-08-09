@@ -556,6 +556,7 @@ impl VelaTransformer {
                     expr: JSXExpr::JSXEmptyExpr(JSXEmptyExpr { span: DUMMY_SP }),
                 }),
             );
+            let wrapped = self.target.opacity_provider_child(wrapped);
             *child =
                 JSXElementChild::JSXElement(self.target.opacity_provider(alpha, vec![wrapped]));
             self.changed = true;
@@ -573,7 +574,10 @@ impl VelaTransformer {
 
         let mut provider = self.target.opacity_provider(alpha, Vec::new());
         std::mem::swap(element, provider.as_mut());
-        element.children.push(JSXElementChild::JSXElement(provider));
+        element.children.push(
+            self.target
+                .opacity_provider_child(JSXElementChild::JSXElement(provider)),
+        );
         self.changed = true;
         self.opacity_helper_needed = true;
     }

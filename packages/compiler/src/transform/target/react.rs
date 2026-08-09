@@ -1,6 +1,8 @@
 use crate::config::model::TailwindConfig;
 use crate::swc::builders::{OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression};
-use crate::transform::runtime_host::{RuntimeNeeds, create_runtime_module_items};
+use crate::transform::runtime_host::{
+    REACT_RUNTIME_MODULE, RuntimeNeeds, create_runtime_module_items,
+};
 use crate::transform::target::EmitTarget;
 use swc_core::{
     common::DUMMY_SP,
@@ -19,7 +21,7 @@ impl EmitTarget for ReactTarget {
         config: &TailwindConfig,
         needs: &RuntimeNeeds<'_>,
     ) -> Vec<ModuleItem> {
-        create_runtime_module_items(config, needs)
+        create_runtime_module_items(config, needs, REACT_RUNTIME_MODULE)
     }
 
     fn host_element_name(&self) -> &'static str {
@@ -83,6 +85,10 @@ impl EmitTarget for ReactTarget {
                 name,
             }),
         })
+    }
+
+    fn opacity_provider_child(&self, child: JSXElementChild) -> JSXElementChild {
+        child
     }
 
     /// A statically lowered instance cannot read a context, so this is what
