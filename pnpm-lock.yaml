@@ -138,6 +138,31 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  apps/vide-harness:
+    dependencies:
+      '@rbxts/services':
+        specifier: ^1.6.0
+        version: 1.6.0
+      '@rbxts/vide':
+        specifier: ^0.6.1
+        version: 0.6.1
+      vela-rbxts:
+        specifier: workspace:*
+        version: link:../../packages/vela-rbxts
+    devDependencies:
+      '@rbxts/compiler-types':
+        specifier: ^3.0.0-types.0
+        version: 3.0.0-types.0
+      '@rbxts/types':
+        specifier: ^1.0.935
+        version: 1.0.935
+      roblox-ts:
+        specifier: ^3.0.0
+        version: 3.0.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/compiler:
     devDependencies:
       '@napi-rs/cli':
@@ -1269,6 +1294,9 @@ packages:
 
   '@rbxts/types@1.0.935':
     resolution: {integrity: sha512-VyX1GIDcwtJFcpkrjLTK6xW1z5d1IsIrD+GST/b5L+uOsR2mZMXOxUu4BjNU+rLF7N1dTz+zhyy+3cBx+KBd6g==}
+
+  '@rbxts/vide@0.6.1':
+    resolution: {integrity: sha512-syFqx+HYXy0TauDCGLhc68K2cAlfgYookIJSRtJZ01W7mUI+EKyj80x2L91dQxos3BwAAGJqBD/ovWU4M//+Lg==}
 
   '@roblox-ts/luau-ast@2.0.0':
     resolution: {integrity: sha512-cmMi093IdwBOLVxwuordhM8AmtbyTIyRpsTbB0D/JauidW4SXsQRQowSwWjHo4QP0DRJBXvOIlxtqEQi50uNzQ==}
@@ -4068,6 +4096,8 @@ snapshots:
   '@rbxts/services@1.6.0': {}
 
   '@rbxts/types@1.0.935': {}
+
+  '@rbxts/vide@0.6.1': {}
 
   '@roblox-ts/luau-ast@2.0.0': {}
 

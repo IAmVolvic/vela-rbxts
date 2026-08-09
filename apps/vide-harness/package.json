@@ -1,0 +1,28 @@
+{
+	"name": "vide-harness",
+	"version": "0.1.0",
+	"private": true,
+	"scripts": {
+		"prebuild": "node ./scripts/materialize-rbxts-modules.cjs",
+		"build": "rbxtsc -p tsconfig.json",
+		"predev": "node ./scripts/materialize-rbxts-modules.cjs",
+		"dev": "rbxtsc -w -p tsconfig.json",
+		"test": "node ./scripts/materialize-rbxts-modules.cjs && node scripts/verify-vide-output.cjs",
+		"pretypecheck": "node ./scripts/materialize-rbxts-modules.cjs",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --fix --unsafe",
+		"clean": "node -e \"const fs=require('node:fs');fs.rmSync('out',{recursive:true,force:true});\""
+	},
+	"dependencies": {
+		"@rbxts/services": "^1.6.0",
+		"@rbxts/vide": "^0.6.1",
+		"vela-rbxts": "workspace:*"
+	},
+	"devDependencies": {
+		"@rbxts/compiler-types": "^3.0.0-types.0",
+		"@rbxts/types": "^1.0.935",
+		"roblox-ts": "^3.0.0",
+		"typescript": "5.9.3"
+	}
+}
