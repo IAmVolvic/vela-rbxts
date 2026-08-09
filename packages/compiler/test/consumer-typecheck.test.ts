@@ -3,8 +3,9 @@ import { transform } from "@vela-rbxts/compiler";
 import ts from "typescript";
 import { expect, test } from "vitest";
 
-// The runtime is inlined into the file being compiled, so it is typechecked
-// under the consumer's own compiler options rather than this repo's.
+// The emit is typechecked under a consumer's own compiler options rather than
+// this repo's, against the runtime package's real declarations — which is where
+// a drift between what the preamble imports and what the runtime exports shows.
 const emittedFileName = fileURLToPath(
 	new URL("./App.vela.tsx", import.meta.url),
 );

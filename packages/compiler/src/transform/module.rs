@@ -1,13 +1,12 @@
 use swc_core::ecma::ast::{JSXAttrName, JSXElementName, ModuleItem};
 
-pub(crate) fn create_runtime_host_module_items(
-    config: &crate::config::model::TailwindConfig,
-) -> Vec<ModuleItem> {
-    crate::transform::runtime_host::create_runtime_host_module_items(config)
-}
+pub(crate) use crate::transform::runtime_host::RuntimeNeeds;
 
-pub(crate) fn create_opacity_module_items() -> Vec<ModuleItem> {
-    crate::transform::runtime_host::create_opacity_module_items()
+pub(crate) fn create_runtime_module_items(
+    config: &crate::config::model::TailwindConfig,
+    needs: &RuntimeNeeds<'_>,
+) -> Vec<ModuleItem> {
+    crate::transform::runtime_host::create_runtime_module_items(config, needs)
 }
 
 pub(crate) fn element_tag_name(name: &JSXElementName) -> String {

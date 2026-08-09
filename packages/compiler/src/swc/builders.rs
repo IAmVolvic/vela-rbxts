@@ -2,9 +2,10 @@ use crate::ir::model::{HelperEntry, PropEntry};
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        Expr, Ident, IdentName, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue,
-        JSXClosingElement, JSXElement, JSXElementChild, JSXElementName, JSXExpr, JSXExprContainer,
-        JSXMemberExpr, JSXObject, JSXOpeningElement,
+        ArrayLit, Bool, CondExpr, Expr, ExprOrSpread, Ident, IdentName, JSXAttr, JSXAttrName,
+        JSXAttrOrSpread, JSXAttrValue, JSXClosingElement, JSXElement, JSXElementChild,
+        JSXElementName, JSXExpr, JSXExprContainer, JSXMemberExpr, JSXObject, JSXOpeningElement,
+        Lit,
     },
 };
 
@@ -18,6 +19,40 @@ pub(crate) fn create_prop_attr_cast_any(prop: PropEntry) -> JSXAttrOrSpread {
     create_prop_attr_with_expr(
         name.to_string(),
         parse_expression(&format!("({value} as never)")),
+    )
+}
+
+/// The tests the emitted branch rules decide on, as one array the host reads by
+/// index. Each is narrowed to a boolean where it is written, so an expression
+/// the rules hang on is evaluated once however many of them name it.
+pub(crate) fn create_tests_attr(tests: Vec<Expr>) -> JSXAttrOrSpread {
+    let elems = tests
+        .into_iter()
+        .map(|test| {
+            Some(ExprOrSpread {
+                spread: None,
+                expr: Box::new(Expr::Cond(CondExpr {
+                    span: DUMMY_SP,
+                    test: Box::new(test),
+                    cons: Box::new(Expr::Lit(Lit::Bool(Bool {
+                        span: DUMMY_SP,
+                        value: true,
+                    }))),
+                    alt: Box::new(Expr::Lit(Lit::Bool(Bool {
+                        span: DUMMY_SP,
+                        value: false,
+                    }))),
+                })),
+            })
+        })
+        .collect();
+
+    create_prop_attr_with_expr(
+        "__velaTests".to_owned(),
+        Box::new(Expr::Array(ArrayLit {
+            span: DUMMY_SP,
+            elems,
+        })),
     )
 }
 

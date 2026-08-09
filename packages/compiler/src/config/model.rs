@@ -31,8 +31,9 @@ pub(crate) struct PluginConfig {
     pub(crate) motion: Option<MotionDriverConfig>,
 }
 
-/// The module the inlined runtime host imports its motion driver from, in place
-/// of the built-in `TweenService` one.
+/// The module a transformed file imports its motion driver from, in place of
+/// the built-in `TweenService` one. Compile-time only: the driver reaches the
+/// runtime as an argument, so the specifier never travels with the config.
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct MotionDriverConfig {
     pub(crate) module: String,
@@ -61,12 +62,68 @@ pub(crate) struct ThemeConfig {
     pub(crate) spacing: ThemeScale,
     #[serde(default, rename = "fontFamily")]
     pub(crate) font_family: ThemeScale,
+    #[serde(default)]
+    pub(crate) rem: RemConfig,
+    /// Emit-only: the theme tables that travel whole rather than as a
+    /// difference from the defaults the runtime carries. Always rewritten on
+    /// the way out, so whatever a config file put here is ignored.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) replaced: Vec<String>,
+}
+
+/// How an offset in a utility turns into pixels. `base` is what one rem is worth
+/// at `base_resolution`; every other viewport scales that value and clamps it
+/// into `[min, max]`.
+#[derive(Clone, Copy, Deserialize, Serialize, PartialEq)]
+pub(crate) struct RemConfig {
+    pub(crate) base: f64,
+    pub(crate) min: f64,
+    pub(crate) max: f64,
+    #[serde(rename = "baseResolution")]
+    pub(crate) base_resolution: RemResolution,
+}
+
+impl RemConfig {
+    /// A clamp with no room left resolves the same rem on every viewport, and a
+    /// pin at `base` resolves it to a ratio of 1, which lets the emit keep its
+    /// literal offsets instead of routing them through the runtime. A pin away
+    /// from `base` still scales — by a constant — so it stays on the runtime
+    /// path, where the host multiplies by the same ratio.
+    pub(crate) fn is_static(&self) -> bool {
+        self.min >= self.max && self.min == self.base
+    }
+}
+
+impl Default for RemConfig {
+    fn default() -> Self {
+        Self {
+            base: 16.0,
+            min: 16.0,
+            max: 16.0,
+            base_resolution: RemResolution::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize, PartialEq)]
+pub(crate) struct RemResolution {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+}
+
+impl Default for RemResolution {
+    fn default() -> Self {
+        Self {
+            x: 1920.0,
+            y: 1020.0,
+        }
+    }
 }
 
 pub(crate) type ThemeScale = BTreeMap<String, String>;
 pub(crate) type ThemeColors = BTreeMap<String, ColorValue>;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
 pub(crate) enum ColorValue {
     Literal(String),
@@ -89,6 +146,7 @@ pub(crate) struct ThemeConfigInput {
     pub(crate) spacing: Option<ThemeScale>,
     #[serde(rename = "fontFamily")]
     pub(crate) font_family: Option<ThemeScale>,
+    pub(crate) rem: Option<RemConfigInput>,
     pub(crate) extend: Option<ThemeConfigExtendInput>,
 }
 
@@ -99,6 +157,22 @@ pub(crate) struct ThemeConfigExtendInput {
     pub(crate) spacing: Option<ThemeScale>,
     #[serde(rename = "fontFamily")]
     pub(crate) font_family: Option<ThemeScale>,
+    pub(crate) rem: Option<RemConfigInput>,
+}
+
+#[derive(Clone, Copy, Deserialize, Default)]
+pub(crate) struct RemConfigInput {
+    pub(crate) base: Option<f64>,
+    pub(crate) min: Option<f64>,
+    pub(crate) max: Option<f64>,
+    #[serde(rename = "baseResolution")]
+    pub(crate) base_resolution: Option<RemResolutionInput>,
+}
+
+#[derive(Clone, Copy, Deserialize, Default)]
+pub(crate) struct RemResolutionInput {
+    pub(crate) x: Option<f64>,
+    pub(crate) y: Option<f64>,
 }
 
 pub(crate) type ColorInputMap = BTreeMap<String, ColorValue>;

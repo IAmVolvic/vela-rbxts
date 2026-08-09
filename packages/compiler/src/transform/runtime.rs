@@ -298,9 +298,9 @@ struct PendingAxes {
     max_width: Option<String>,
     max_height: Option<String>,
     gradient_rotation: Option<&'static str>,
-    gradient_from: Option<String>,
-    gradient_via: Option<String>,
-    gradient_to: Option<String>,
+    gradient_from: Option<GradientStop>,
+    gradient_via: Option<GradientStop>,
+    gradient_to: Option<GradientStop>,
     font_family: Option<String>,
     font_weight: Option<&'static str>,
     font_style: Option<&'static str>,
@@ -337,6 +337,16 @@ struct PendingAxes {
     divide_axis: Option<&'static str>,
     divide_thickness: Option<f64>,
     divide_color: Option<String>,
+    divide_transparency: Option<f64>,
+}
+
+/// A `from-*`/`via-*`/`to-*` stop. UIGradient keeps color and alpha in two
+/// parallel sequences, so the `/N` modifier has to travel beside the color
+/// until every stop is known.
+#[derive(Clone)]
+struct GradientStop {
+    color: String,
+    transparency: Option<String>,
 }
 
 impl PendingAxes {
@@ -508,6 +518,7 @@ impl PendingAxes {
                 axis: axis.to_owned(),
                 thickness: self.divide_thickness.unwrap_or(1.0),
                 color: self.divide_color,
+                transparency: self.divide_transparency,
             });
         }
 
@@ -520,12 +531,24 @@ impl PendingAxes {
             });
         }
 
-        let stops: Vec<String> = [self.gradient_from, self.gradient_via, self.gradient_to]
+        let stops: Vec<GradientStop> = [self.gradient_from, self.gradient_via, self.gradient_to]
             .into_iter()
             .flatten()
             .collect();
         if !stops.is_empty() {
-            style.set_helper_prop("uigradient", "Color", color_sequence_expr(&stops));
+            let colors: Vec<String> = stops.iter().map(|stop| stop.color.clone()).collect();
+            style.set_helper_prop("uigradient", "Color", color_sequence_expr(&colors));
+
+            // A stop without a modifier is opaque, but a sequence cannot leave a
+            // keypoint out, so the untouched stops have to say so.
+            if stops.iter().any(|stop| stop.transparency.is_some()) {
+                let alphas: Vec<String> = stops
+                    .iter()
+                    .map(|stop| stop.transparency.clone().unwrap_or_else(|| "0".to_owned()))
+                    .collect();
+                style.set_helper_prop("uigradient", "Transparency", number_sequence_expr(&alphas));
+            }
+
             if let Some(rotation) = self.gradient_rotation.filter(|rotation| *rotation != "0") {
                 style.set_helper_prop("uigradient", "Rotation", rotation.to_owned());
             }
@@ -554,6 +577,26 @@ fn color_sequence_expr(stops: &[String]) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("new ColorSequence([{keypoints}])")
+        }
+    }
+}
+
+fn number_sequence_expr(stops: &[String]) -> String {
+    match stops {
+        [single] => format!("new NumberSequence({single})"),
+        [start, end] => format!("new NumberSequence({start}, {end})"),
+        _ => {
+            let last = stops.len() - 1;
+            let keypoints = stops
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    let position = format_stop_position(index as f64 / last as f64);
+                    format!("new NumberSequenceKeypoint({position}, {value})")
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("new NumberSequence([{keypoints}])")
         }
     }
 }
@@ -1343,7 +1386,7 @@ fn apply_analyzed_token(
             }
         }
         UtilityKind::DivideColor => {
-            if let Some(color_key) = analysis.payload()
+            if let Some((color_key, opacity)) = analysis.payload().map(split_color_opacity)
                 && let Some(resolution) = resolve_color_value(
                     config,
                     diagnostics,
@@ -1355,6 +1398,8 @@ fn apply_analyzed_token(
                 match resolution {
                     ColorResolution::Expression(value) => {
                         pending.divide_color = Some(value);
+                        pending.divide_transparency =
+                            opacity.map(|percent| f64::from(100 - percent) / 100.0);
                     }
                     ColorResolution::Transparent => {
                         diagnostics.push(unsupported_color_keyword_diagnostic(
@@ -1709,6 +1754,7 @@ fn apply_border_utility(
         return;
     }
 
+    let (border_key, opacity) = split_color_opacity(border_key);
     let Some(resolution) =
         resolve_color_value(config, diagnostics, BORDER_COLOR_FAMILY, border_key, token)
     else {
@@ -1718,7 +1764,11 @@ fn apply_border_utility(
     match resolution {
         ColorResolution::Expression(value) => {
             style.set_helper_prop("uistroke", "Color", value);
-            style.set_helper_prop("uistroke", "Transparency", "0".to_owned());
+            style.set_helper_prop(
+                "uistroke",
+                "Transparency",
+                opacity.map_or_else(|| "0".to_owned(), opacity_to_transparency),
+            );
         }
         ColorResolution::Transparent => {
             style.set_helper_prop("uistroke", "Transparency", "1".to_owned());
@@ -1845,7 +1895,8 @@ fn resolve_gradient_stop(
     diagnostics: &mut Vec<Diagnostic>,
     color_key: &str,
     token: &str,
-) -> Option<String> {
+) -> Option<GradientStop> {
+    let (color_key, opacity) = split_color_opacity(color_key);
     match resolve_color_value(
         style_config,
         diagnostics,
@@ -1853,7 +1904,10 @@ fn resolve_gradient_stop(
         color_key,
         token,
     )? {
-        ColorResolution::Expression(value) => Some(value),
+        ColorResolution::Expression(color) => Some(GradientStop {
+            color,
+            transparency: opacity.map(opacity_to_transparency),
+        }),
         ColorResolution::Transparent => None,
     }
 }

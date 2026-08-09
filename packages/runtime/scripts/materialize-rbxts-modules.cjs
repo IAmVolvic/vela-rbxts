@@ -20,7 +20,17 @@ if (!fs.existsSync(sourceDir)) {
 fs.rmSync(targetDir, { recursive: true, force: true });
 fs.mkdirSync(targetDir, { recursive: true });
 
+const selfName = require(path.join(packageRoot, "package.json")).name.split(
+	"/",
+)[1];
+
 for (const entry of fs.readdirSync(sourceDir)) {
+	// This package is itself hoisted under @rbxts, and `dereference` would copy
+	// it into its own node_modules.
+	if (entry === selfName) {
+		continue;
+	}
+
 	fs.cpSync(path.join(sourceDir, entry), path.join(targetDir, entry), {
 		recursive: true,
 		dereference: true,

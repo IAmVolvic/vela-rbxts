@@ -43,11 +43,30 @@ export type ColorScaleInput = ColorValue;
 
 export type ColorInputMap = Record<string, ColorScaleInput>;
 
+export type RemResolution = {
+	x: number;
+	y: number;
+};
+
+/**
+ * How an offset in a utility turns into pixels. `base` is what one rem is worth
+ * at `baseResolution`; every other viewport scales that value and clamps it into
+ * `[min, max]`. Setting all three to the same number pins offsets to pixels and
+ * takes the scaling out of the emit entirely.
+ */
+export type RemConfig = {
+	base: number;
+	min: number;
+	max: number;
+	baseResolution: RemResolution;
+};
+
 export type ThemeConfig = {
 	colors: ThemeColors;
 	radius: ThemeScale;
 	spacing: ThemeScale;
 	fontFamily: ThemeScale;
+	rem: RemConfig;
 };
 
 export type TailwindConfig = {
@@ -56,16 +75,20 @@ export type TailwindConfig = {
 	plugins: ResolvedPlugins;
 };
 
+export type RemConfigInput = Partial<RemConfig>;
+
 export type ThemeConfigInput = {
 	colors?: ColorInputMap;
 	radius?: ThemeScale;
 	spacing?: ThemeScale;
 	fontFamily?: ThemeScale;
+	rem?: RemConfigInput;
 	extend?: {
 		colors?: ColorInputMap;
 		radius?: ThemeScale;
 		spacing?: ThemeScale;
 		fontFamily?: ThemeScale;
+		rem?: RemConfigInput;
 	};
 };
 
@@ -77,6 +100,14 @@ export type TailwindConfigInput = {
 
 const defaultConfigInput = defaultConfigSource satisfies TailwindConfigInput;
 
+/** No viewport scales an offset away from its literal value. */
+const staticRem: RemConfig = {
+	base: 16,
+	min: 16,
+	max: 16,
+	baseResolution: { x: 1920, y: 1020 },
+};
+
 const emptyConfig: TailwindConfig = {
 	preflight: false,
 	theme: {
@@ -84,6 +115,7 @@ const emptyConfig: TailwindConfig = {
 		radius: {},
 		spacing: {},
 		fontFamily: {},
+		rem: staticRem,
 	},
 	plugins: emptyResolvedPlugins(),
 };
@@ -124,6 +156,7 @@ function resolveConfig(
 			extend?.fontFamily,
 			input.theme?.fontFamily,
 		),
+		rem: resolveRemConfig(base.theme.rem, extend?.rem, input.theme?.rem),
 	};
 
 	return {
@@ -214,6 +247,31 @@ function mergeColorValues(
 	return {
 		...base,
 		...value,
+	};
+}
+
+/**
+ * `rem` is a record of four related numbers rather than a keyed scale, so a
+ * partial override merges field by field instead of replacing the family.
+ */
+export function resolveRemConfig(
+	base: RemConfig,
+	extend: RemConfigInput | undefined,
+	override: RemConfigInput | undefined,
+): RemConfig {
+	const merged = { ...base, ...extend, ...override };
+
+	return {
+		...merged,
+		// Luau's `math.clamp` errors when the bounds cross, and this config
+		// reaches the runtime verbatim, so an inverted clamp collapses onto
+		// `min` here rather than at the first viewport read.
+		max: Math.max(merged.min, merged.max),
+		baseResolution: {
+			...base.baseResolution,
+			...extend?.baseResolution,
+			...override?.baseResolution,
+		},
 	};
 }
 

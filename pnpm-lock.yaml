@@ -97,6 +97,9 @@ importers:
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
@@ -125,6 +128,9 @@ importers:
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
@@ -137,6 +143,9 @@ importers:
       '@napi-rs/cli':
         specifier: ^3.6.2
         version: 3.6.2(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.12.2)
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@vela-rbxts/config':
         specifier: workspace:*
         version: link:../config
@@ -182,6 +191,10 @@ importers:
         version: link:../types
 
   packages/runtime:
+    dependencies:
+      '@rbxts/services':
+        specifier: ^1.6.0
+        version: 1.6.0
     devDependencies:
       '@rbxts/compiler-types':
         specifier: ^3.0.0-types.0
@@ -189,9 +202,6 @@ importers:
       '@rbxts/react':
         specifier: ^17.3.7-ts.1
         version: 17.3.7-ts.1
-      '@rbxts/services':
-        specifier: ^1.6.0
-        version: 1.6.0
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
@@ -212,6 +222,9 @@ importers:
       '@rbxts/services':
         specifier: ^1.6.0
         version: 1.6.0
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@vela-rbxts/config':
         specifier: workspace:*
         version: link:../config

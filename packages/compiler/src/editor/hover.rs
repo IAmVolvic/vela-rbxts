@@ -28,7 +28,7 @@ use crate::semantic::{
         resolve_text_size_value, resolve_text_transform_value, resolve_text_wrap_value,
         resolve_text_x_alignment_value, resolve_text_y_alignment_value, resolve_transition_toggle,
         resolve_visibility_value, resolve_whitespace_value, resolve_z_index_value,
-        spacing_value_to_offset,
+        spacing_value_to_offset, split_color_opacity,
     },
 };
 use crate::transform::opacity::opacity_transparency_props;
@@ -488,7 +488,7 @@ fn describe_token(
             })
         }
         UtilityKind::DivideColor => {
-            let color_key = analysis.payload()?;
+            let (color_key, opacity) = split_color_opacity(analysis.payload()?);
             let mut diagnostics = Vec::new();
             let resolution = resolve_color_value(
                 config,
@@ -500,10 +500,16 @@ fn describe_token(
             let ColorResolution::Expression(value) = resolution else {
                 return None;
             };
+            let fade = match opacity_modifier_transparency(opacity) {
+                Some(transparency) => {
+                    format!(" Sets each separator's `BackgroundTransparency` to `{transparency}`.")
+                }
+                None => String::new(),
+            };
             Some(HoverContent {
                 display: format!("`{token}` -> separator color"),
                 documentation: format!(
-                    "{variant_prefix}Paints the `divide-x`/`divide-y` separators with `{value}`."
+                    "{variant_prefix}Paints the `divide-x`/`divide-y` separators with `{value}`.{fade}"
                 ),
             })
         }
@@ -976,7 +982,7 @@ fn describe_token(
             })
         }
         UtilityKind::GradientFrom | UtilityKind::GradientVia | UtilityKind::GradientTo => {
-            let color_key = analysis.payload()?;
+            let (color_key, opacity) = split_color_opacity(analysis.payload()?);
             let stop = match &analysis.utility {
                 UtilityKind::GradientFrom => "from",
                 UtilityKind::GradientVia => "via",
@@ -991,9 +997,15 @@ fn describe_token(
                 color_key,
                 token,
             )?;
+            let fade = match opacity_modifier_transparency(opacity) {
+                Some(transparency) => {
+                    format!(" Sets its `UIGradient.Transparency` keypoint to `{transparency}`.")
+                }
+                None => String::new(),
+            };
             let documentation = match resolution {
                 ColorResolution::Expression(value) => format!(
-                    "{variant_prefix}Adds a `{stop}` color stop `{value}` to the parent's UIGradient."
+                    "{variant_prefix}Adds a `{stop}` color stop `{value}` to the parent's UIGradient.{fade}"
                 ),
                 ColorResolution::Transparent => format!(
                     "{variant_prefix}`transparent` gradient stops are not lowered to UIGradient yet."
@@ -1016,11 +1028,21 @@ fn describe_color_token(
     prop: &str,
     variant_prefix: String,
 ) -> Option<HoverContent> {
+    let (color_key, opacity) = split_color_opacity(color_key);
     let mut diagnostics = Vec::new();
     let resolution = resolve_color_value(config, &mut diagnostics, spec, color_key, token)?;
     let documentation = match resolution {
         ColorResolution::Expression(value) => {
-            format!("{variant_prefix}Sets `{prop}` to `{value}`.")
+            let fade = match (
+                opacity_modifier_transparency(opacity),
+                spec.transparency_prop,
+            ) {
+                (Some(transparency), Some(transparency_prop)) => {
+                    format!(" Sets `{transparency_prop}` to `{transparency}`.")
+                }
+                _ => String::new(),
+            };
+            format!("{variant_prefix}Sets `{prop}` to `{value}`.{fade}")
         }
         ColorResolution::Transparent => {
             format!("{variant_prefix}Sets the matching Roblox transparency prop for `{prop}`.")
@@ -1031,6 +1053,10 @@ fn describe_color_token(
         display: format!("`{token}` -> {prop}"),
         documentation,
     })
+}
+
+fn opacity_modifier_transparency(opacity: Option<u32>) -> Option<String> {
+    resolve_opacity_value(&opacity?.to_string())
 }
 
 fn describe_border_token(
@@ -1080,6 +1106,7 @@ fn describe_border_token(
         });
     }
 
+    let (border_key, opacity) = split_color_opacity(border_key);
     let mut diagnostics = Vec::new();
     let resolution = resolve_color_value(
         config,
@@ -1089,9 +1116,12 @@ fn describe_border_token(
         token,
     )?;
 
+    let transparency = opacity
+        .and_then(|percent| resolve_opacity_value(&percent.to_string()))
+        .unwrap_or_else(|| "0".to_owned());
     let documentation = match resolution {
         ColorResolution::Expression(value) => format!(
-            "{variant_prefix}Sets `UIStroke.Color` to the resolved `{border_key}` Color3 value `{value}` and clears `UIStroke.Transparency` to `0`."
+            "{variant_prefix}Sets `UIStroke.Color` to the resolved `{border_key}` Color3 value `{value}` and `UIStroke.Transparency` to `{transparency}`."
         ),
         ColorResolution::Transparent => {
             format!("{variant_prefix}Sets `UIStroke.Transparency` to `1`.")

@@ -7,7 +7,7 @@ use crate::diagnostics::compiler::{
 use crate::ir::model::{PropEntry, StyleIr, TextSpec};
 use crate::swc::builders::{
     create_helper_child, create_helper_child_cast_any, create_opacity_provider, create_prop_attr,
-    create_prop_attr_cast_any,
+    create_prop_attr_cast_any, create_tests_attr,
 };
 use crate::transform::fade::{
     fade_component_function, fade_component_initializer, is_component_binding,
@@ -17,8 +17,7 @@ use crate::transform::jsx::{
     unsupported_host_class_name_diagnostic,
 };
 use crate::transform::module::{
-    create_opacity_module_items, create_runtime_host_module_items, element_tag_name,
-    is_supported_host_element,
+    RuntimeNeeds, create_runtime_module_items, element_tag_name, is_supported_host_element,
 };
 use crate::transform::opacity::{compose_inherited_opacity, static_opacity_alpha};
 use swc_core::{
@@ -38,9 +37,15 @@ pub(crate) struct VelaTransformer {
     pub(crate) diagnostics: Vec<Diagnostic>,
     pub(crate) ir: Vec<StyleIr>,
     pub(crate) runtime_host_needed: bool,
+    /// Whether any host in this file is handed a class value to parse, which is
+    /// the only thing the inlined config's theme scales are read for.
+    pub(crate) resolves_class_values: bool,
     /// Whether a fade left the static path and needs the runtime's opacity
     /// helpers, which a file can need without needing the whole host.
     pub(crate) opacity_helper_needed: bool,
+    /// Whether a statically lowered offset left as a rem binding, which needs
+    /// the rem namespace the same way, and the slots those bindings took.
+    pub(crate) rem: crate::transform::rem::RemScaler,
     pub(crate) class_value_scopes: ClassValueScopeStack,
     /// The alpha every enclosing `opacity-*` has left for this element. 1 is
     /// opaque, and the root starts there.
@@ -53,16 +58,19 @@ impl VisitMut for VelaTransformer {
         module.visit_mut_children_with(self);
         self.class_value_scopes.pop();
 
-        // The host already carries the opacity namespace, so a file that needs
-        // both inlines the runtime once.
-        if self.runtime_host_needed {
-            let mut runtime_items = create_runtime_host_module_items(&self.config);
+        let mut runtime_items = create_runtime_module_items(
+            &self.config,
+            &RuntimeNeeds {
+                host: self.runtime_host_needed,
+                resolves_class_values: self.resolves_class_values,
+                rem: self.rem.used.then_some(&self.config.theme.rem),
+                opacity: self.opacity_helper_needed,
+            },
+        );
+
+        if !runtime_items.is_empty() {
             runtime_items.append(&mut module.body);
             module.body = runtime_items;
-        } else if self.opacity_helper_needed {
-            let mut opacity_items = create_opacity_module_items();
-            opacity_items.append(&mut module.body);
-            module.body = opacity_items;
         }
     }
 
@@ -304,18 +312,32 @@ impl VisitMut for VelaTransformer {
         };
 
         self.changed = true;
+        if lowered.needs_runtime_host {
+            crate::transform::branch::hoist_helpers_shared_with_rules(&mut lowered.style_ir);
+        }
         self.ir.push(lowered.style_ir.clone());
 
+        let tests = std::mem::take(&mut lowered.tests);
         let mut attrs = lowered.preserved_attrs;
         if let Some(runtime_class_name) = lowered.runtime_class_name {
             attrs.push(JSXAttrOrSpread::JSXAttr(runtime_class_name));
         }
 
+        // A helper is a host instance of its own that the runtime host never
+        // reads back, so its offsets take the binding on either path.
+        let scales_rem = !self.config.theme.rem.is_static();
         let helper_children = lowered
             .style_ir
             .base
             .helpers
             .into_iter()
+            .map(|helper| {
+                if !scales_rem {
+                    return helper;
+                }
+
+                self.rem.helper(helper)
+            })
             .map(if lowered.needs_runtime_host {
                 create_helper_child_cast_any
             } else {
@@ -325,6 +347,19 @@ impl VisitMut for VelaTransformer {
 
         if lowered.needs_runtime_host {
             self.runtime_host_needed = true;
+            // A spread can carry a `className` this pass never reads, so it
+            // counts as a class value the host may have to resolve.
+            self.resolves_class_values |= has_attr(&attrs, "className")
+                || attrs
+                    .iter()
+                    .any(|attr| matches!(attr, JSXAttrOrSpread::SpreadElement(_)));
+            // The host re-renders on a rem change anyway, so its own props stay
+            // values and it is told which of them to scale.
+            let rem_props = if scales_rem {
+                crate::transform::rem::scaled_prop_names(&lowered.style_ir.base.props)
+            } else {
+                Vec::new()
+            };
             attrs.extend(
                 lowered
                     .style_ir
@@ -333,12 +368,22 @@ impl VisitMut for VelaTransformer {
                     .into_iter()
                     .map(create_prop_attr_cast_any),
             );
+            if !rem_props.is_empty() {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaRem".into(),
+                    value: serde_json::to_string(&rem_props)
+                        .expect("rem prop names must serialize to JSON"),
+                }));
+            }
             if !lowered.style_ir.runtime_rules.is_empty() {
                 attrs.push(create_prop_attr(PropEntry {
                     name: "__velaRules".into(),
                     value: serde_json::to_string(&lowered.style_ir.runtime_rules)
                         .expect("runtime rules must serialize to JSON"),
                 }));
+            }
+            if !tests.is_empty() {
+                attrs.push(create_tests_attr(tests));
             }
             if let Some(transition) = &lowered.style_ir.transition {
                 attrs.push(create_prop_attr(PropEntry {
@@ -389,14 +434,13 @@ impl VisitMut for VelaTransformer {
                 closing.name = element.opening.name.clone();
             }
         } else {
-            attrs.extend(
-                lowered
-                    .style_ir
-                    .base
-                    .props
-                    .into_iter()
-                    .map(create_prop_attr),
-            );
+            attrs.extend(lowered.style_ir.base.props.into_iter().map(|prop| {
+                if !scales_rem {
+                    return create_prop_attr(prop);
+                }
+
+                create_prop_attr(self.rem.prop(prop))
+            }));
         }
 
         element.opening.attrs = attrs;
@@ -465,7 +509,7 @@ impl VelaTransformer {
                 if collapse.is_dynamic() {
                     return None;
                 }
-                static_opacity_alpha(collapse.static_tokens, &self.config)
+                static_opacity_alpha(collapse.static_tokens(), &self.config)
             }
             _ => None,
         }

@@ -5,6 +5,7 @@ import {
 	UserInputService as __VelaUserInputService,
 	Workspace as __VelaWorkspace,
 } from "@rbxts/services";
+import __VelaConfigDefaults from "./config-defaults.json";
 
 type ClassDictionary = Record<string, boolean | null | undefined>;
 type ClassValue =
@@ -16,6 +17,28 @@ type ClassValue =
 	| ClassDictionary
 	| ClassValue[];
 
+type RuntimeRemConfig = {
+	base: number;
+	min: number;
+	max: number;
+	baseResolution: {
+		x: number;
+		y: number;
+	};
+};
+
+/// What a module scaling offsets holds instead of the namespace: the slot table
+/// the emit numbers from zero, over the one rem curve every module shares.
+type VelaRemScaler = {
+	scale: <T>(value: T, slot: number) => __VelaReact.Binding<T>;
+	scaleText: (value: number, slot: number) => __VelaReact.Binding<number>;
+};
+
+/// The theme tables arrive as the difference from the defaults this package
+/// carries, keyed at the top level — a color family, a radius step. Most
+/// projects change none of them and hand over four empty tables. A table listed
+/// in `replaced` dropped entries the defaults had, so it is used as given
+/// instead of merged.
 type VelaRuntimeConfig = {
 	preflight: boolean;
 	theme: {
@@ -23,6 +46,8 @@ type VelaRuntimeConfig = {
 		radius: Record<string, string>;
 		spacing: Record<string, string>;
 		fontFamily: Record<string, string>;
+		rem?: RuntimeRemConfig;
+		replaced?: string[];
 	};
 	plugins?: {
 		utilities?: Record<string, string | Record<string, string>>;
@@ -55,26 +80,249 @@ namespace __VelaDefaults {
 		"rbxasset://fonts/families/SourceSansPro.json";
 }
 
-namespace __VelaOpacity {
-	const CONTEXT_KEY = "__velaOpacityContext";
+/// One rem is what an offset in a utility is worth, and it follows the viewport
+/// so the same class reads at the same visual weight on a phone and on a 4K
+/// monitor. The curve is Littensy's rem provider: the diagonal against a base
+/// resolution, an aspect cap so an ultrawide does not inflate the scale, and a
+/// gentler falloff in portrait.
+namespace __VelaRem {
+	const MAX_ASPECT_RATIO = 19 / 9;
 
-	/// The runtime is inlined into every file that needs it, so a `createContext`
-	/// here would make one context per module and the alpha would never leave the
-	/// module it started in. Crossing a component boundary means every copy has
-	/// to agree on one object, and a shared global is where they can meet.
-	function sharedContext(): __VelaReact.Context<number> {
-		const globals = _G as unknown as Record<string, unknown>;
-		const existing = globals[CONTEXT_KEY];
-		if (existing !== undefined) {
-			return existing as __VelaReact.Context<number>;
+	/// Where a portrait viewport's factor starts, instead of falling to zero
+	/// with its diagonal.
+	const PORTRAIT_FLOOR = 0.25;
+
+	const DEFAULT_CONFIG: RuntimeRemConfig = {
+		base: 16,
+		min: 16,
+		max: 16,
+		baseResolution: { x: 1920, y: 1020 },
+	};
+
+	let config = DEFAULT_CONFIG;
+	let cameraConnection: RBXScriptConnection | undefined;
+	let connected = false;
+
+	const [remBinding, setRem] = __VelaReact.createBinding(DEFAULT_CONFIG.base);
+
+	export function configure(resolved: RuntimeRemConfig | undefined) {
+		if (resolved === undefined) {
+			return;
 		}
 
-		const created = __VelaReact.createContext(1);
-		globals[CONTEXT_KEY] = created;
-		return created;
+		config = resolved;
+
+		if (connected) {
+			refresh();
+		}
 	}
 
-	export const Context = sharedContext();
+	export function resolve(camera: RuntimeCamera | undefined): number {
+		const viewport = camera?.ViewportSize;
+		const width = viewport?.X ?? 0;
+		const height = viewport?.Y ?? 0;
+
+		// ViewportSize stays 1x1 until the first frame renders, and clamping that
+		// to the minimum would paint one frame at the wrong scale.
+		if (width <= 1 || height <= 1) {
+			return math.clamp(config.base, config.min, config.max);
+		}
+
+		const boundedWidth = math.min(width, height * MAX_ASPECT_RATIO);
+		const diagonal = math.sqrt(boundedWidth * boundedWidth + height * height);
+		const baseDiagonal = math.sqrt(
+			config.baseResolution.x * config.baseResolution.x +
+				config.baseResolution.y * config.baseResolution.y,
+		);
+		const scale = baseDiagonal > 0 ? diagonal / baseDiagonal : 1;
+		const landscape = boundedWidth > height || scale >= 1;
+		const factor = landscape
+			? scale
+			: PORTRAIT_FLOOR + scale * (1 - PORTRAIT_FLOOR);
+
+		return math.clamp(math.round(config.base * factor), config.min, config.max);
+	}
+
+	/// What a literal offset in the emit multiplies by. 1 at the base
+	/// resolution, so a project that never resizes gets its numbers back.
+	export function ratio(rem: number): number {
+		return config.base > 0 ? rem / config.base : 1;
+	}
+
+	/// Roblox stops honoring `TextSize` past 100 and does it silently, so a
+	/// scaled size stops there too. Left uncapped, a transition would tween
+	/// toward a size the engine never paints and stall part-way.
+	export const TEXT_SIZE_CEILING = 100;
+
+	/// One binding per call site in the emit. Rebuilt inline it would be a new
+	/// binding on every render, and the reconciler treats a new binding as a
+	/// fresh subscription — so the slot the transformer assigned holds it. The
+	/// slots belong to the scaler rather than to this namespace: the emit numbers
+	/// them from zero in every module, and one shared table would hand a module
+	/// the binding its neighbour built.
+	export function scaler(): VelaRemScaler {
+		const slots: __VelaReact.Binding<unknown>[] = [];
+
+		function cached(
+			slot: number,
+			build: () => __VelaReact.Binding<unknown>,
+		): __VelaReact.Binding<unknown> {
+			connect();
+
+			let binding = slots[slot];
+			if (binding === undefined) {
+				binding = build();
+				slots[slot] = binding;
+			}
+
+			return binding;
+		}
+
+		// The emit hands offsets over as a binding rather than a value: a
+		// statically lowered element has no render of its own to run again when
+		// the viewport changes, and a binding writes the property without one.
+		//
+		// Declarations rather than arrows: the compiler reads this file as TSX,
+		// where `<T>(…) =>` opens a JSX element instead of a type parameter.
+		function scale<T>(value: T, slot: number): __VelaReact.Binding<T> {
+			return cached(slot, () =>
+				remBinding.map((rem) => apply(value as never, ratio(rem)) as never),
+			) as unknown as __VelaReact.Binding<T>;
+		}
+
+		function scaleText(
+			value: number,
+			slot: number,
+		): __VelaReact.Binding<number> {
+			return cached(slot, () =>
+				remBinding.map((rem) =>
+					math.min(value * ratio(rem), TEXT_SIZE_CEILING),
+				),
+			) as __VelaReact.Binding<number>;
+		}
+
+		return { scale, scaleText };
+	}
+
+	/// Props whose numbers are pixel offsets. Everything else a utility writes is
+	/// a scale, a color, an alignment or an order, and rem must leave those
+	/// alone — `UIGradient.Offset` is normalized, `UIScale.Scale` is a multiplier.
+	const SCALED_PROPS: Record<string, true> = {
+		BlurRadius: true,
+		CellPadding: true,
+		CellSize: true,
+		CornerRadius: true,
+		GapOffset: true,
+		GridCrossExtent: true,
+		MaxHeight: true,
+		MaxSize: true,
+		MaxWidth: true,
+		MinHeight: true,
+		MinSize: true,
+		MinWidth: true,
+		Padding: true,
+		PaddingBottom: true,
+		PaddingLeft: true,
+		PaddingRight: true,
+		PaddingTop: true,
+		Position: true,
+		PositionX: true,
+		PositionY: true,
+		ScrollBarThickness: true,
+		Size: true,
+		SizeX: true,
+		SizeY: true,
+		Spread: true,
+		TextSize: true,
+		Thickness: true,
+		TranslateX: true,
+		TranslateY: true,
+	};
+
+	export function scalesProp(name: string): boolean {
+		return SCALED_PROPS[name] === true;
+	}
+
+	export function apply(
+		value: RuntimePropValue,
+		remRatio: number,
+	): RuntimePropValue {
+		if (remRatio === 1) {
+			return value;
+		}
+
+		if (typeIs(value, "number")) {
+			return value * remRatio;
+		}
+
+		if (typeIs(value, "UDim")) {
+			return new UDim(value.Scale, value.Offset * remRatio);
+		}
+
+		if (typeIs(value, "UDim2")) {
+			return new UDim2(
+				value.X.Scale,
+				value.X.Offset * remRatio,
+				value.Y.Scale,
+				value.Y.Offset * remRatio,
+			);
+		}
+
+		if (typeIs(value, "Vector2")) {
+			return new Vector2(value.X * remRatio, value.Y * remRatio);
+		}
+
+		return value;
+	}
+
+	function refresh() {
+		const latest = resolve(
+			__VelaWorkspace.CurrentCamera as RuntimeCamera | undefined,
+		);
+		if (remBinding.getValue() !== latest) {
+			setRem(latest);
+		}
+	}
+
+	/// One camera subscription, set up the first time an offset asks for a
+	/// binding rather than at module load, so a game that never scales an offset
+	/// never listens.
+	function connect() {
+		if (connected) {
+			return;
+		}
+
+		connected = true;
+		__VelaWorkspace.GetPropertyChangedSignal("CurrentCamera").Connect(() => {
+			watchCamera();
+			refresh();
+		});
+		watchCamera();
+		refresh();
+	}
+
+	function watchCamera() {
+		cameraConnection?.Disconnect();
+
+		const camera = __VelaWorkspace.CurrentCamera as RuntimeCamera | undefined;
+		cameraConnection =
+			camera === undefined
+				? undefined
+				: camera.GetPropertyChangedSignal("ViewportSize").Connect(refresh);
+	}
+}
+
+/// What a module gets when it scales an offset without needing the host. The
+/// curve is configured here rather than at import time because a file can reach
+/// rem without ever constructing the host that would otherwise carry the config.
+export function createVelaRemScaler(config?: RuntimeRemConfig): VelaRemScaler {
+	__VelaRem.configure(config);
+
+	return __VelaRem.scaler();
+}
+
+export namespace __VelaOpacity {
+	export const Context = __VelaReact.createContext(1);
 
 	/// Mirrors `opacity_transparency_props`: every channel an instance paints
 	/// itself. A CanvasGroup composites its whole subtree, so `GroupTransparency`
@@ -111,40 +359,22 @@ namespace __VelaOpacity {
 		return 1 - (1 - transparency) * alpha;
 	}
 
-	const PROVIDER_KEY = "__velaOpacityProvider";
-
 	type ProviderProps = { value: number; children?: defined };
 
 	/// Fades everything below it, the alpha the transformer knew multiplied by
 	/// whatever it is already nested in. The two have to multiply here rather
 	/// than at the context, where the inner value would simply win.
-	function makeProvider(): (props: ProviderProps) => __VelaReact.Element {
-		return (props: ProviderProps) => {
-			const total = __VelaReact.useContext(Context) * props.value;
+	export const Provider = (props: ProviderProps) => {
+		const total = __VelaReact.useContext(Context) * props.value;
 
-			// Instances below cannot read a context, so they are faded here; a
-			// component or a runtime host reads `total` for itself.
-			return __VelaReact.createElement(
-				Context.Provider,
-				{ value: total },
-				applyAlpha(props.children, total) as defined,
-			) as __VelaReact.Element;
-		};
-	}
-
-	function sharedProvider(): (props: ProviderProps) => __VelaReact.Element {
-		const globals = _G as unknown as Record<string, unknown>;
-		const existing = globals[PROVIDER_KEY];
-		if (existing !== undefined) {
-			return existing as (props: ProviderProps) => __VelaReact.Element;
-		}
-
-		const created = makeProvider();
-		globals[PROVIDER_KEY] = created;
-		return created;
-	}
-
-	export const Provider = sharedProvider();
+		// Instances below cannot read a context, so they are faded here; a
+		// component or a runtime host reads `total` for itself.
+		return __VelaReact.createElement(
+			Context.Provider,
+			{ value: total },
+			applyAlpha(props.children, total) as defined,
+		) as __VelaReact.Element;
+	};
 
 	/// Hands `alpha` to everything rendered below, across the boundary the
 	/// transformer cannot see through. Relative, like the provider it renders:
@@ -312,6 +542,13 @@ type RuntimeCondition =
 	  }
 	| {
 			kind: "focus";
+	  }
+	/// A branch of a class value the transformer read but could not decide. The
+	/// tokens were resolved there; only which of them apply is settled here.
+	| {
+			kind: "test";
+			index: number;
+			expected: boolean;
 	  };
 
 type RuntimeRule = {
@@ -340,12 +577,16 @@ type RuntimeSizeAxisValue = {
 
 type RuntimeEnvironment = {
 	width: number;
+	rem: number;
 	orientation: "portrait" | "landscape";
 	input: "touch" | "mouse" | "gamepad";
 	colorScheme: "light" | "dark";
 	hovered: boolean;
 	pressed: boolean;
 	focused: boolean;
+	/// What the element's own `__velaTests` came to this render, which only the
+	/// host that was handed them can answer.
+	tests?: readonly boolean[];
 };
 
 type RuntimeCamera = {
@@ -362,6 +603,8 @@ type RuntimePropValue =
 	| boolean
 	| Color3
 	| ColorSequence
+	| NumberSequence
+	| Font
 	| UDim
 	| UDim2
 	| Vector2
@@ -432,12 +675,14 @@ type RuntimeDivide = {
 	axis: string;
 	thickness: number;
 	color?: string;
+	transparency?: number;
 };
 
 type RuntimeDivideState = {
 	axis?: string;
 	thickness?: number;
 	color?: string;
+	transparency?: number;
 };
 
 type RuntimeMargin = {
@@ -493,14 +738,29 @@ type RuntimeResolution = {
 	gradientFrom?: Color3;
 	gradientVia?: Color3;
 	gradientTo?: Color3;
+	gradientFromTransparency?: number;
+	gradientViaTransparency?: number;
+	gradientToTransparency?: number;
 	usesHover?: boolean;
 	usesActive?: boolean;
 	usesFocus?: boolean;
+	/// What a pixel offset resolved at runtime multiplies by, applied as each
+	/// value lands rather than at the end so composition never sees a raw offset.
+	remRatio?: number;
 };
 
 type VelaRuntimeHostProps = {
 	__velaTag: VelaRuntimeTag;
 	__velaRules?: readonly RuntimeRule[];
+	/// What each branch rule's condition reads, by index. The transformer
+	/// narrows every test where it is written, so an expression several rules
+	/// hang on is evaluated once.
+	__velaTests?: readonly boolean[];
+	/// Which of the props below the transformer lowered are pixel offsets. It
+	/// names them instead of scaling them in the emit because this element
+	/// re-renders on a rem change anyway, and a value beats a binding the
+	/// composition step would have to read back.
+	__velaRem?: readonly string[];
 	__velaTransition?: RuntimeTransition;
 	__velaAnimation?: string;
 	__velaText?: RuntimeTextSpec;
@@ -530,6 +790,8 @@ export function createVelaRuntimeHost(
 		__VelaMotion.setDriver(motionDriver);
 	}
 
+	__VelaRem.configure(config.theme.rem);
+
 	const theme = __VelaEnv.normalizeTheme(config);
 	const preflight = config.preflight;
 
@@ -545,12 +807,14 @@ export function createVelaRuntimeHost(
 			const [focused, setFocused] = __VelaReact.useState(false);
 			const environment: RuntimeEnvironment = {
 				width: globalEnvironment.width,
+				rem: globalEnvironment.rem,
 				orientation: globalEnvironment.orientation,
 				input: globalEnvironment.input,
 				colorScheme: globalEnvironment.colorScheme,
 				hovered,
 				pressed,
 				focused,
+				tests: props.__velaTests,
 			};
 			const __velaTag = props.__velaTag;
 			const __velaRules = props.__velaRules ?? [];
@@ -596,10 +860,12 @@ export function createVelaRuntimeHost(
 			const margin = __VelaMargin.resolveMarginConfig(
 				props.__velaMargin,
 				resolution.margin,
+				resolution.remRatio ?? 1,
 			);
 			const divide = __VelaDivide.resolveDivideConfig(
 				props.__velaDivide,
 				resolution.divide,
+				resolution.remRatio ?? 1,
 			);
 
 			const instanceRef = __VelaReact.useRef<Instance | undefined>(undefined);
@@ -615,6 +881,8 @@ export function createVelaRuntimeHost(
 				if (
 					name !== "__velaTag" &&
 					name !== "__velaRules" &&
+					name !== "__velaTests" &&
+					name !== "__velaRem" &&
 					name !== "__velaTransition" &&
 					name !== "__velaAnimation" &&
 					name !== "__velaText" &&
@@ -627,8 +895,29 @@ export function createVelaRuntimeHost(
 					hostProps[name] = value;
 				}
 			}
+			// Before the resolution merges in: what it carries was already scaled
+			// on its way into the resolution, and scaling twice would compound.
+			const remRatio = resolution.remRatio ?? 1;
+			if (remRatio !== 1) {
+				for (const name of props.__velaRem ?? []) {
+					const value = hostProps[name];
+					if (value !== undefined) {
+						hostProps[name] = __VelaRem.apply(
+							value as RuntimePropValue,
+							remRatio,
+						);
+					}
+				}
+			}
 			for (const [name, value] of pairs(resolution.props)) {
 				hostProps[name] = value;
+			}
+			const textSize = hostProps.TextSize;
+			if (
+				typeIs(textSize, "number") &&
+				textSize > __VelaRem.TEXT_SIZE_CEILING
+			) {
+				hostProps.TextSize = __VelaRem.TEXT_SIZE_CEILING;
 			}
 
 			// Props the element was handed rather than resolved — its own static
@@ -876,9 +1165,14 @@ namespace __VelaDivide {
 
 		if (__VelaLua.startsWith(token, "divide-")) {
 			const key = __VelaLua.substring(token, __VelaLua.stringLength("divide-"));
-			const color = resolveDivideColor(theme, key);
+			const [base, opacity] = __VelaColor.splitColorOpacity(key);
+			const color = resolveDivideColor(theme, base);
 			if (color !== undefined) {
-				divideState(resolution).color = color;
+				const state = divideState(resolution);
+				state.color = color;
+				if (opacity !== undefined) {
+					state.transparency = __VelaColor.opacityToTransparency(opacity);
+				}
 			}
 			return true;
 		}
@@ -903,6 +1197,7 @@ namespace __VelaDivide {
 	export function resolveDivideConfig(
 		base: RuntimeDivide | undefined,
 		dynamic: RuntimeDivideState | undefined,
+		remRatio: number,
 	): RuntimeDivide | undefined {
 		const axis = dynamic?.axis ?? base?.axis;
 		if (axis === undefined) {
@@ -911,8 +1206,9 @@ namespace __VelaDivide {
 
 		return {
 			axis,
-			thickness: dynamic?.thickness ?? base?.thickness ?? 1,
+			thickness: (dynamic?.thickness ?? base?.thickness ?? 1) * remRatio,
 			color: dynamic?.color ?? base?.color,
+			transparency: dynamic?.transparency ?? base?.transparency,
 		};
 	}
 
@@ -943,6 +1239,7 @@ namespace __VelaDivide {
 				result.push(
 					__VelaReact.createElement("frame", {
 						BackgroundColor3: color,
+						BackgroundTransparency: divide.transparency ?? 0,
 						BorderSizePixel: 0,
 						Size: size,
 					} as never),
@@ -1045,15 +1342,19 @@ namespace __VelaMargin {
 		return false;
 	}
 
+	/// Neither source has met rem yet — the static spec came straight from the
+	/// emit, and a margin token writes its offset to the resolution rather than
+	/// through the prop path — so the merged result is scaled once, here.
 	export function resolveMarginConfig(
 		base: RuntimeMargin | undefined,
 		dynamic: RuntimeMarginState | undefined,
+		remRatio: number,
 	): RuntimeMargin | undefined {
 		const margin: RuntimeMargin = {
-			top: dynamic?.top ?? base?.top ?? 0,
-			right: dynamic?.right ?? base?.right ?? 0,
-			bottom: dynamic?.bottom ?? base?.bottom ?? 0,
-			left: dynamic?.left ?? base?.left ?? 0,
+			top: (dynamic?.top ?? base?.top ?? 0) * remRatio,
+			right: (dynamic?.right ?? base?.right ?? 0) * remRatio,
+			bottom: (dynamic?.bottom ?? base?.bottom ?? 0) * remRatio,
+			left: (dynamic?.left ?? base?.left ?? 0) * remRatio,
 		};
 
 		if (
@@ -1257,6 +1558,7 @@ namespace __VelaEnv {
 				setEnvironment((previous) => {
 					const latest = readRuntimeEnvironment(camera);
 					return previous.width === latest.width &&
+						previous.rem === latest.rem &&
 						previous.orientation === latest.orientation &&
 						previous.input === latest.input &&
 						previous.colorScheme === latest.colorScheme
@@ -1315,6 +1617,7 @@ namespace __VelaEnv {
 
 		return {
 			width,
+			rem: __VelaRem.resolve(camera),
 			orientation: width >= height ? "landscape" : "portrait",
 			input: detectInputMode(),
 			colorScheme: readColorScheme(),
@@ -1352,12 +1655,69 @@ namespace __VelaEnv {
 		return "mouse";
 	}
 
+	/// The defaults every project starts from. They live here rather than in
+	/// each emitted module because they are the same table in every one of them
+	/// — and they are most of what a theme weighs.
+	const DEFAULT_THEME = __VelaConfigDefaults.theme as unknown as {
+		colors: Record<string, string | Record<string, string>>;
+		radius: Record<string, string>;
+		spacing: Record<string, string>;
+		fontFamily: Record<string, string>;
+	};
+
+	function withDefaults<T>(
+		defaults: Record<string, T>,
+		overrides: Record<string, T>,
+		replaced: boolean,
+	): Record<string, T> {
+		if (replaced) {
+			return overrides;
+		}
+
+		const merged: Record<string, T> = {};
+
+		for (const [key, value] of pairs(defaults)) {
+			merged[key as string] = value as T;
+		}
+		for (const [key, value] of pairs(overrides)) {
+			merged[key as string] = value as T;
+		}
+
+		return merged;
+	}
+
 	export function normalizeTheme(config: VelaRuntimeConfig): RuntimeTheme {
+		const replaced = config.theme.replaced ?? [];
+		const isReplaced = (name: string) =>
+			replaced.some((entry) => entry === name);
+
 		return {
-			colors: normalizeColorRegistry(config.theme.colors),
-			radius: normalizeRadiusScale(config.theme.radius),
-			spacing: normalizeSpacingScale(config.theme.spacing),
-			fontFamily: config.theme.fontFamily,
+			colors: normalizeColorRegistry(
+				withDefaults(
+					DEFAULT_THEME.colors,
+					config.theme.colors,
+					isReplaced("colors"),
+				),
+			),
+			radius: normalizeRadiusScale(
+				withDefaults(
+					DEFAULT_THEME.radius,
+					config.theme.radius,
+					isReplaced("radius"),
+				),
+			),
+			spacing: normalizeSpacingScale(
+				withDefaults(
+					DEFAULT_THEME.spacing,
+					config.theme.spacing,
+					isReplaced("spacing"),
+				),
+			),
+			fontFamily: withDefaults(
+				DEFAULT_THEME.fontFamily,
+				config.theme.fontFamily,
+				isReplaced("fontFamily"),
+			),
 			pluginUtilities: config.plugins?.utilities ?? {},
 		};
 	}
@@ -1430,6 +1790,7 @@ namespace __VelaResolution {
 		const resolution: RuntimeResolution = {
 			props: {},
 			helpers: [],
+			remRatio: __VelaRem.ratio(environment.rem),
 		};
 
 		for (const rule of runtimeRules) {
@@ -2163,6 +2524,10 @@ namespace __VelaVariant {
 				return environment.pressed;
 			case "focus":
 				return environment.focused;
+			case "test":
+				return (
+					(environment.tests?.[condition.index] ?? false) === condition.expected
+				);
 			default:
 				return false;
 		}
@@ -2313,6 +2678,27 @@ namespace __VelaToken {
 		props: RuntimeResolvedPropEntry[],
 	): RuntimeResolvedEffectBundle {
 		return { props: [], helpers: [{ tag, props }] };
+	}
+
+	/// A gradient stop carries its `/N` alpha beside the color, because
+	/// UIGradient only learns the keypoint positions once every stop is known.
+	export function gradientStopEffect(
+		theme: RuntimeTheme,
+		name: string,
+		key: string,
+	): RuntimeResolvedEffectBundle | undefined {
+		const stop = __VelaColor.resolveGradientStop(theme, key);
+		if (stop === undefined) {
+			return undefined;
+		}
+
+		const [color, transparency] = stop;
+		const props: RuntimeResolvedPropEntry[] = [{ name, value: color }];
+		if (transparency !== undefined) {
+			props.push({ name: `${name}Transparency`, value: transparency });
+		}
+
+		return propsEffect(props);
 	}
 
 	export function resolveUtilityToken(
@@ -2774,11 +3160,11 @@ namespace __VelaToken {
 			["via-", "GradientVia"],
 		] as Array<[string, string]>) {
 			if (__VelaLua.startsWith(token, prefix)) {
-				const stop = __VelaColor.resolveGradientStop(
+				return gradientStopEffect(
 					theme,
+					name,
 					__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
 				);
-				return stop === undefined ? undefined : propEffect(name, stop);
 			}
 		}
 
@@ -2793,11 +3179,11 @@ namespace __VelaToken {
 		}
 
 		if (__VelaLua.startsWith(token, "to-")) {
-			const stop = __VelaColor.resolveGradientStop(
+			return gradientStopEffect(
 				theme,
+				"GradientTo",
 				__VelaLua.substring(token, __VelaLua.stringLength("to-")),
 			);
-			return stop === undefined ? undefined : propEffect("GradientTo", stop);
 		}
 
 		for (const prefix of [
@@ -3258,9 +3644,17 @@ namespace __VelaColor {
 	export function resolveGradientStop(
 		theme: RuntimeTheme,
 		key: string,
-	): Color3 | undefined {
-		const [base] = splitColorOpacity(key);
-		return resolveThemeColor(theme, base)?.color;
+	): [Color3, number | undefined] | undefined {
+		const [base, opacity] = splitColorOpacity(key);
+		const color = resolveThemeColor(theme, base)?.color;
+		if (color === undefined) {
+			return undefined;
+		}
+
+		return [
+			color,
+			opacity === undefined ? undefined : opacityToTransparency(opacity),
+		];
 	}
 
 	/// Mirrors `resolve_color_value`: an arbitrary hex, the `transparent` keyword,
@@ -4123,6 +4517,159 @@ namespace __VelaValue {
 		);
 	}
 
+	export function parseVector2(value: string): Vector2 | undefined {
+		const args =
+			__VelaLua.parseCallArguments(value, "new Vector2(", ")") ??
+			__VelaLua.parseCallArguments(value, "Vector2.new(", ")");
+		if (args === undefined || __VelaLua.arraySize(args) !== 2) {
+			return undefined;
+		}
+
+		return new Vector2(
+			__VelaLua.toNumber(args[0]) ?? 0,
+			__VelaLua.toNumber(args[1]) ?? 0,
+		);
+	}
+
+	/// `new Font("family", Enum.FontWeight.Bold, Enum.FontStyle.Italic)`, with
+	/// the last two optional the way the static path writes them.
+	export function parseFont(value: string): Font | undefined {
+		const args = __VelaLua.splitCallArguments(value, "new Font(", ")");
+		if (args === undefined) {
+			return undefined;
+		}
+
+		const size = __VelaLua.arraySize(args);
+		if (size < 1 || size > 3) {
+			return undefined;
+		}
+
+		const family = __VelaLua.unquote(args[0] ?? "");
+		if (family === undefined) {
+			return undefined;
+		}
+
+		const weight = parseEnumValue(args[1] ?? "") as Enum.FontWeight | undefined;
+		const style = parseEnumValue(args[2] ?? "") as Enum.FontStyle | undefined;
+
+		return new Font(
+			family,
+			weight ?? Enum.FontWeight.Regular,
+			style ?? Enum.FontStyle.Normal,
+		);
+	}
+
+	/// The two- and three-stop forms the gradient families write, plus the
+	/// keypoint array a `via` stop turns into.
+	export function parseColorSequence(value: string): ColorSequence | undefined {
+		const args = __VelaLua.splitCallArguments(value, "new ColorSequence(", ")");
+		if (args === undefined) {
+			return undefined;
+		}
+
+		const first = args[0];
+		if (first === undefined) {
+			return undefined;
+		}
+
+		if (__VelaLua.startsWith(first, "[")) {
+			const body = __VelaLua.substring(
+				first,
+				1,
+				__VelaLua.stringLength(first) - 1,
+			);
+			const keypoints: ColorSequenceKeypoint[] = [];
+			for (const entry of __VelaLua.splitTopLevel(body, ",")) {
+				const parts = __VelaLua.splitCallArguments(
+					__VelaLua.trim(entry),
+					"new ColorSequenceKeypoint(",
+					")",
+				);
+				const position = __VelaLua.toNumber(parts?.[0]);
+				const color = parseColor3(parts?.[1] ?? "");
+				if (position === undefined || color === undefined) {
+					return undefined;
+				}
+				keypoints.push(new ColorSequenceKeypoint(position, color));
+			}
+
+			return __VelaLua.arraySize(keypoints) >= 2
+				? new ColorSequence(keypoints)
+				: undefined;
+		}
+
+		const start = parseColor3(first);
+		if (start === undefined) {
+			return undefined;
+		}
+
+		const second = args[1];
+		if (second === undefined) {
+			return new ColorSequence(start);
+		}
+
+		const stop = parseColor3(second);
+		return stop === undefined ? undefined : new ColorSequence(start, stop);
+	}
+
+	/// The alpha half of a gradient, written by the `/N` modifier on a stop.
+	export function parseNumberSequence(
+		value: string,
+	): NumberSequence | undefined {
+		const args = __VelaLua.splitCallArguments(
+			value,
+			"new NumberSequence(",
+			")",
+		);
+		if (args === undefined) {
+			return undefined;
+		}
+
+		const first = args[0];
+		if (first === undefined) {
+			return undefined;
+		}
+
+		if (__VelaLua.startsWith(first, "[")) {
+			const body = __VelaLua.substring(
+				first,
+				1,
+				__VelaLua.stringLength(first) - 1,
+			);
+			const keypoints: NumberSequenceKeypoint[] = [];
+			for (const entry of __VelaLua.splitTopLevel(body, ",")) {
+				const parts = __VelaLua.splitCallArguments(
+					__VelaLua.trim(entry),
+					"new NumberSequenceKeypoint(",
+					")",
+				);
+				const position = __VelaLua.toNumber(parts?.[0]);
+				const alpha = __VelaLua.toNumber(parts?.[1]);
+				if (position === undefined || alpha === undefined) {
+					return undefined;
+				}
+				keypoints.push(new NumberSequenceKeypoint(position, alpha));
+			}
+
+			return __VelaLua.arraySize(keypoints) >= 2
+				? new NumberSequence(keypoints)
+				: undefined;
+		}
+
+		const start = __VelaLua.toNumber(first);
+		if (start === undefined) {
+			return undefined;
+		}
+
+		const second = args[1];
+		if (second === undefined) {
+			return new NumberSequence(start);
+		}
+
+		const stop = __VelaLua.toNumber(second);
+		return stop === undefined ? undefined : new NumberSequence(start, stop);
+	}
+
 	export function parseEnumValue(value: string): EnumItem | undefined {
 		if (!__VelaLua.startsWith(value, "Enum.")) {
 			return undefined;
@@ -4230,7 +4777,18 @@ namespace __VelaApply {
 		}
 
 		for (const helper of effects.helpers) {
-			setHelperProp(resolution.helpers, helper.tag, helper.props);
+			setResolvedHelperProp(
+				resolution.helpers,
+				helper.tag,
+				helper.props.map((prop) => ({
+					name: prop.name,
+					value: scaleHelperProp(
+						prop.name,
+						parseRuntimePropValue(prop.value),
+						resolution,
+					),
+				})),
+			);
 		}
 	}
 
@@ -4243,8 +4801,30 @@ namespace __VelaApply {
 		}
 
 		for (const helper of effects.helpers) {
-			setResolvedHelperProp(resolution.helpers, helper.tag, helper.props);
+			setResolvedHelperProp(
+				resolution.helpers,
+				helper.tag,
+				helper.props.map((prop) => ({
+					name: prop.name,
+					value: scaleHelperProp(prop.name, prop.value, resolution),
+				})),
+			);
 		}
+	}
+
+	/// Only a value arriving from a rule or a class token is scaled here. What
+	/// the composition steps below write is derived from resolution fields that
+	/// were already scaled on the way in.
+	function scaleHelperProp(
+		name: string,
+		value: RuntimePropValue,
+		resolution: RuntimeResolution,
+	): RuntimePropValue {
+		const remRatio = resolution.remRatio ?? 1;
+
+		return remRatio !== 1 && __VelaRem.scalesProp(name)
+			? __VelaRem.apply(value, remRatio)
+			: value;
 	}
 
 	/// Several utility families only meet at the end — two axes of one `Size`, the
@@ -4254,8 +4834,14 @@ namespace __VelaApply {
 	export function applyResolutionProp(
 		resolution: RuntimeResolution,
 		name: string,
-		value: RuntimePropValue,
+		rawValue: RuntimePropValue,
 	) {
+		const remRatio = resolution.remRatio ?? 1;
+		const value =
+			remRatio !== 1 && __VelaRem.scalesProp(name)
+				? __VelaRem.apply(rawValue, remRatio)
+				: rawValue;
+
 		if (name === "OpacityAlpha") {
 			if (typeIs(value, "number")) {
 				resolution.opacityAlpha = value;
@@ -4416,6 +5002,23 @@ namespace __VelaApply {
 			return;
 		}
 
+		if (
+			name === "GradientFromTransparency" ||
+			name === "GradientViaTransparency" ||
+			name === "GradientToTransparency"
+		) {
+			if (typeIs(value, "number")) {
+				if (name === "GradientFromTransparency") {
+					resolution.gradientFromTransparency = value;
+				} else if (name === "GradientViaTransparency") {
+					resolution.gradientViaTransparency = value;
+				} else {
+					resolution.gradientToTransparency = value;
+				}
+			}
+			return;
+		}
+
 		setProp(resolution.props, name, value);
 	}
 
@@ -4507,13 +5110,16 @@ namespace __VelaApply {
 			hostProps.AnchorPoint = new Vector2(anchorX ?? 0, anchorY ?? 0);
 		}
 
+		// The translate half already met rem on its way into the resolution; a
+		// negative margin token wrote its offset straight to the shift.
+		const remRatio = resolution.remRatio ?? 1;
 		const positionX = shiftPositionAxis(
 			resolution.positionX,
-			shiftX + (resolution.marginShiftX ?? 0),
+			shiftX + (resolution.marginShiftX ?? 0) * remRatio,
 		);
 		const positionY = shiftPositionAxis(
 			resolution.positionY,
-			shiftY + (resolution.marginShiftY ?? 0),
+			shiftY + (resolution.marginShiftY ?? 0) * remRatio,
 		);
 		if (positionX === undefined && positionY === undefined) {
 			return;
@@ -4610,7 +5216,12 @@ namespace __VelaApply {
 		if (cells !== undefined && cells > 0) {
 			const scale = 1 / cells;
 			const gapShare = (gap * (cells - 1)) / cells;
-			const cross = resolution.gridCrossExtent ?? GRID_CROSS_AXIS_DEFAULT;
+			// `gridCrossExtent` met rem on its way into the resolution; the
+			// stock extent standing in for it has not, and the static path
+			// scales the same number.
+			const cross =
+				resolution.gridCrossExtent ??
+				GRID_CROSS_AXIS_DEFAULT * (resolution.remRatio ?? 1);
 			setResolvedHelperProp(resolution.helpers, "uigridlayout", [
 				{
 					name: "CellSize",
@@ -4635,13 +5246,17 @@ namespace __VelaApply {
 		preflight: boolean,
 	) {
 		const stops: Color3[] = [];
-		for (const stop of [
-			resolution.gradientFrom,
-			resolution.gradientVia,
-			resolution.gradientTo,
-		]) {
+		const alphas: number[] = [];
+		let faded = false;
+		for (const [stop, transparency] of [
+			[resolution.gradientFrom, resolution.gradientFromTransparency],
+			[resolution.gradientVia, resolution.gradientViaTransparency],
+			[resolution.gradientTo, resolution.gradientToTransparency],
+		] as Array<[Color3 | undefined, number | undefined]>) {
 			if (stop !== undefined) {
 				stops.push(stop);
+				alphas.push(transparency ?? 0);
+				faded = faded || transparency !== undefined;
 			}
 		}
 
@@ -4653,6 +5268,15 @@ namespace __VelaApply {
 		setResolvedHelperProp(resolution.helpers, "uigradient", [
 			{ name: "Color", value: color },
 		]);
+
+		if (faded) {
+			const transparency = numberSequenceValue(alphas);
+			if (transparency !== undefined) {
+				setResolvedHelperProp(resolution.helpers, "uigradient", [
+					{ name: "Transparency", value: transparency },
+				]);
+			}
+		}
 
 		const rotation = resolution.gradientRotation;
 		if (rotation !== undefined && rotation !== 0) {
@@ -4695,6 +5319,34 @@ namespace __VelaApply {
 		}
 
 		return new ColorSequence(keypoints);
+	}
+
+	export function numberSequenceValue(
+		stops: number[],
+	): NumberSequence | undefined {
+		const [first, second] = stops;
+		if (first === undefined) {
+			return undefined;
+		}
+
+		if (second === undefined) {
+			return new NumberSequence(first);
+		}
+
+		const last = __VelaLua.arraySize(stops) - 1;
+		if (last === 1) {
+			return new NumberSequence(first, second);
+		}
+
+		const keypoints: NumberSequenceKeypoint[] = [];
+		for (let index = 0; index <= last; index++) {
+			const stop = stops[index];
+			if (stop !== undefined) {
+				keypoints.push(new NumberSequenceKeypoint(index / last, stop));
+			}
+		}
+
+		return new NumberSequence(keypoints);
 	}
 
 	export function setProp(
@@ -4822,6 +5474,26 @@ namespace __VelaApply {
 		const udim2 = __VelaValue.parseUDim2(trimmed);
 		if (udim2 !== undefined) {
 			return udim2;
+		}
+
+		const vector = __VelaValue.parseVector2(trimmed);
+		if (vector !== undefined) {
+			return vector;
+		}
+
+		const sequence = __VelaValue.parseColorSequence(trimmed);
+		if (sequence !== undefined) {
+			return sequence;
+		}
+
+		const alphaSequence = __VelaValue.parseNumberSequence(trimmed);
+		if (alphaSequence !== undefined) {
+			return alphaSequence;
+		}
+
+		const font = __VelaValue.parseFont(trimmed);
+		if (font !== undefined) {
+			return font;
 		}
 
 		const enumValue = __VelaValue.parseEnumValue(trimmed);
@@ -4969,6 +5641,73 @@ namespace __VelaLua {
 		return pieces;
 	}
 
+	/// `splitBy` for a value that nests: a comma inside `Color3.fromRGB(…)` or
+	/// inside a quoted font family is part of an argument, not a separator.
+	export function splitTopLevel(value: string, separator: string): string[] {
+		const pieces: string[] = [];
+		let pieceStart = 0;
+		let depth = 0;
+		let quote: string | undefined;
+		const length = stringLength(value);
+
+		for (let index = 0; index < length; index++) {
+			const char = substring(value, index, index + 1);
+
+			if (quote !== undefined) {
+				if (char === quote) {
+					quote = undefined;
+				}
+				continue;
+			}
+
+			if (char === '"' || char === "'") {
+				quote = char;
+			} else if (char === "(" || char === "[") {
+				depth++;
+			} else if (char === ")" || char === "]") {
+				depth--;
+			} else if (char === separator && depth === 0) {
+				pieces.push(substring(value, pieceStart, index));
+				pieceStart = index + 1;
+			}
+		}
+
+		pieces.push(substring(value, pieceStart));
+		return pieces.map((piece) => trim(piece));
+	}
+
+	export function splitCallArguments(
+		value: string,
+		prefix: string,
+		suffix: string,
+	): string[] | undefined {
+		if (!startsWith(value, prefix) || !endsWith(value, suffix)) {
+			return undefined;
+		}
+
+		const body = trim(
+			substring(value, stringLength(prefix), -stringLength(suffix)),
+		);
+
+		return body === "" ? [] : splitTopLevel(body, ",");
+	}
+
+	export function unquote(value: string): string | undefined {
+		const length = stringLength(value);
+		if (length < 2) {
+			return undefined;
+		}
+
+		const first = substring(value, 0, 1);
+		if (first !== '"' && first !== "'") {
+			return undefined;
+		}
+
+		return substring(value, length - 1, length) === first
+			? substring(value, 1, length - 1)
+			: undefined;
+	}
+
 	export function splitOnce(
 		value: string,
 		separator: string,
@@ -5050,4 +5789,9 @@ namespace __VelaLua {
 	}
 }
 
-export type { VelaMotionDriver, VelaRuntimeConfig, VelaRuntimeHostComponent };
+export type {
+	VelaMotionDriver,
+	VelaRemScaler,
+	VelaRuntimeConfig,
+	VelaRuntimeHostComponent,
+};

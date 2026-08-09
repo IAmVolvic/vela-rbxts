@@ -5,13 +5,13 @@ use std::borrow::Cow;
 /// the project's own config.
 pub(crate) type PropName = Cow<'static, str>;
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct PropEntry {
     pub(crate) name: PropName,
     pub(crate) value: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct HelperEntry {
     pub(crate) tag: &'static str,
     pub(crate) props: Vec<PropEntry>,
@@ -46,6 +46,8 @@ pub(crate) struct DivideSpec {
     pub(crate) thickness: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) transparency: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -73,13 +75,13 @@ pub(crate) struct TransitionSpec {
     pub(crate) property: String,
 }
 
-#[derive(Clone, Debug, Serialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Default)]
 pub(crate) struct StyleEffectBundle {
     pub(crate) props: Vec<PropEntry>,
     pub(crate) helpers: Vec<HelperEntry>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum RuntimeCondition {
     All {
@@ -104,9 +106,16 @@ pub(crate) enum RuntimeCondition {
     Hover,
     Active,
     Focus,
+    /// A branch of a class value this pass read but could not decide. The test
+    /// travels as `__velaTests` and the condition names it by index, so the
+    /// expression is evaluated once however many branches hang on it.
+    Test {
+        index: usize,
+        expected: bool,
+    },
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct RuntimeRule {
     pub(crate) condition: RuntimeCondition,
     pub(crate) effects: StyleEffectBundle,

@@ -5,7 +5,7 @@ use crate::semantic::utility::{
     BACKGROUND_COLOR_FAMILY, BORDER_COLOR_FAMILY, ColorFamilySpec, ColorResolution,
     GRADIENT_COLOR_FAMILY, IMAGE_COLOR_FAMILY, PLACEHOLDER_COLOR_FAMILY, SCROLLBAR_COLOR_FAMILY,
     SHADOW_COLOR_FAMILY, TEXT_COLOR_FAMILY, UtilityKind, is_utility_allowed_on_host,
-    resolve_color_value,
+    resolve_color_value, split_color_opacity,
 };
 
 pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> DocumentColorsResponse {
@@ -25,7 +25,7 @@ pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> Docume
                 continue;
             }
 
-            let Some(color_key) = analysis.payload() else {
+            let Some((color_key, opacity)) = analysis.payload().map(split_color_opacity) else {
                 continue;
             };
 
@@ -42,6 +42,15 @@ pub(crate) fn get_document_colors_impl(request: DocumentColorsRequest) -> Docume
 
             let Some((red, green, blue, alpha)) = resolution_to_rgba(resolution) else {
                 continue;
+            };
+
+            // A family with no transparency prop rejects the modifier, so its
+            // swatch stays the color the token actually paints.
+            let alpha = match opacity {
+                Some(percent) if color_family.transparency_prop.is_some() => {
+                    alpha * f64::from(percent) / 100.0
+                }
+                _ => alpha,
             };
 
             colors.push(DocumentColor {

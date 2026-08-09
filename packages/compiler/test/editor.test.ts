@@ -440,6 +440,31 @@ test("hovers border utilities with UIStroke semantics", () => {
 	).toContain("resolved");
 });
 
+test("hovers the transparency a color opacity modifier lowers to", () => {
+	const source =
+		'<frame className="bg-slate-700/25 border-slate-700/25 divide-slate-700/10 from-slate-700/50" />';
+
+	expect(
+		getHover({ source, position: positionAfter(source, "bg-slate-700/25") })
+			.contents?.documentation,
+	).toContain("`BackgroundTransparency` to `0.75`");
+
+	expect(
+		getHover({ source, position: positionAfter(source, "border-slate-700/25") })
+			.contents?.documentation,
+	).toContain("`UIStroke.Transparency` to `0.75`");
+
+	expect(
+		getHover({ source, position: positionAfter(source, "divide-slate-700/10") })
+			.contents?.documentation,
+	).toContain("`BackgroundTransparency` to `0.9`");
+
+	expect(
+		getHover({ source, position: positionAfter(source, "from-slate-700/50") })
+			.contents?.documentation,
+	).toContain("`UIGradient.Transparency` keypoint to `0.5`");
+});
+
 test("hovers variant-prefixed tokens on the active token only", () => {
 	const source = '<frame className="md:bg-blue-600 px-4" />';
 	const hover = getHover({
@@ -691,6 +716,20 @@ test("returns colors for border color utilities", () => {
 		expect.objectContaining({
 			token: "border-blue-600",
 			presentation: "border-blue-600",
+		}),
+	);
+});
+
+test("folds a color opacity modifier into the swatch alpha", () => {
+	const result = getDocumentColors({
+		source: '<frame className="bg-slate-700/25" />',
+	});
+
+	expect(result.colors).toHaveLength(1);
+	expect(result.colors[0]).toEqual(
+		expect.objectContaining({
+			token: "bg-slate-700/25",
+			alpha: 0.25,
 		}),
 	);
 });

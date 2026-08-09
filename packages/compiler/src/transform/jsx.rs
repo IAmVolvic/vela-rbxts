@@ -1,12 +1,16 @@
 use crate::api::{Diagnostic, EditorRange};
-use crate::class_value::collapse::collapse_class_value_expr;
+use crate::class_value::collapse::{
+    collapse_class_value_expr, collapse_class_value_expr_without_branches,
+};
 use crate::class_value::scope::ClassValueScopeStack;
 use crate::diagnostics::compiler::transition_without_runtime_diagnostic;
 use crate::editor::ClassToken;
 use crate::ir::model::{StyleEffectBundle, StyleIr};
+use crate::transform::branch::lower_branches;
 use crate::transform::runtime::resolve_class_tokens;
 use swc_core::ecma::ast::{
-    JSXAttr, JSXAttrOrSpread, JSXAttrValue, JSXElementName, JSXExpr, JSXExprContainer, JSXObject,
+    Expr, JSXAttr, JSXAttrOrSpread, JSXAttrValue, JSXElementName, JSXExpr, JSXExprContainer,
+    JSXObject,
 };
 
 pub(crate) struct LoweredClassName {
@@ -14,6 +18,9 @@ pub(crate) struct LoweredClassName {
     pub(crate) preserved_attrs: Vec<JSXAttrOrSpread>,
     pub(crate) runtime_class_name: Option<JSXAttr>,
     pub(crate) needs_runtime_host: bool,
+    /// The expressions the emitted branch rules decide on, in the order they
+    /// name them. Empty unless a branch was lowered.
+    pub(crate) tests: Vec<Expr>,
 }
 
 pub(crate) fn lower_class_name(
@@ -72,6 +79,7 @@ pub(crate) fn lower_class_name(
                 preserved_attrs,
                 runtime_class_name: None,
                 needs_runtime_host,
+                tests: Vec::new(),
             })
         }
         Some(JSXAttrValue::JSXExprContainer(container)) => {
@@ -91,17 +99,48 @@ pub(crate) fn lower_class_name(
                     preserved_attrs,
                     runtime_class_name: Some(class_name_attr.clone()),
                     needs_runtime_host: true,
+                    tests: Vec::new(),
                 });
             };
 
-            let collapse = collapse_class_value_expr(expr, scopes);
-            let runtime_class_value = collapse.is_dynamic();
-            let style = resolve_class_tokens(
-                collapse.static_tokens.clone(),
-                config,
-                element_tag,
-                diagnostics,
-            );
+            let mut collapse = collapse_class_value_expr(expr, scopes);
+            let mut style =
+                resolve_class_tokens(collapse.static_tokens(), config, element_tag, diagnostics);
+            let mut tests = Vec::new();
+
+            if collapse.has_branches() {
+                match lower_branches(&collapse, &style, config, element_tag) {
+                    Some(lowered) => {
+                        for diagnostic in lowered.diagnostics {
+                            if !diagnostics.iter().any(|reported| {
+                                reported.code == diagnostic.code
+                                    && reported.token == diagnostic.token
+                            }) {
+                                diagnostics.push(diagnostic);
+                            }
+                        }
+
+                        if !lowered.rules.is_empty() {
+                            style.runtime_rules.extend(lowered.rules);
+                            tests = std::mem::take(&mut collapse.tests);
+                        }
+                    }
+                    // A branch that reaches past what a rule can carry takes the
+                    // whole class value with it: the runtime resolves it as it
+                    // was written, and nothing is lowered here twice.
+                    None => {
+                        collapse = collapse_class_value_expr_without_branches(expr, scopes);
+                        style = resolve_class_tokens(
+                            collapse.static_tokens(),
+                            config,
+                            element_tag,
+                            &mut Vec::new(),
+                        );
+                    }
+                }
+            }
+
+            let runtime_class_value = collapse.dynamic_expr.is_some() || !tests.is_empty();
             let needs_runtime_host = !style.runtime_rules.is_empty()
                 || runtime_class_value
                 || style.animation.is_some()
@@ -124,6 +163,7 @@ pub(crate) fn lower_class_name(
                 preserved_attrs,
                 runtime_class_name,
                 needs_runtime_host,
+                tests,
             })
         }
         _ => Some(LoweredClassName {
@@ -141,6 +181,7 @@ pub(crate) fn lower_class_name(
             preserved_attrs,
             runtime_class_name: Some(class_name_attr.clone()),
             needs_runtime_host: true,
+            tests: Vec::new(),
         }),
     }
 }

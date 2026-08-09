@@ -58,7 +58,7 @@ pub(crate) fn unsupported_opacity_modifier_diagnostic(modifier: &str, token: &st
         level: "warning".to_owned(),
         code: "unsupported-opacity-modifier".to_owned(),
         message: format!(
-            "Color opacity modifier \"/{modifier}\" is not supported; use an `opacity-*` utility instead."
+            "Color opacity modifier \"/{modifier}\" is not supported; this family has no Roblox transparency channel, so use an `opacity-*` utility instead."
         ),
         token: Some(token.to_owned()),
         range: None,

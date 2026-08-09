@@ -86,6 +86,7 @@
   },
   "devDependencies": {
     "@vela-rbxts/config": "workspace:*",
-    "@napi-rs/cli": "^3.6.2"
+    "@napi-rs/cli": "^3.6.2",
+    "@rbxts/vela-runtime": "workspace:*"
   }
 }

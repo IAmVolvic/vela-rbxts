@@ -258,3 +258,38 @@ test("the motion driver module has to resolve from every module", () => {
 	);
 	expect(setDriver({ module: "m" }).plugins.motion).toEqual({ module: "m" });
 });
+
+test("a partial rem override merges field by field", () => {
+	const config = defineConfig({
+		theme: {
+			rem: { min: 12, baseResolution: { y: 1080 } },
+		},
+	});
+
+	expect(config.theme.rem).toEqual({
+		base: 16,
+		min: 12,
+		max: 64,
+		baseResolution: { x: 1920, y: 1080 },
+	});
+});
+
+test("pinning min to max takes the scaling out of every offset", () => {
+	const config = defineConfig({
+		theme: {
+			extend: { rem: { min: 16, max: 16 } },
+		},
+	});
+
+	expect(config.theme.rem.min).toBe(config.theme.rem.max);
+	expect(config.theme.rem.base).toBe(16);
+});
+
+test("an inverted rem clamp collapses onto min", () => {
+	const config = defineConfig({
+		theme: { rem: { min: 32, max: 16 } },
+	});
+
+	expect(config.theme.rem.min).toBe(32);
+	expect(config.theme.rem.max).toBe(32);
+});

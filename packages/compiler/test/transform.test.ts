@@ -74,6 +74,12 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 				serif: "rbxasset://fonts/families/Merriweather.json",
 				mono: "rbxasset://fonts/families/RobotoMono.json",
 			},
+			rem: {
+				base: 16,
+				min: 8,
+				max: 64,
+				baseResolution: { x: 1920, y: 1020 },
+			},
 		},
 		plugins: { utilities: {} },
 	});
@@ -90,13 +96,21 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 		/BackgroundColor3=\{Color3\.fromRGB\(99, 102, 241\)\}/,
 	);
 	expect(result.code).toMatch(
-		/<uicorner\b[^>]*CornerRadius=\{new UDim\(0, 12\)\}[^>]*\/>/i,
+		/<uicorner\b[^>]*CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 12\), \d+\)\}[^>]*\/>/i,
 	);
 	expect(result.code).toMatch(/<uipadding\b[^>]*\/>/i);
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 16\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 16\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 16\)\}/);
-	expect(result.code).toMatch(/PaddingBottom=\{new UDim\(0, 16\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingBottom=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
 	expect(result.code).not.toContain("theme.");
 });
 
@@ -257,13 +271,13 @@ test("lowers border utilities to UIStroke helpers", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toMatch(
-		/<uistroke\b[^>]*Thickness=\{1\}[^>]*Color=\{Color3\.fromRGB\(49, 65, 88\)\}[^>]*\/>/i,
+		/<uistroke\b[^>]*Thickness=\{__VelaRem\.scale\(1, \d+\)\}[^>]*Color=\{Color3\.fromRGB\(49, 65, 88\)\}[^>]*\/>/i,
 	);
 	expect(result.code).toMatch(
-		/<uistroke\b[^>]*Thickness=\{2\}[^>]*Color=\{Color3\.fromRGB\(21, 93, 252\)\}[^>]*\/>/i,
+		/<uistroke\b[^>]*Thickness=\{__VelaRem\.scale\(2, \d+\)\}[^>]*Color=\{Color3\.fromRGB\(21, 93, 252\)\}[^>]*\/>/i,
 	);
 	expect(result.code).toMatch(
-		/<uistroke\b[^>]*Thickness=\{4\}[^>]*Transparency=\{1\}[^>]*\/>/i,
+		/<uistroke\b[^>]*Thickness=\{__VelaRem\.scale\(4, \d+\)\}[^>]*Transparency=\{1\}[^>]*\/>/i,
 	);
 	expect(runtimeSource).toContain("uicorner");
 	expect(runtimeSource).toContain("uistroke");
@@ -330,9 +344,10 @@ test("border static and runtime classifiers stay in parity", () => {
 
 	for (const key of THICKNESS_KEYS) {
 		const result = transform(`<frame className="border-${key}" />`);
+		const thickness = key === "0" ? key : `__VelaRem\\.scale\\(${key}, \\d+\\)`;
 		expect(result.diagnostics).toEqual([]);
 		expect(result.code).toMatch(
-			new RegExp(`<uistroke\\b[^>]*Thickness=\\{${key}\\}`, "i"),
+			new RegExp(`<uistroke\\b[^>]*Thickness=\\{${thickness}\\}`, "i"),
 		);
 	}
 
@@ -460,19 +475,19 @@ test("resolves built-in radius presets out of the box", () => {
 		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 0)}/></textbutton>",
 	);
 	expect(result.code).toContain(
-		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 4)}/></imagebutton>",
+		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={__VelaRem.scale(new UDim(0, 4), 0)}/></imagebutton>",
 	);
 	expect(result.code).toContain(
-		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 6)}/></textbutton>",
+		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={__VelaRem.scale(new UDim(0, 6), 1)}/></textbutton>",
 	);
 	expect(result.code).toContain(
-		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 8)}/></imagebutton>",
+		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={__VelaRem.scale(new UDim(0, 8), 2)}/></imagebutton>",
 	);
 	expect(result.code).toContain(
-		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 12)}/></textbutton>",
+		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={__VelaRem.scale(new UDim(0, 12), 3)}/></textbutton>",
 	);
 	expect(result.code).toContain(
-		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0, 16)}/></imagebutton>",
+		"<imagebutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={__VelaRem.scale(new UDim(0, 16), 4)}/></imagebutton>",
 	);
 	expect(result.code).toContain(
 		"<textbutton BorderSizePixel={0} BackgroundTransparency={1}><uicorner CornerRadius={new UDim(0.5, 0)}/></textbutton>",
@@ -504,10 +519,16 @@ test("mixes z-index lowering with existing direct prop utilities", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 6\)\}/);
+	expect(result.code).toMatch(
+		/CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}/,
+	);
 	expect(result.code).toMatch(/ZIndex=\{20\}/);
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 16\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 16\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
 });
 
 test("carries z-index utilities through the runtime variant path", () => {
@@ -617,16 +638,24 @@ test("lowers className on multiple supported Roblox host elements", () => {
 		/<scrollingframe\b[^>]*BackgroundColor3=\{Color3\.fromRGB\(10, 20, 30\)\}[^>]*\/>/i,
 	);
 	expect(result.code).toMatch(
-		/<textbutton\b[^>]*><uicorner\b[^>]*CornerRadius=\{new UDim\(0, 6\)\}[^>]*\/><\/textbutton>/i,
+		/<textbutton\b[^>]*><uicorner\b[^>]*CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}[^>]*\/><\/textbutton>/i,
 	);
 	expect(result.code).toMatch(
-		/<imagebutton\b[^>]*><uicorner\b[^>]*CornerRadius=\{new UDim\(0, 6\)\}[^>]*\/><\/imagebutton>/i,
+		/<imagebutton\b[^>]*><uicorner\b[^>]*CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}[^>]*\/><\/imagebutton>/i,
 	);
 	expect(result.code).toMatch(/<uipadding\b[^>]*\/>/i);
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 2\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 6\)\}/);
-	expect(result.code).toMatch(/PaddingBottom=\{new UDim\(0, 12\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 2\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingBottom=\{__VelaRem\.scale\(new UDim\(0, 12\), \d+\)\}/,
+	);
 });
 
 test("resolves valid numeric spacing fallback tokens", () => {
@@ -635,9 +664,15 @@ test("resolves valid numeric spacing fallback tokens", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 2\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 6\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 2\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}/,
+	);
 });
 
 test("resolves padding shorthand numeric spacing fallback tokens", () => {
@@ -646,10 +681,18 @@ test("resolves padding shorthand numeric spacing fallback tokens", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingBottom=\{new UDim\(0, 8\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingBottom=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
 });
 
 test("resolves fractional padding shorthand numeric spacing fallback tokens", () => {
@@ -658,10 +701,18 @@ test("resolves fractional padding shorthand numeric spacing fallback tokens", ()
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 2\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 2\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 2\)\}/);
-	expect(result.code).toMatch(/PaddingBottom=\{new UDim\(0, 2\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 2\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 2\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 2\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingBottom=\{__VelaRem\.scale\(new UDim\(0, 2\), \d+\)\}/,
+	);
 });
 
 test("resolves zero numeric spacing fallback tokens", () => {
@@ -688,8 +739,12 @@ test("prefers explicit spacing config over numeric fallback", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 99\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 99\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
 });
 
 test("prefers explicit spacing config over padding shorthand numeric fallback", () => {
@@ -707,10 +762,18 @@ test("prefers explicit spacing config over padding shorthand numeric fallback", 
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 99\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 99\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 99\)\}/);
-	expect(result.code).toMatch(/PaddingBottom=\{new UDim\(0, 99\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingBottom=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
 });
 
 test("keeps spacing-backed padding and size utilities on the same resolver path", () => {
@@ -721,11 +784,21 @@ test("keeps spacing-backed padding and size utilities on the same resolver path"
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 6\)\}/);
-	expect(result.code).toMatch(/PaddingBottom=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(8, 8\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingBottom=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(8, 8\), \d+\)\}/,
+	);
 });
 
 test("lowers gap spacing utilities to a UIListLayout helper", () => {
@@ -735,7 +808,7 @@ test("lowers gap spacing utilities to a UIListLayout helper", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toMatch(
-		/<frame\b[^>]*><uilistlayout\b[^>]*Padding=\{new UDim\(0, 16\)\}[^>]*\/><\/frame>/i,
+		/<frame\b[^>]*><uilistlayout\b[^>]*Padding=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}[^>]*\/><\/frame>/i,
 	);
 });
 
@@ -746,7 +819,9 @@ test("resolves fractional gap numeric spacing fallback tokens", () => {
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
 	expect(result.code).toMatch(/<uilistlayout\b[^>]*\/>/i);
-	expect(result.code).toMatch(/Padding=\{new UDim\(0, 2\)\}/);
+	expect(result.code).toMatch(
+		/Padding=\{__VelaRem\.scale\(new UDim\(0, 2\), \d+\)\}/,
+	);
 });
 
 test("prefers explicit spacing config for gap utilities", () => {
@@ -765,7 +840,9 @@ test("prefers explicit spacing config for gap utilities", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).toMatch(/<uilistlayout\b[^>]*\/>/i);
-	expect(result.code).toMatch(/Padding=\{new UDim\(0, 99\)\}/);
+	expect(result.code).toMatch(
+		/Padding=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
 });
 
 test("lowers width spacing utilities to a direct Size prop", () => {
@@ -774,7 +851,9 @@ test("lowers width spacing utilities to a direct Size prop", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(16, 0\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(16, 0\), \d+\)\}/,
+	);
 	expect(result.code).not.toMatch(/<uisize\b/i);
 });
 
@@ -784,7 +863,9 @@ test("lowers height spacing utilities to a direct Size prop", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(0, 16\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(0, 16\), \d+\)\}/,
+	);
 	expect(result.code).not.toMatch(/<uisize\b/i);
 });
 
@@ -794,7 +875,9 @@ test("lowers square size spacing utilities to both Size axes", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(16, 16\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(16, 16\), \d+\)\}/,
+	);
 });
 
 test("lowers square pixel size utilities to both Size axes", () => {
@@ -803,7 +886,9 @@ test("lowers square pixel size utilities to both Size axes", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(1, 1\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(1, 1\), \d+\)\}/,
+	);
 });
 
 test("lowers square full size utilities to both Size axes", () => {
@@ -830,7 +915,9 @@ test("lets width utilities override only the width axis after size", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(32, 16\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(32, 16\), \d+\)\}/,
+	);
 });
 
 test("lets height utilities override only the height axis after size", () => {
@@ -839,7 +926,9 @@ test("lets height utilities override only the height axis after size", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(16, 32\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(16, 32\), \d+\)\}/,
+	);
 });
 
 test("resolves width and height numeric spacing fallback tokens", () => {
@@ -848,7 +937,9 @@ test("resolves width and height numeric spacing fallback tokens", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(8, 12\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(8, 12\), \d+\)\}/,
+	);
 });
 
 test("lowers pixel width and height utilities to one offset pixel", () => {
@@ -857,7 +948,9 @@ test("lowers pixel width and height utilities to one offset pixel", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(1, 1\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(1, 1\), \d+\)\}/,
+	);
 });
 
 test("lowers full width and height utilities to full scale", () => {
@@ -893,7 +986,9 @@ test("lets full width override only the width axis after size", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{new UDim2\(1, 0, 0, 16\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(new UDim2\(1, 0, 0, 16\), \d+\)\}/,
+	);
 });
 
 test("lets height spacing utilities override only the height axis after full size", () => {
@@ -902,7 +997,9 @@ test("lets height spacing utilities override only the height axis after full siz
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{new UDim2\(1, 0, 0, 16\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(new UDim2\(1, 0, 0, 16\), \d+\)\}/,
+	);
 });
 
 test("lets fractional height override only the height axis after size", () => {
@@ -911,7 +1008,9 @@ test("lets fractional height override only the height axis after size", () => {
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{new UDim2\(0, 16, 0\.5, 0\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(new UDim2\(0, 16, 0\.5, 0\), \d+\)\}/,
+	);
 });
 
 test("keeps each size axis separate across variant rules", () => {
@@ -964,7 +1063,9 @@ test("prefers explicit spacing config for size utilities", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(99, 111\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(99, 111\), \d+\)\}/,
+	);
 });
 
 test("prefers the same explicit spacing override across padding and size utilities", () => {
@@ -982,10 +1083,18 @@ test("prefers the same explicit spacing override across padding and size utiliti
 
 	expect(paddingResult.changed).toBe(true);
 	expect(paddingResult.diagnostics).toEqual([]);
-	expect(paddingResult.code).toMatch(/PaddingLeft=\{new UDim\(0, 99\)\}/);
-	expect(paddingResult.code).toMatch(/PaddingRight=\{new UDim\(0, 99\)\}/);
-	expect(paddingResult.code).toMatch(/PaddingTop=\{new UDim\(0, 99\)\}/);
-	expect(paddingResult.code).toMatch(/PaddingBottom=\{new UDim\(0, 99\)\}/);
+	expect(paddingResult.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
+	expect(paddingResult.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
+	expect(paddingResult.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
+	expect(paddingResult.code).toMatch(
+		/PaddingBottom=\{__VelaRem\.scale\(new UDim\(0, 99\), \d+\)\}/,
+	);
 
 	const sizeResult = transform('<frame className="w-2 h-2 size-2" />', {
 		configJson: JSON.stringify(config),
@@ -993,7 +1102,9 @@ test("prefers the same explicit spacing override across padding and size utiliti
 
 	expect(sizeResult.changed).toBe(true);
 	expect(sizeResult.diagnostics).toEqual([]);
-	expect(sizeResult.code).toMatch(/Size=\{UDim2\.fromOffset\(99, 99\)\}/);
+	expect(sizeResult.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(99, 99\), \d+\)\}/,
+	);
 });
 
 test("warns when size utilities resolve to non-offset spacing values", () => {
@@ -1269,7 +1380,7 @@ test("keeps static-only className fully compile-time without runtime helper inje
 	expect(result.code).not.toContain("__vela__");
 });
 
-test("rewrites dynamic array className through the inline runtime helper", () => {
+test("rewrites dynamic array className through the runtime helper", () => {
 	const result = transform(
 		'<frame className={["bg-blue-600", active && "rounded-md"]} />',
 	);
@@ -1278,16 +1389,293 @@ test("rewrites dynamic array className through the inline runtime helper", () =>
 	expect(result.needsRuntimeHost).toBe(true);
 	expect(runtimeSource).toContain("createVelaRuntimeHost");
 	expect(runtimeSource).toContain("VelaRuntimeHost");
-	expect(result.code).toContain('className={active && "rounded-md"}');
-	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
+	// The branch names classes this pass can read, so it is resolved here and
+	// the host is handed the test rather than the class list.
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/__velaTests=\{\[\s*active \? true : false\s*\]\}/,
+	);
+	expect(JSON.parse(result.ir[0])).toEqual(
+		expect.objectContaining({
+			runtimeRules: [
+				expect.objectContaining({
+					condition: { kind: "test", index: 0, expected: true },
+					effects: expect.objectContaining({
+						helpers: [expect.objectContaining({ tag: "uicorner" })],
+					}),
+				}),
+			],
+		}),
+	);
+	expect(result.code).toContain(
+		'import { createVelaRuntimeHost } from "@rbxts/vela-runtime";',
+	);
 	expect(result.code).not.toContain("../__vela__/runtime-host");
+});
+
+/// The config travels as the host factory's first argument, so it ends at the
+/// only closing brace the emitter leaves at column zero.
+const hostConfig = (code: string) =>
+	JSON.parse(
+		/createVelaRuntimeHost\((\{[\s\S]*?\n\})[,)]/.exec(code)?.[1] ?? "null",
+	);
+
+test("prunes the resolver's tables from a host that resolves no class value", () => {
+	const result = transform(
+		'<frame className="bg-slate-700 hover:bg-blue-600" />',
+		withPluginUtilities,
+	);
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).not.toContain("className=");
+	// The variant is already a rule, so nothing in this file is ever parsed
+	// in-game. The scales travel empty *and* replaced, so the runtime uses the
+	// empty tables rather than falling back on the defaults it carries.
+	expect(hostConfig(result.code)).toEqual({
+		preflight: false,
+		theme: {
+			colors: {},
+			radius: {},
+			spacing: {},
+			fontFamily: {},
+			rem: expect.objectContaining({ base: 16 }),
+			replaced: ["colors", "radius", "spacing", "fontFamily"],
+		},
+		plugins: { utilities: {} },
+	});
+	expect(result.code).toContain("Color3.fromRGB(21, 93, 252)");
+});
+
+// The runtime carries the defaults, so an untouched scale travels as nothing at
+// all — but it must be left mergeable rather than marked replaced.
+test("leaves the resolver's tables to the defaults when a class value reaches the host", () => {
+	const result = transform("<frame className={variant} />");
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(hostConfig(result.code).theme.colors).toEqual({});
+	expect(hostConfig(result.code).theme.replaced).toBeUndefined();
+});
+
+// A spread can carry a `className` this pass never reads, so the tables have to
+// stay readable through it.
+test("leaves the resolver's tables mergeable when a spread may carry a class value", () => {
+	const result = transform('<frame {...rest} className="hover:bg-blue-600" />');
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(hostConfig(result.code).theme.replaced).toBeUndefined();
+});
+
+// Only what the project changed travels; `extend` adds a family, and a
+// top-level scale replaces the whole table, which no set of additions can say.
+test("a theme extension travels as the entries it added", () => {
+	const result = transform("<frame className={variant} />", {
+		configJson: JSON.stringify(
+			defineConfig({
+				theme: { extend: { colors: { brand: "Color3.fromRGB(1, 2, 3)" } } },
+			}),
+		),
+	});
+
+	const theme = hostConfig(result.code).theme;
+	expect(theme.colors).toEqual({ brand: "Color3.fromRGB(1, 2, 3)" });
+	expect(theme.replaced).toBeUndefined();
+});
+
+test("a replaced theme scale travels whole so the defaults do not come back", () => {
+	const result = transform("<frame className={variant} />", {
+		configJson: JSON.stringify(
+			defineConfig({ theme: { colors: { brand: "Color3.fromRGB(9, 9, 9)" } } }),
+		),
+	});
+
+	const theme = hostConfig(result.code).theme;
+	expect(theme.colors).toEqual({ brand: "Color3.fromRGB(9, 9, 9)" });
+	expect(theme.replaced).toEqual(["colors"]);
+});
+
+// Overriding one shade keeps the family whole, so the shades around it survive
+// the family-level merge the runtime does.
+test("overriding one shade carries the rest of its family with it", () => {
+	const result = transform("<frame className={variant} />", {
+		configJson: JSON.stringify(
+			defineConfig({
+				theme: {
+					extend: { colors: { blue: { "500": "Color3.fromRGB(1, 2, 3)" } } },
+				},
+			}),
+		),
+	});
+
+	const blue = hostConfig(result.code).theme.colors.blue;
+	expect(blue["500"]).toBe("Color3.fromRGB(1, 2, 3)");
+	expect(blue["600"]).toEqual(expect.any(String));
+	expect(Object.keys(hostConfig(result.code).theme.colors)).toEqual(["blue"]);
+});
+
+// A branch whose tokens are all written out is one this pass can read; only
+// which of them apply is left for render time. Resolving it here is what lets
+// the whole utility set through, rather than the subset the runtime parses.
+const ruleConditions = (result: { ir: string[] }) =>
+	JSON.parse(result.ir[0]).runtimeRules.map(
+		(rule: { condition: unknown }) => rule.condition,
+	);
+
+test("resolves a static-only utility written inside a branch", () => {
+	const result = transform(
+		'export const A = ({ big }: { big: boolean }) => <textlabel className={big ? "text-lg" : "text-sm"} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).not.toContain("className=");
+	// `text-{size}` has no runtime resolution at all, so before the branch was
+	// read here it left no TextSize on either side.
+	expect(JSON.parse(result.ir[0]).runtimeRules).toEqual([
+		expect.objectContaining({
+			condition: { kind: "test", index: 0, expected: true },
+			effects: expect.objectContaining({
+				props: [{ name: "TextSize", value: "18" }],
+			}),
+		}),
+		expect.objectContaining({
+			condition: { kind: "test", index: 0, expected: false },
+			effects: expect.objectContaining({
+				props: [{ name: "TextSize", value: "14" }],
+			}),
+		}),
+	]);
+});
+
+test("resolves a branch among the tokens written around it", () => {
+	const result = transform(
+		'export const A = ({ tall }: { tall: boolean }) => <frame className={["w-40", tall && "h-10"]} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// Both axes are known here, so they still meet in one `Size` rather than the
+	// branch overwriting the width the base opened.
+	expect(JSON.parse(result.ir[0]).runtimeRules).toEqual([
+		expect.objectContaining({
+			condition: { kind: "test", index: 0, expected: true },
+			effects: expect.objectContaining({
+				props: [{ name: "Size", value: "UDim2.fromOffset(160, 40)" }],
+			}),
+		}),
+	]);
+});
+
+test("evaluates a test once however many branches hang on it", () => {
+	const result = transform(
+		'export const A = ({ a, b }: { a: boolean; b: boolean }) => <frame className={a ? "bg-red-500" : b ? "bg-green-500" : "bg-blue-500"} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/__velaTests=\{\[\s*a \? true : false,\s*b \? true : false\s*\]\}/,
+	);
+	expect(ruleConditions(result)).toEqual([
+		{ kind: "test", index: 0, expected: true },
+		{
+			kind: "all",
+			conditions: [
+				{ kind: "test", index: 0, expected: false },
+				{ kind: "test", index: 1, expected: true },
+			],
+		},
+		{
+			kind: "all",
+			conditions: [
+				{ kind: "test", index: 0, expected: false },
+				{ kind: "test", index: 1, expected: false },
+			],
+		},
+	]);
+});
+
+test("meets a variant inside a branch with the branch's own test", () => {
+	const result = transform(
+		'export const A = ({ on }: { on: boolean }) => <frame className={on ? "hover:bg-blue-500" : "bg-slate-900"} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(ruleConditions(result)).toEqual([
+		{
+			kind: "all",
+			conditions: [
+				{ kind: "test", index: 0, expected: true },
+				{ kind: "hover" },
+			],
+		},
+		{ kind: "test", index: 0, expected: false },
+	]);
+});
+
+test("keeps the undecided left side of `||` on the runtime path", () => {
+	const result = transform(
+		'export const A = ({ extra }: { extra?: string }) => <frame className={extra || "bg-blue-500"} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// A truthy `extra` is the class value itself and can name anything, so it
+	// travels on; the literal behind it is what the test decides.
+	expect(result.code).toContain("className={extra}");
+	expect(ruleConditions(result)).toEqual([
+		{ kind: "test", index: 0, expected: false },
+	]);
+});
+
+test("hands a whole class value back when a branch reaches past a rule", () => {
+	const result = transform(
+		'export const A = ({ loud }: { loud: boolean }) => <textlabel className={loud ? "uppercase" : "bg-slate-900"} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// A text transform is read off the host's own props rather than off the
+	// resolution, so no rule can carry it and the runtime resolves the lot.
+	expect(result.code).toContain(
+		'className={loud ? "uppercase" : "bg-slate-900"}',
+	);
+	expect(result.code).not.toContain("__velaTests=");
+	expect(JSON.parse(result.ir[0]).runtimeRules).toEqual([]);
+});
+
+test("reports an unknown utility written inside a branch", () => {
+	const result = transform(
+		'export const A = ({ on }: { on: boolean }) => <frame className={on ? "bg-blu-500" : "bg-slate-900"} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toHaveLength(1);
+	expect(result.diagnostics[0].code).toBe("unknown-theme-key");
+	expect(result.diagnostics[0].token).toBe("bg-blu-500");
+});
+
+test("keeps one helper instance when a branch overwrites the base's", () => {
+	const result = transform(
+		'export const A = ({ roomy }: { roomy: boolean }) => <frame className={["p-4", roomy && "p-8"]} />;',
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	// The host renders what the resolution came to alongside the children it
+	// was handed, so a padding both name has to meet in one of the two.
+	expect(result.code).not.toContain("<uipadding");
+	expect(ruleConditions(result)).toEqual([
+		{ kind: "all", conditions: [] },
+		{ kind: "test", index: 0, expected: true },
+	]);
 });
 
 // The runtime host once implemented a strict subset of the static lowering:
 // layout direction, alignment and automatic sizing were dropped, so a component
 // whose classes come from a recipe silently lost its layout. These assert the
 // dynamic path knows the families at all.
-test("resolves layout direction and alignment through the inline runtime helper", () => {
+test("resolves layout direction and alignment through the runtime helper", () => {
 	const result = transform(
 		'<frame className={["flex-row items-center justify-between", wide && "gap-2"]} />',
 	);
@@ -1300,7 +1688,7 @@ test("resolves layout direction and alignment through the inline runtime helper"
 	expect(runtimeSource).toContain("Enum.UIFlexAlignment.SpaceBetween");
 });
 
-test("resolves automatic sizing through the inline runtime helper", () => {
+test("resolves automatic sizing through the runtime helper", () => {
 	const result = transform(
 		'<frame className={["h-9 w-fit", tall && "size-auto"]} />',
 	);
@@ -1311,7 +1699,7 @@ test("resolves automatic sizing through the inline runtime helper", () => {
 	expect(runtimeSource).toContain("Enum.AutomaticSize.XY");
 });
 
-test("rewrites dynamic object-map className through the inline runtime helper", () => {
+test("rewrites dynamic object-map className through the runtime helper", () => {
 	const result = transform(
 		'<frame className={{ "px-4": roomy, "px-2": !roomy }} />',
 	);
@@ -1320,11 +1708,23 @@ test("rewrites dynamic object-map className through the inline runtime helper", 
 	expect(result.needsRuntimeHost).toBe(true);
 	expect(runtimeSource).toContain("createVelaRuntimeHost");
 	expect(runtimeSource).toContain("VelaRuntimeHost");
-	expect(result.code).toContain('"px-4": roomy');
-	expect(result.code).toContain('"px-2": !roomy');
+	// Each key names its own classes and its value only decides them, so the
+	// values travel as tests and the keys are resolved here.
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/__velaTests=\{\[\s*roomy \? true : false,\s*!roomy \? true : false\s*\]\}/,
+	);
+	expect(
+		JSON.parse(result.ir[0]).runtimeRules.map(
+			(rule: { condition: unknown }) => rule.condition,
+		),
+	).toEqual([
+		{ kind: "test", index: 0, expected: true },
+		{ kind: "test", index: 1, expected: true },
+	]);
 });
 
-test("rewrites dynamic border className through the inline runtime helper", () => {
+test("rewrites dynamic border className through the runtime helper", () => {
 	const result = transform(
 		'<frame className={["border", active && "border-blue-600"]} />',
 	);
@@ -1336,7 +1736,9 @@ test("rewrites dynamic border className through the inline runtime helper", () =
 	expect(runtimeSource).toContain("uistroke");
 	expect(runtimeSource).toContain("Thickness");
 	expect(result.code).toContain("Color3.fromRGB(21, 93, 252)");
-	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
+	expect(result.code).toContain(
+		'import { createVelaRuntimeHost } from "@rbxts/vela-runtime";',
+	);
 });
 
 test("resolves text colors on the runtime path", () => {
@@ -1539,7 +1941,7 @@ test("resolves color opacity modifiers and arbitrary hex on the runtime path", (
 	expect(runtimeSource).toContain("function parseArbitraryColor(");
 });
 
-test("rewrites dynamic border object maps through the inline runtime helper", () => {
+test("rewrites dynamic border object maps through the runtime helper", () => {
 	const result = transform(
 		'<frame className={{ "border-2": thick, "border-transparent": hidden }} />',
 	);
@@ -1551,9 +1953,24 @@ test("rewrites dynamic border object maps through the inline runtime helper", ()
 	expect(runtimeSource).toContain("uistroke");
 	expect(runtimeSource).toContain("Thickness");
 	expect(runtimeSource).toContain("Transparency");
-	expect(result.code).toContain("className={{");
-	expect(result.code).toContain('"border-2": thick');
-	expect(result.code).toContain('"border-transparent": hidden');
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(
+		/__velaTests=\{\[\s*thick \? true : false,\s*hidden \? true : false\s*\]\}/,
+	);
+	expect(JSON.parse(result.ir[0]).runtimeRules).toEqual([
+		expect.objectContaining({
+			condition: { kind: "test", index: 0, expected: true },
+			effects: expect.objectContaining({
+				helpers: [expect.objectContaining({ tag: "uistroke" })],
+			}),
+		}),
+		expect.objectContaining({
+			condition: { kind: "test", index: 1, expected: true },
+			effects: expect.objectContaining({
+				helpers: [expect.objectContaining({ tag: "uistroke" })],
+			}),
+		}),
+	]);
 });
 
 test("rewrites runtime-aware variants through the inline runtime rule path", () => {
@@ -1586,7 +2003,9 @@ test("rewrites dynamic ClassValue expressions through the runtime wrapper", () =
 	expect(runtimeSource).toContain("__velaTag");
 	expect(runtimeSource).toContain("__velaRules");
 	// Intentional regression checks for the removed runtime package import path.
-	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
+	expect(result.code).toContain(
+		'import { createVelaRuntimeHost } from "@rbxts/vela-runtime";',
+	);
 	expect(result.code).not.toContain("../__vela__/runtime-host");
 	expect(result.code).not.toContain("RbxtsTailwindRuntimeHost");
 	expect(result.code).not.toContain("__rbxtsTailwindRules");
@@ -1599,7 +2018,7 @@ test("rewrites dynamic ClassValue expressions through the runtime wrapper", () =
 	expect(result.code).not.toContain("@vela-rbxts/types");
 	expect(result.code).not.toContain("@vela-rbxts/config");
 	expect(runtimeSource).toContain("BackgroundColor3");
-	expect(result.code).toContain('className={active && "rounded-md"}');
+	expect(result.code).not.toContain("className=");
 	expect(result.code).not.toContain("unsupported-classname-expression");
 	expect(result.ir).toHaveLength(1);
 	expect(JSON.parse(result.ir[0])).toEqual(
@@ -1612,7 +2031,11 @@ test("rewrites dynamic ClassValue expressions through the runtime wrapper", () =
 				]),
 				helpers: [],
 			}),
-			runtimeRules: [],
+			runtimeRules: [
+				expect.objectContaining({
+					condition: { kind: "test", index: 0, expected: true },
+				}),
+			],
 			runtimeClassValue: true,
 		}),
 	);
@@ -1675,8 +2098,12 @@ test("folds a constant object map down to the surviving static key", () => {
 	expect(result.code).not.toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain("VelaRuntimeHost");
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/PaddingLeft=\{new UDim\(0, 8\)\}/);
-	expect(result.code).toMatch(/PaddingRight=\{new UDim\(0, 8\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingRight=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
 });
 
 test("folds a constant ternary to a static utility class", () => {
@@ -1689,7 +2116,9 @@ test("folds a constant ternary to a static utility class", () => {
 	expect(result.code).not.toContain("createVelaRuntimeHost");
 	expect(result.code).not.toContain("VelaRuntimeHost");
 	expect(result.code).not.toContain("className=");
-	expect(result.code).toMatch(/Size=\{UDim2\.fromOffset\(160, 0\)\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(160, 0\), \d+\)\}/,
+	);
 });
 
 test("keeps the runtime wrapper when a dynamic remainder survives constant folding", () => {
@@ -1716,10 +2145,17 @@ test("keeps dynamic object-map className values on the runtime wrapper", () => {
 	expect(runtimeSource).toContain("createVelaRuntimeHost");
 	expect(runtimeSource).toContain("VelaRuntimeHost");
 	expect(runtimeSource).toContain("BackgroundColor3");
-	expect(result.code).toContain("className={{");
-	expect(result.code).toContain('"px-4": roomy');
-	expect(result.code).toContain('"px-2": !roomy');
+	expect(result.code).not.toContain("className=");
 	expect(result.code).not.toContain('"bg-slate-500": true');
+	// The constant key folds into the base; the two undecided ones stay tests.
+	expect(result.code).toMatch(
+		/__velaTests=\{\[\s*roomy \? true : false,\s*!roomy \? true : false\s*\]\}/,
+	);
+	expect(JSON.parse(result.ir[0]).base.props).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ name: "BackgroundColor3" }),
+		]),
+	);
 });
 
 test("keeps variant-prefixed literals on the runtime rule path when they survive folding", () => {
@@ -1761,7 +2197,6 @@ test("lifts variant-prefixed literal utilities into runtime rules", () => {
 	expect(result.code).toContain("const VelaRuntimeHost =");
 	expect(result.code).toContain("<VelaRuntimeHost");
 	// Intentional regression checks for the removed runtime package import path.
-	expect(result.code).toContain("const VelaRuntimeHost = (()=>{");
 	expect(result.code).not.toContain("../__vela__/runtime-host");
 	expect(runtimeSource).toContain("__velaRules");
 	expect(result.code).not.toContain(
@@ -2013,8 +2448,10 @@ test("a component root reads the alpha its caller provided", () => {
 
 	expect(result.diagnostics).toEqual([]);
 	expect(emitted(result.code)).toContain("<__VelaOpacity.Fade>");
-	expect(result.code).toContain("namespace __VelaOpacity");
-	// The whole runtime is a great deal more than a fade needs.
+	expect(result.code).toMatch(
+		/import \{[^}]*__VelaOpacity[^}]*\} from "@rbxts\/vela-runtime";/,
+	);
+	// The host is a great deal more than a fade needs.
 	expect(result.needsRuntimeHost).toBe(false);
 	expect(result.code).not.toContain("createVelaRuntimeHost");
 });
@@ -2155,7 +2592,9 @@ test("lowers flex and alignment utilities onto a shared UIListLayout helper", ()
 	expect(result.code).toMatch(
 		/VerticalAlignment=\{Enum\.VerticalAlignment\.Bottom\}/,
 	);
-	expect(result.code).toMatch(/Padding=\{new UDim\(0, 16\)\}/);
+	expect(result.code).toMatch(
+		/Padding=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
 	expect(result.code.match(/<uilistlayout\b/gi) ?? []).toHaveLength(1);
 });
 
@@ -2229,20 +2668,26 @@ test("carries flex utilities through the runtime variant path with enum parsing"
 
 	expect(JSON.parse(result.ir[0])).toEqual(
 		expect.objectContaining({
-			base: expect.objectContaining({
-				helpers: expect.arrayContaining([
-					expect.objectContaining({
-						tag: "uilistlayout",
-						props: expect.arrayContaining([
+			// A rule overwrites this layout, so the base one joins the
+			// resolution rather than arriving as a second instance.
+			base: expect.objectContaining({ helpers: [] }),
+			runtimeRules: expect.arrayContaining([
+				expect.objectContaining({
+					condition: { kind: "all", conditions: [] },
+					effects: expect.objectContaining({
+						helpers: expect.arrayContaining([
 							expect.objectContaining({
-								name: "FillDirection",
-								value: "Enum.FillDirection.Horizontal",
+								tag: "uilistlayout",
+								props: expect.arrayContaining([
+									expect.objectContaining({
+										name: "FillDirection",
+										value: "Enum.FillDirection.Horizontal",
+									}),
+								]),
 							}),
 						]),
 					}),
-				]),
-			}),
-			runtimeRules: expect.arrayContaining([
+				}),
 				expect.objectContaining({
 					condition: expect.objectContaining({
 						kind: "width",
@@ -2318,7 +2763,9 @@ test("lowers className on components into props and helper children", () => {
 	expect(result.code).toContain(
 		"BackgroundColor3={Color3.fromRGB(49, 65, 88)}",
 	);
-	expect(result.code).toContain("<uicorner CornerRadius={new UDim(0, 6)}/>");
+	expect(result.code).toContain(
+		"<uicorner CornerRadius={__VelaRem.scale(new UDim(0, 6), 0)}/>",
+	);
 	expect(result.code).not.toContain("className");
 	expect(result.diagnostics).toEqual([]);
 });
@@ -2341,7 +2788,7 @@ test("prepends component helper children before existing children", () => {
 	);
 
 	expect(result.code).toContain(
-		`<uicorner CornerRadius={new UDim(0, 6)}/><textlabel Text="hi"/>`,
+		`<uicorner CornerRadius={__VelaRem.scale(new UDim(0, 6), 0)}/><textlabel Text="hi"/>`,
 	);
 });
 
@@ -2379,9 +2826,18 @@ test("routes dynamic className on components through the runtime host", () => {
 	);
 
 	expect(result.code).toContain("__velaTag={Box}");
-	expect(result.code).toContain(
-		`className={on ? "bg-slate-700" : "bg-slate-900"}`,
-	);
+	// The eventual host element is unknown, but the tokens are not, so both
+	// branches lower here the way they would on a host element.
+	expect(result.code).not.toContain("className=");
+	expect(result.code).toMatch(/__velaTests=\{\[\s*on \? true : false\s*\]\}/);
+	expect(
+		JSON.parse(result.ir[0]).runtimeRules.map(
+			(rule: { condition: unknown }) => rule.condition,
+		),
+	).toEqual([
+		{ kind: "test", index: 0, expected: true },
+		{ kind: "test", index: 0, expected: false },
+	]);
 });
 
 test("forwards member expression components to the runtime host", () => {
@@ -2467,7 +2923,9 @@ test("lowers right/bottom utilities relative to the far edges", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/Position=\{new UDim2\(1, -16, 1, -8\)\}/);
+	expect(result.code).toMatch(
+		/Position=\{__VelaRem\.scale\(new UDim2\(1, -16, 1, -8\), \d+\)\}/,
+	);
 });
 
 test("lowers negative and fractional right utilities", () => {
@@ -2476,7 +2934,9 @@ test("lowers negative and fractional right utilities", () => {
 		null,
 	);
 	expect(negative.diagnostics).toEqual([]);
-	expect(negative.code).toMatch(/Position=\{new UDim2\(1, 16, 0, 0\)\}/);
+	expect(negative.code).toMatch(
+		/Position=\{__VelaRem\.scale\(new UDim2\(1, 16, 0, 0\), \d+\)\}/,
+	);
 
 	const fractional = transform(
 		`export const B = () => <frame className="bottom-1/2" />;`,
@@ -2684,7 +3144,9 @@ test("lowers grid utilities into UIGridLayout", () => {
 		/FillDirection=\{Enum\.FillDirection\.Horizontal\}/,
 	);
 	expect(result.code).toMatch(/FillDirectionMaxCells=\{3\}/);
-	expect(result.code).toMatch(/CellPadding=\{UDim2\.fromOffset\(8, 8\)\}/);
+	expect(result.code).toMatch(
+		/CellPadding=\{__VelaRem\.scale\(UDim2\.fromOffset\(8, 8\), \d+\)\}/,
+	);
 
 	const rows = transform(
 		`export const B = () => <frame className="grid-rows-2" />;`,
@@ -2705,7 +3167,9 @@ test("sizes grid cells so tracks divide the container instead of collapsing", ()
 
 	expect(columns.diagnostics).toEqual([]);
 	// Two tracks, each giving back its share of the single 10px gap.
-	expect(columns.code).toMatch(/CellSize=\{new UDim2\(0\.5, -5, 0, 100\)\}/);
+	expect(columns.code).toMatch(
+		/CellSize=\{__VelaRem\.scale\(new UDim2\(0\.5, -5, 0, 100\), \d+\)\}/,
+	);
 
 	const gapless = transform(
 		`export const B = () => <frame className="grid grid-cols-3" />;`,
@@ -2713,7 +3177,7 @@ test("sizes grid cells so tracks divide the container instead of collapsing", ()
 	);
 
 	expect(gapless.code).toMatch(
-		/CellSize=\{new UDim2\(0\.3333333333, 0, 0, 100\)\}/,
+		/CellSize=\{__VelaRem\.scale\(new UDim2\(0\.3333333333, 0, 0, 100\), \d+\)\}/,
 	);
 
 	// `grid-rows-*` fills vertically, so it divides the other axis.
@@ -2722,7 +3186,9 @@ test("sizes grid cells so tracks divide the container instead of collapsing", ()
 		null,
 	);
 
-	expect(rows.code).toMatch(/CellSize=\{new UDim2\(0, 100, 0\.25, -6\)\}/);
+	expect(rows.code).toMatch(
+		/CellSize=\{__VelaRem\.scale\(new UDim2\(0, 100, 0\.25, -6\), \d+\)\}/,
+	);
 });
 
 test("names the grid cross axis with auto-rows/auto-cols", () => {
@@ -2734,7 +3200,9 @@ test("names the grid cross axis with auto-rows/auto-cols", () => {
 	);
 
 	expect(rows.diagnostics).toEqual([]);
-	expect(rows.code).toMatch(/CellSize=\{new UDim2\(0\.5, -5, 0, 150\)\}/);
+	expect(rows.code).toMatch(
+		/CellSize=\{__VelaRem\.scale\(new UDim2\(0\.5, -5, 0, 150\), \d+\)\}/,
+	);
 
 	const columns = transform(
 		`export const B = () => <frame className="grid grid-rows-3 auto-cols-20" />;`,
@@ -2742,7 +3210,7 @@ test("names the grid cross axis with auto-rows/auto-cols", () => {
 	);
 
 	expect(columns.code).toMatch(
-		/CellSize=\{new UDim2\(0, 80, 0\.3333333333, 0\)\}/,
+		/CellSize=\{__VelaRem\.scale\(new UDim2\(0, 80, 0\.3333333333, 0\), \d+\)\}/,
 	);
 });
 
@@ -2753,8 +3221,8 @@ test("keeps gap on UIListLayout when no grid is present", () => {
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).not.toContain("uigridlayout");
-	expect(result.code).not.toContain("CellPadding");
+	expect(emitted(result.code)).not.toContain("uigridlayout");
+	expect(emitted(result.code)).not.toContain("CellPadding");
 });
 
 test("rejects out-of-range grid cell counts", () => {
@@ -2791,13 +3259,17 @@ test("lowers pixel translates into Position offsets", () => {
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/Position=\{UDim2\.fromOffset\(16, -8\)\}/);
+	expect(result.code).toMatch(
+		/Position=\{__VelaRem\.scale\(UDim2\.fromOffset\(16, -8\), \d+\)\}/,
+	);
 
 	const combined = transform(
 		`export const B = () => <frame className="left-1/2 translate-x-4" />;`,
 		null,
 	);
-	expect(combined.code).toMatch(/Position=\{new UDim2\(0\.5, 16, 0, 0\)\}/);
+	expect(combined.code).toMatch(
+		/Position=\{__VelaRem\.scale\(new UDim2\(0\.5, 16, 0, 0\), \d+\)\}/,
+	);
 });
 
 test("lowers fractional translates into AnchorPoint", () => {
@@ -2824,7 +3296,9 @@ test("parses top utilities as position instead of a gradient stop", () => {
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/Position=\{UDim2\.fromOffset\(0, 16\)\}/);
+	expect(result.code).toMatch(
+		/Position=\{__VelaRem\.scale\(UDim2\.fromOffset\(0, 16\), \d+\)\}/,
+	);
 });
 
 test("lowers object fit utilities into ScaleType on image hosts", () => {
@@ -2871,7 +3345,9 @@ test("lowers space utilities into UIListLayout padding with a direction", () => 
 		null,
 	);
 	expect(horizontal.diagnostics).toEqual([]);
-	expect(horizontal.code).toMatch(/Padding=\{new UDim\(0, 16\)\}/);
+	expect(horizontal.code).toMatch(
+		/Padding=\{__VelaRem\.scale\(new UDim\(0, 16\), \d+\)\}/,
+	);
 	expect(horizontal.code).toMatch(
 		/FillDirection=\{Enum\.FillDirection\.Horizontal\}/,
 	);
@@ -2880,7 +3356,9 @@ test("lowers space utilities into UIListLayout padding with a direction", () => 
 		`export const B = () => <frame className="space-y-2" />;`,
 		null,
 	);
-	expect(vertical.code).toMatch(/Padding=\{new UDim\(0, 8\)\}/);
+	expect(vertical.code).toMatch(
+		/Padding=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
 	expect(vertical.code).toMatch(
 		/FillDirection=\{Enum\.FillDirection\.Vertical\}/,
 	);
@@ -2961,7 +3439,9 @@ test("lowers scrollbar utilities into thickness and image color", () => {
 		null,
 	);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/ScrollBarThickness=\{8\}/);
+	expect(result.code).toMatch(
+		/ScrollBarThickness=\{__VelaRem\.scale\(8, \d+\)\}/,
+	);
 	expect(result.code).toMatch(
 		/ScrollBarImageColor3=\{Color3\.fromRGB\(98, 116, 142\)\}/,
 	);
@@ -3018,7 +3498,7 @@ test("lowers ring and outline utilities into the shared UIStroke", () => {
 		null,
 	);
 	expect(ring.diagnostics).toEqual([]);
-	expect(ring.code).toMatch(/Thickness=\{3\}/);
+	expect(ring.code).toMatch(/Thickness=\{__VelaRem\.scale\(3, \d+\)\}/);
 	expect(ring.code).toMatch(
 		/ApplyStrokeMode=\{Enum\.ApplyStrokeMode\.Border\}/,
 	);
@@ -3028,7 +3508,7 @@ test("lowers ring and outline utilities into the shared UIStroke", () => {
 		`export const B = () => <frame className="outline-4" />;`,
 		null,
 	);
-	expect(outline.code).toMatch(/Thickness=\{4\}/);
+	expect(outline.code).toMatch(/Thickness=\{__VelaRem\.scale\(4, \d+\)\}/);
 
 	const none = transform(
 		`export const C = () => <frame className="outline-none" />;`,
@@ -3335,7 +3815,9 @@ test("negative top and left margins shift Position instead of wrapping", () => {
 
 	expect(result.diagnostics).toEqual([]);
 	expect(result.needsRuntimeHost).toBe(false);
-	expect(result.code).toMatch(/Position=\{UDim2\.fromOffset\(-16, -8\)\}/);
+	expect(result.code).toMatch(
+		/Position=\{__VelaRem\.scale\(UDim2\.fromOffset\(-16, -8\), \d+\)\}/,
+	);
 	expect(result.code).not.toContain("__velaMargin");
 });
 
@@ -3539,19 +4021,31 @@ test("resolves arbitrary length values", () => {
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/Size=\{new UDim2\(0, 120, 0\.5, 0\)\}/);
-	expect(result.code).toMatch(/PaddingTop=\{new UDim\(0, 7\)\}/);
-	expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 10\)\}/);
-	expect(result.code).toMatch(/Position=\{new UDim2\(0, -8, 0\.6, 0\)\}/);
-	expect(result.code).toMatch(/Padding=\{new UDim\(0, 3\)\}/);
-	expect(result.code).toMatch(/Thickness=\{3\}/);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(new UDim2\(0, 120, 0\.5, 0\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 7\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 10\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/Position=\{__VelaRem\.scale\(new UDim2\(0, -8, 0\.6, 0\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/Padding=\{__VelaRem\.scale\(new UDim\(0, 3\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(/Thickness=\{__VelaRem\.scale\(3, \d+\)\}/);
 
 	const typography = transform(
 		`export const B = () => <textlabel className="text-[13px] leading-[1.6] rotate-[17deg] z-[15]" />;`,
 		withoutPreflight,
 	);
 	expect(typography.diagnostics).toEqual([]);
-	expect(typography.code).toMatch(/TextSize=\{13\}/);
+	expect(typography.code).toMatch(
+		/TextSize=\{__VelaRem\.scaleText\(13, \d+\)\}/,
+	);
 	expect(typography.code).toMatch(/LineHeight=\{1\.6\}/);
 	expect(typography.code).toMatch(/Rotation=\{17\}/);
 	expect(typography.code).toMatch(/ZIndex=\{15\}/);
@@ -3597,8 +4091,30 @@ test("applies color opacity modifiers as transparency", () => {
 	expect(result.code).toMatch(/BackgroundTransparency=\{0\.5\}/);
 	expect(result.code).toMatch(/Transparency=\{0\.75\}/);
 
+	const border = transform(
+		`export const B = () => <frame className="border-2 border-slate-500/25" />;`,
+		null,
+	);
+	expect(border.diagnostics).toEqual([]);
+	expect(border.code).toMatch(/Transparency=\{0\.75\}/);
+
+	const gradient = transform(
+		`export const C = () => <frame className="bg-gradient-to-r from-blue-600/50 to-rose-500" />;`,
+		null,
+	);
+	expect(gradient.diagnostics).toEqual([]);
+	expect(gradient.code).toContain("Transparency={new NumberSequence(0.5, 0)}");
+
+	const divide = transform(
+		`export const D = () => <frame className="divide-y divide-slate-500/10"><frame /><frame /></frame>;`,
+		null,
+	);
+	expect(divide.diagnostics).toEqual([]);
+	expect(divide.code).toMatch(/"transparency":\s*0\.9/);
+
+	// A family with no transparency channel of its own still reports the modifier.
 	const unsupported = transform(
-		`export const B = () => <frame className="from-blue-600/50" />;`,
+		`export const E = () => <textbox className="placeholder-white/50" />;`,
 		null,
 	);
 	expect(unsupported.diagnostics).toEqual([
@@ -3684,7 +4200,9 @@ test("expands a plugin utility into the utilities it stands for", () => {
 	expect(result.code).toMatch(
 		/BackgroundColor3=\{\(Color3\.fromRGB\(21, 93, 252\) as never\)\}/,
 	);
-	expect(result.code).toMatch(/PaddingLeft=\{\(new UDim\(0, 16\) as never\)\}/);
+	expect(result.code).toMatch(
+		/PaddingLeft=\{\(__VelaRem\.scale\(new UDim\(0, 16\), \d+\) as never\)\}/,
+	);
 	expect(result.code).toMatch(/<uicorner\b/i);
 
 	const style = JSON.parse(result.ir[0]);
@@ -3769,7 +4287,7 @@ test("a class the plugin body cannot resolve is reported on the class the author
 
 test("resolves plugin utilities on the runtime path too", () => {
 	const result = transform(
-		"<frame className={active ? `btn` : `panel`} />",
+		"<frame className={variant} />",
 		withPluginUtilities,
 	);
 
@@ -3804,9 +4322,7 @@ test("imports the configured motion driver instead of tweening itself", () => {
 	expect(result.code).toContain(
 		'import { springDriver as __VelaMotionDriverSource } from "@rbxts/vela-spring";',
 	);
-	expect(result.code).toContain(
-		"createVelaRuntimeHost(__VelaRuntimeConfig, __VelaMotionDriverSource)",
-	);
+	expect(result.code).toContain(", __VelaMotionDriverSource)");
 	// The built-in path stays in the module: a driver that only implements one
 	// method leaves the other to TweenService.
 	expect(runtimeSource).toContain("__VelaTweenService.Create(instance, info");
@@ -3829,6 +4345,117 @@ test("a motion driver with no export name is imported as the default", () => {
 test("falls back to the built-in driver when no plugin sets one", () => {
 	const result = transform('<frame className="animate-spin" />');
 
-	expect(result.code).toContain("createVelaRuntimeHost(__VelaRuntimeConfig)");
+	expect(result.code).toContain("createVelaRuntimeHost(");
 	expect(result.code).not.toContain("__VelaMotionDriverSource");
+});
+
+// A statically lowered element never renders again, so an offset that has to
+// follow the viewport leaves as a binding rather than as a value.
+const staticRem = {
+	configJson: JSON.stringify(
+		defineConfig({ theme: { rem: { min: 16, max: 16 } } }),
+	),
+};
+
+test("a static offset leaves as a rem binding with the namespace above it", () => {
+	const result = transform('<frame className="w-4 p-2" />');
+
+	expect(result.needsRuntimeHost).toBe(false);
+	expect(emitted(result.code)).toContain(
+		"Size={__VelaRem.scale(UDim2.fromOffset(16, 0), 4)}",
+	);
+	expect(emitted(result.code)).toContain(
+		"PaddingTop={__VelaRem.scale(new UDim(0, 8), 0)}",
+	);
+	expect(result.code).toMatch(
+		/const __VelaRem = createVelaRemScaler\(\{[\s\S]*?"min": 8\.0/,
+	);
+	// Only the scaler, not the whole host.
+	expect(result.code).not.toContain("createVelaRuntimeHost");
+});
+
+test("a pure scale value keeps its literal instead of paying for a binding", () => {
+	const result = transform('<frame className="w-full h-1/2" />');
+
+	expect(emitted(result.code)).toContain("Size={UDim2.fromScale(1, 0.5)}");
+	expect(result.code).not.toContain("__VelaRem");
+});
+
+test("pinning rem takes the binding out of the emit entirely", () => {
+	const result = transform('<frame className="w-4 p-2" />', staticRem);
+
+	expect(emitted(result.code)).toContain("Size={UDim2.fromOffset(16, 0)}");
+	expect(emitted(result.code)).toContain("PaddingTop={new UDim(0, 8)}");
+	expect(result.code).not.toContain("__VelaRem");
+});
+
+// The host re-renders on a rem change of its own accord, so its props stay
+// values and it is handed the names of the ones that are offsets.
+test("a runtime host is named the props it should scale itself", () => {
+	const result = transform('<frame className="w-4 p-2 hover:w-8" />');
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toMatch(/__velaRem=\{\[\s*"Size"\s*\]\}/);
+	expect(result.code).toContain("Size={(UDim2.fromOffset(16, 0) as never)}");
+	// A helper is a host instance the runtime host never reads back, so it
+	// takes the binding on this path too.
+	expect(emitted(result.code)).toContain(
+		"PaddingTop={(__VelaRem.scale(new UDim(0, 8), 0) as never)}",
+	);
+});
+
+test("a rem config reaches the runtime host through the config it is handed", () => {
+	const result = transform('<frame className="w-4 hover:w-8" />', {
+		configJson: JSON.stringify(
+			defineConfig({ theme: { rem: { min: 12, max: 32 } } }),
+		),
+	});
+
+	expect(hostConfig(result.code).theme.rem).toEqual(
+		expect.objectContaining({ min: 12, max: 32 }),
+	);
+});
+
+// The runtime scales by `rem / base`, so a clamp pinned away from `base` is a
+// constant ratio rather than no ratio. Dropping it from the emit would leave a
+// static offset at 1 while everything the host resolves moved.
+test("pinning rem away from base keeps the binding", () => {
+	const result = transform('<frame className="w-4 p-2" />', {
+		configJson: JSON.stringify(
+			defineConfig({ theme: { rem: { min: 24, max: 24 } } }),
+		),
+	});
+
+	expect(emitted(result.code)).toContain(
+		"Size={__VelaRem.scale(UDim2.fromOffset(16, 0), 4)}",
+	);
+	expect(result.code).toContain("createVelaRemScaler(");
+});
+
+// Roblox stops honoring TextSize past 100, so a scaled size stops there rather
+// than tweening toward a size the engine never paints.
+test("a scaled text size caps at the ceiling Roblox honors", () => {
+	const result = transform('<textlabel className="text-6xl" />');
+
+	expect(emitted(result.code)).toContain(
+		"TextSize={__VelaRem.scaleText(60, 0)}",
+	);
+
+	// The host re-renders on a rem change itself, so it takes the size as a
+	// value and caps it where the runtime does.
+	const host = transform('<textlabel className="text-6xl hover:text-sm" />');
+
+	expect(host.needsRuntimeHost).toBe(true);
+	expect(host.code).toContain("TextSize={(60 as never)}");
+});
+
+test("an inverted rem clamp collapses onto min instead of reaching the runtime", () => {
+	const result = transform('<frame className="w-4 hover:w-8" />', {
+		configJson: JSON.stringify({
+			theme: { rem: { min: 32, max: 16 } },
+		}),
+	});
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/"min": 32\.0,\s*"max": 32\.0/);
 });

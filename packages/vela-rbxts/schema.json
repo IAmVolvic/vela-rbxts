@@ -85,7 +85,7 @@
 					"type": "object",
 					"additionalProperties": false,
 					"required": ["module"],
-					"description": "Replaces the built-in TweenService driver behind `transition` and `animate-*`. The runtime host is inlined into every transformed module, so the module has to resolve from any of them — a package name or a baseUrl-relative path, never a relative one.",
+					"description": "Replaces the built-in TweenService driver behind `transition` and `animate-*`. Every transformed module that needs it imports the driver itself, at whatever depth it sits, so the module has to resolve from any of them — a package name or a baseUrl-relative path, never a relative one.",
 					"properties": {
 						"module": {
 							"type": "string",
@@ -102,6 +102,47 @@
 		}
 	},
 	"definitions": {
+		"rem": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"base": {
+					"type": "number",
+					"exclusiveMinimum": 0,
+					"default": 16,
+					"description": "Pixels one rem is worth at baseResolution."
+				},
+				"min": {
+					"type": "number",
+					"minimum": 0,
+					"default": 8,
+					"description": "Smallest rem any viewport resolves to."
+				},
+				"max": {
+					"type": "number",
+					"minimum": 0,
+					"default": 64,
+					"description": "Largest rem any viewport resolves to."
+				},
+				"baseResolution": {
+					"type": "object",
+					"additionalProperties": false,
+					"description": "Viewport at which one rem equals base.",
+					"properties": {
+						"x": {
+							"type": "number",
+							"exclusiveMinimum": 0,
+							"default": 1920
+						},
+						"y": {
+							"type": "number",
+							"exclusiveMinimum": 0,
+							"default": 1020
+						}
+					}
+				}
+			}
+		},
 		"themeScale": {
 			"type": "object",
 			"additionalProperties": {

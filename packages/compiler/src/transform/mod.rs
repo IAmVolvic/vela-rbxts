@@ -1,9 +1,11 @@
+pub(crate) mod branch;
 pub(crate) mod context;
 pub(crate) mod emit;
 pub(crate) mod fade;
 pub(crate) mod jsx;
 pub(crate) mod module;
 pub(crate) mod opacity;
+pub(crate) mod rem;
 pub(crate) mod runtime;
 pub(crate) mod runtime_host;
 
@@ -97,7 +99,9 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
         diagnostics,
         ir: Vec::new(),
         runtime_host_needed: false,
+        resolves_class_values: false,
         opacity_helper_needed: false,
+        rem: Default::default(),
         class_value_scopes: crate::class_value::scope::ClassValueScopeStack::default(),
         opacity_alpha: 1.0,
     };
@@ -290,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn the_runtime_host_is_scoped_and_typed_from_the_host_tag() {
+    fn the_runtime_host_is_imported_and_typed_from_the_host_tag() {
         let result = transform_impl(
             "const ui = <frame className=\"bg-slate-700 hover:bg-blue-600\" />;".to_owned(),
             None,
@@ -300,13 +304,19 @@ mod tests {
             result.needs_runtime_host,
             "a hover variant must promote the element to the runtime host"
         );
-        // Luau caps a function at 200 local registers and the module body is
-        // one. The runtime has to arrive as a single local, or a component with
-        // enough parts of its own stops compiling — `card` did.
+        // The runtime is one ModuleScript the whole game shares. Carried inline
+        // it cost every consumer a copy of itself, and Luau caps a function at
+        // 200 local registers — a component with enough parts of its own stopped
+        // compiling.
         assert!(
-            result.code.contains("const VelaRuntimeHost = (()=>{")
-                || result.code.contains("const VelaRuntimeHost = (() => {"),
-            "the runtime must be scoped inside one initializer, not spread over the module body"
+            result.code.contains("from \"@rbxts/vela-runtime\""),
+            "the runtime must arrive as an import, not as a copy: {}",
+            result.code
+        );
+        assert!(
+            !result.code.contains("namespace __VelaToken"),
+            "no part of the runtime should be inlined: {}",
+            result.code
         );
         assert!(
             result

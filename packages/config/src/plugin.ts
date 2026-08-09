@@ -199,11 +199,12 @@ function normalizeMotionDriver(
 		);
 	}
 
-	// The runtime host is inlined into every transformed module, at whatever
-	// depth it sits, so a relative specifier would resolve differently per file.
+	// Every transformed module that needs a driver imports it itself, at
+	// whatever depth it sits, so a relative specifier would resolve differently
+	// per file.
 	if (module.startsWith(".")) {
 		throw new Error(
-			`${label} set the motion driver module to "${module}". A relative path cannot resolve from every module the runtime host is inlined into; use a package name or a baseUrl-relative path.`,
+			`${label} set the motion driver module to "${module}". A relative path cannot resolve from every module that imports the driver; use a package name or a baseUrl-relative path.`,
 		);
 	}
 

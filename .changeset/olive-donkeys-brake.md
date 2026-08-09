@@ -1,5 +1,5 @@
 ---
-"@vela-rbxts/runtime": patch
+"@rbxts/vela-runtime": patch
 "@vela-rbxts/compiler": patch
 ---
 

@@ -1,5 +1,6 @@
 use crate::config::model::{
-    ColorInputMap, ColorValue, PluginConfig, TailwindConfig, ThemeColors, ThemeScale,
+    ColorInputMap, ColorValue, PluginConfig, RemConfig, RemConfigInput, TailwindConfig,
+    ThemeColors, ThemeScale,
 };
 
 fn merge_plugin_config(base: &PluginConfig, input: Option<PluginConfig>) -> PluginConfig {
@@ -96,6 +97,34 @@ pub(crate) fn resolve_theme_scale(
     merged
 }
 
+/// `rem` is a record of four related numbers rather than a keyed scale, so a
+/// partial override merges field by field instead of replacing the family.
+pub(crate) fn resolve_rem_config(
+    base: &RemConfig,
+    extend: Option<&RemConfigInput>,
+    override_rem: Option<&RemConfigInput>,
+) -> RemConfig {
+    let mut merged = *base;
+
+    for input in [extend, override_rem].into_iter().flatten() {
+        merged.base = input.base.unwrap_or(merged.base);
+        merged.min = input.min.unwrap_or(merged.min);
+        merged.max = input.max.unwrap_or(merged.max);
+
+        if let Some(resolution) = input.base_resolution {
+            merged.base_resolution.x = resolution.x.unwrap_or(merged.base_resolution.x);
+            merged.base_resolution.y = resolution.y.unwrap_or(merged.base_resolution.y);
+        }
+    }
+
+    // Luau's `math.clamp` errors when the bounds cross, and this config is
+    // handed to the runtime verbatim, so an inverted clamp collapses onto `min`
+    // here rather than at the first viewport read.
+    merged.max = merged.max.max(merged.min);
+
+    merged
+}
+
 pub(crate) fn resolve_color_input(
     base: &ThemeColors,
     extend: Option<&ColorInputMap>,
@@ -149,6 +178,9 @@ pub(crate) fn resolve_config_input(
                 extend.font_family.as_ref(),
                 theme.font_family.as_ref(),
             ),
+            rem: resolve_rem_config(&base.theme.rem, extend.rem.as_ref(), theme.rem.as_ref()),
+            // Decided at emit time, against the defaults the runtime carries.
+            replaced: Vec::new(),
         },
     }
 }

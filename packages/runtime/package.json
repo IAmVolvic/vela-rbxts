@@ -1,7 +1,13 @@
 {
-  "name": "@vela-rbxts/runtime",
+  "name": "@rbxts/vela-runtime",
   "version": "0.11.0",
-  "description": "Source of truth for the runtime class resolver the compiler inlines. Not published: the compiler reads this source at build time.",
+  "description": "The runtime class resolver behind vela-rbxts. Installed as a dependency of vela-rbxts; transformed modules import it rather than carrying a copy.",
+  "main": "out/init.luau",
+  "types": "out/index.d.ts",
+  "files": [
+    "out",
+    "default.project.json"
+  ],
   "license": "MIT",
   "author": "astra-void",
   "keywords": [
@@ -24,26 +30,26 @@
     "url": "https://github.com/astra-void/vela-rbxts/issues"
   },
   "scripts": {
-    "prebuild": "node ./scripts/materialize-rbxts-modules.cjs",
+    "prebuild": "node ./scripts/materialize-config-defaults.cjs && node ./scripts/materialize-rbxts-modules.cjs",
     "build": "rbxtsc -p tsconfig.json",
     "postbuild": "node ./scripts/clean-rbxts-modules.cjs",
-    "pretypecheck": "node ./scripts/materialize-rbxts-modules.cjs",
+    "pretypecheck": "node ./scripts/materialize-config-defaults.cjs && node ./scripts/materialize-rbxts-modules.cjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome check .",
     "lint:fix": "biome check . --fix --unsafe",
     "clean": "node -e \"const fs=require('node:fs');fs.rmSync('out',{recursive:true,force:true});\""
   },
-  "peerDependencies": {
-    "@rbxts/react": "^17.3.7-ts.1",
+  "dependencies": {
     "@rbxts/services": "^1.6.0"
+  },
+  "peerDependencies": {
+    "@rbxts/react": "^17.3.7-ts.1"
   },
   "devDependencies": {
     "@rbxts/compiler-types": "^3.0.0-types.0",
     "@rbxts/react": "^17.3.7-ts.1",
-    "@rbxts/services": "^1.6.0",
     "@rbxts/types": "^1.0.935",
     "roblox-ts": "^3.0.0",
     "typescript": "5.9.3"
-  },
-  "private": true
+  }
 }

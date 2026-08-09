@@ -1,163 +1,162 @@
-use crate::config::model::{MotionDriverConfig, TailwindConfig};
+use crate::config::model::{MotionDriverConfig, RemConfig, TailwindConfig};
 use crate::swc::parse::parse_module_items;
+use crate::transform::rem::REM_NAMESPACE;
 use swc_core::ecma::ast::ModuleItem;
 
-/// The runtime lives in `packages/runtime` so it is real, typechecked source
-/// rather than a string this crate can never compile. It is read, not imported:
-/// importing it would make every consumer install a package and map it into
-/// their Rojo tree.
-const RUNTIME_SOURCE: &str = include_str!("../../../runtime/src/index.ts");
+/// The runtime ships under the `@rbxts` scope because roblox-ts only resolves a
+/// package whose scope directory is one of the project's `typeRoots`, and that
+/// is the one every roblox-ts project already lists. A consumer installs it
+/// through `vela-rbxts` and maps nothing new.
+const RUNTIME_MODULE: &str = "@rbxts/vela-runtime";
 
-pub(crate) fn create_runtime_host_module_items(config: &TailwindConfig) -> Vec<ModuleItem> {
-    let config_json = serde_json::to_string(config).expect("runtime config must serialize to JSON");
-    let (motion_import, motion_argument) = motion_driver_source(config.plugins.motion.as_ref());
-    let runtime = partition_runtime_source(RUNTIME_SOURCE);
+/// What a transformed module reaches for. A file can need any combination: a
+/// host to resolve class values, a rem scaler for statically lowered offsets,
+/// and the opacity namespace for a fade that left the static path.
+pub(crate) struct RuntimeNeeds<'a> {
+    pub(crate) host: bool,
+    /// Whether any host in this file is handed a class value to parse, which is
+    /// the only thing the config's theme scales are read for.
+    pub(crate) resolves_class_values: bool,
+    pub(crate) rem: Option<&'a RemConfig>,
+    pub(crate) opacity: bool,
+}
 
-    // Luau caps a function at 200 local registers, and the module body is a
-    // function. The runtime's helpers are grouped into namespaces, which lower
-    // to `local Group = {} do ... end` — one register each, with the members
-    // freed at the block's end — so they stay at module scope. Only the host
-    // factory needs the initializer; types stay outside because they cost no
-    // register and the host cast names one of them.
-    let source = format!(
-        "{motion_import}{imports}\n{types}\n{namespaces}\nconst __VelaRuntimeConfig = {config_json};\nconst VelaRuntimeHost = (() => {{\n{values}\nreturn createVelaRuntimeHost(__VelaRuntimeConfig{motion_argument});\n}})() as unknown as VelaRuntimeHostComponent;",
-        imports = runtime.imports,
-        types = runtime.types,
-        namespaces = runtime.namespaces,
-        values = runtime.values,
-    );
+impl RuntimeNeeds<'_> {
+    fn is_empty(&self) -> bool {
+        !self.host && self.rem.is_none() && !self.opacity
+    }
+}
+
+pub(crate) fn create_runtime_module_items(
+    config: &TailwindConfig,
+    needs: &RuntimeNeeds<'_>,
+) -> Vec<ModuleItem> {
+    if needs.is_empty() {
+        return Vec::new();
+    }
+
+    let mut source = String::new();
+    let mut values = Vec::new();
+    let mut types = Vec::new();
+    let mut statements = String::new();
+
+    if needs.host {
+        let (motion_import, motion_argument) = motion_driver_source(config.plugins.motion.as_ref());
+        source.push_str(&motion_import);
+
+        values.push("createVelaRuntimeHost");
+        types.push("VelaRuntimeHostComponent");
+        statements.push_str(&format!(
+            "const VelaRuntimeHost = createVelaRuntimeHost({config_json}{motion_argument}) as unknown as VelaRuntimeHostComponent;\n",
+            config_json = host_config_json(config, needs.resolves_class_values),
+        ));
+    }
+
+    // The scaler holds the slot table the emit numbers from zero in every
+    // module, so it is built per file even though the curve behind it is shared.
+    if let Some(rem) = needs.rem {
+        values.push("createVelaRemScaler");
+        statements.push_str(&format!(
+            "const {REM_NAMESPACE} = createVelaRemScaler({});\n",
+            serde_json::to_string(rem).expect("rem config must serialize to JSON"),
+        ));
+    }
+
+    if needs.opacity {
+        values.push(crate::swc::builders::OPACITY_NAMESPACE);
+    }
+
+    source.push_str(&format!(
+        "import {{ {} }} from \"{RUNTIME_MODULE}\";\n",
+        values.join(", ")
+    ));
+
+    if !types.is_empty() {
+        source.push_str(&format!(
+            "import type {{ {} }} from \"{RUNTIME_MODULE}\";\n",
+            types.join(", ")
+        ));
+    }
+
+    source.push_str(&statements);
+
     let items = parse_module_items(&source);
 
-    assert!(!items.is_empty(), "inline runtime helper source must parse");
+    assert!(!items.is_empty(), "the runtime preamble must parse");
 
     items
 }
 
-/// A file can need the fade without needing the host: a component whose root is
-/// lowered statically still has to consume the alpha its caller provides, and a
-/// static element still has to hand one to the component below it. Only the
-/// opacity namespace is inlined there — it depends on React and nothing else.
-pub(crate) fn create_opacity_module_items() -> Vec<ModuleItem> {
-    let import = extract_declaration(RUNTIME_SOURCE, "import __VelaReact ")
-        .expect("the runtime must import React");
-    let namespace = extract_declaration(
-        RUNTIME_SOURCE,
-        &format!("namespace {} ", crate::swc::builders::OPACITY_NAMESPACE),
-    )
-    .expect("the runtime must declare the opacity namespace");
+/// The theme is only ever read while parsing a class value the host was handed,
+/// and most files hand it none — a variant, a branch or a text transform
+/// reaches the host through props resolved here. Such a file drops the tables
+/// entirely; the rest send only what they changed. `rem` and `preflight` stay
+/// either way: the host reads those whatever it renders.
+fn host_config_json(config: &TailwindConfig, resolves_class_values: bool) -> String {
+    let mut config = config.clone();
 
-    let items = parse_module_items(&format!("{import}\n{namespace}"));
+    // Where the driver is imported from is answered above, at compile time. The
+    // runtime is handed the driver itself and never reads the specifier.
+    config.plugins.motion = None;
 
-    assert!(!items.is_empty(), "inline opacity helper source must parse");
-
-    items
-}
-
-/// One top-level declaration, from its own keyword to the next one at column
-/// zero — the same shape `partition_runtime_source` reads the file in.
-fn extract_declaration(source: &str, head: &str) -> Option<String> {
-    let lines: Vec<&str> = source.lines().collect();
-    let start = lines.iter().position(|line| line.starts_with(head))?;
-    let end = lines[start + 1..]
-        .iter()
-        .position(|line| starts_declaration(line))
-        .map_or(lines.len(), |offset| start + 1 + offset);
-
-    Some(lines[start..end].join("\n"))
-}
-
-struct RuntimeSourceParts {
-    imports: String,
-    types: String,
-    namespaces: String,
-    values: String,
-}
-
-/// Splits the runtime into what must stay at module scope and what can be
-/// scoped away. Imports cannot appear inside a function, types are erased
-/// before Luau ever sees them, and a namespace already scopes its own members,
-/// so only loose value declarations are worth moving.
-///
-/// A declaration runs from its own keyword to the next one at column zero. The
-/// runtime is formatter-normalized, so nested code is always indented and only
-/// a real top-level declaration can match — which keeps multi-line type unions,
-/// wrapped function signatures, and whole namespace bodies in one piece.
-fn partition_runtime_source(source: &str) -> RuntimeSourceParts {
-    let mut imports = String::new();
-    let mut types = String::new();
-    let mut namespaces = String::new();
-    let mut values = String::new();
-
-    let lines: Vec<&str> = source.lines().collect();
-    let mut index = 0;
-
-    while index < lines.len() {
-        let head = lines[index];
-        let start = index;
-        index += 1;
-
-        while index < lines.len() && !starts_declaration(lines[index]) {
-            index += 1;
-        }
-
-        let block = lines[start..index].join("\n");
-        let target = if head.starts_with("import ") {
-            &mut imports
-        } else if is_type_declaration(head) {
-            &mut types
-        } else if is_namespace_declaration(head) {
-            &mut namespaces
-        } else {
-            &mut values
-        };
-
-        target.push_str(&block);
-        target.push('\n');
+    if resolves_class_values {
+        keep_theme_changes(&mut config.theme);
+    } else {
+        prune_resolver_tables(&mut config);
     }
 
-    // `export` has no meaning once these are locals in one file, and the
-    // package's re-export list describes a public surface that does not exist
-    // here at all.
-    RuntimeSourceParts {
-        imports,
-        types: strip_type_reexports(&types),
-        namespaces,
-        values: values.replace("export function ", "function "),
-    }
+    serde_json::to_string(&config).expect("runtime config must serialize to JSON")
 }
 
-fn strip_type_reexports(types: &str) -> String {
-    types
-        .lines()
-        .filter(|line| !line.starts_with("export type {"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+const THEME_TABLES: [&str; 4] = ["colors", "radius", "spacing", "fontFamily"];
 
-fn starts_declaration(line: &str) -> bool {
-    const KEYWORDS: [&str; 8] = [
-        "import ",
-        "type ",
-        "interface ",
-        "declare ",
-        "namespace ",
-        "function ",
-        "const ",
-        "let ",
+/// The runtime carries the defaults, so a table only has to say how it differs
+/// from them — which for most projects is not at all. A table that dropped a
+/// default entry cannot say that as an addition, so it travels whole and is
+/// named in `replaced` for the runtime to take as given.
+fn keep_theme_changes(theme: &mut crate::config::model::ThemeConfig) {
+    let defaults = &crate::config::defaults::default_config_ref().theme;
+    let kept = [
+        keep_changes(&mut theme.colors, &defaults.colors),
+        keep_changes(&mut theme.radius, &defaults.radius),
+        keep_changes(&mut theme.spacing, &defaults.spacing),
+        keep_changes(&mut theme.font_family, &defaults.font_family),
     ];
 
-    let head = line.strip_prefix("export ").unwrap_or(line);
-    KEYWORDS.iter().any(|keyword| head.starts_with(keyword))
+    theme.replaced = THEME_TABLES
+        .iter()
+        .zip(kept)
+        .filter(|(_, merges)| !merges)
+        .map(|(name, _)| (*name).to_owned())
+        .collect();
 }
 
-fn is_type_declaration(line: &str) -> bool {
-    let head = line.strip_prefix("export ").unwrap_or(line);
-    head.starts_with("type ") || head.starts_with("interface ") || head.starts_with("declare ")
+/// Drops every entry the defaults already carry. `false` when the table is
+/// missing one of them, which no set of additions can express.
+fn keep_changes<V: PartialEq>(
+    table: &mut std::collections::BTreeMap<String, V>,
+    defaults: &std::collections::BTreeMap<String, V>,
+) -> bool {
+    if defaults.keys().any(|key| !table.contains_key(key)) {
+        return false;
+    }
+
+    table.retain(|key, value| defaults.get(key) != Some(value));
+
+    true
 }
 
-fn is_namespace_declaration(line: &str) -> bool {
-    let head = line.strip_prefix("export ").unwrap_or(line);
-    head.starts_with("namespace ")
+/// The theme scales and the plugin utilities are only ever read while parsing a
+/// class value, and a file that hands the host none needs neither. They travel
+/// emptied *and* replaced, so the runtime takes the empty tables as given
+/// rather than falling back on its defaults.
+fn prune_resolver_tables(config: &mut TailwindConfig) {
+    config.theme.colors.clear();
+    config.theme.radius.clear();
+    config.theme.spacing.clear();
+    config.theme.font_family.clear();
+    config.plugins.utilities.clear();
+    config.theme.replaced = THEME_TABLES.iter().map(|name| (*name).to_owned()).collect();
 }
 
 /// The import that brings a configured motion driver in, and the argument that
@@ -212,64 +211,74 @@ mod tests {
         );
     }
 
-    /// Luau caps a function at 200 local registers and the emitted module body
-    /// is a function, so every runtime declaration that survives to module scope
-    /// is one the consumer's own file can no longer spend. The budget leaves
-    /// room both for the emitter's prelude and for the file being compiled.
-    const REGISTER_BUDGET: usize = 120;
-
-    /// The three scopes the emitter produces: module scope holds one register
-    /// per namespace, a namespace body holds its members until its block ends,
-    /// and the initializer holds whatever was left loose at the top level.
+    /// Every name the preamble reaches for has to leave the package. One left
+    /// unexported fails at the consumer's `import`, long after this crate ran.
     #[test]
-    fn the_inlined_runtime_stays_inside_luau_s_local_register_budget() {
-        let mut namespaces: Vec<(String, usize)> = Vec::new();
-        let mut loose = 0;
-
-        for line in RUNTIME_SOURCE.lines() {
-            let head = line.strip_prefix("export ").unwrap_or(line);
-
-            if let Some(rest) = head.strip_prefix("namespace ") {
-                let name = rest.trim_end_matches(" {").to_owned();
-                namespaces.push((name, 0));
-            } else if super::starts_declaration(line) && !super::is_type_declaration(line) {
-                loose += 1;
-            } else if let Some(member) = line.strip_prefix('\t') {
-                let member = member.strip_prefix("export ").unwrap_or(member);
-                if super::starts_declaration(member)
-                    && !super::is_type_declaration(member)
-                    && let Some(last) = namespaces.last_mut()
-                {
-                    last.1 += 1;
-                }
-            }
-        }
-
-        // The initializer keeps the loose declarations, and module scope keeps
-        // one register per namespace plus the config and the host itself.
-        let module_scope = namespaces.len() + 2;
-        assert!(
-            module_scope <= REGISTER_BUDGET,
-            "module scope needs {module_scope} registers, over the {REGISTER_BUDGET} budget"
+    fn the_runtime_exports_everything_the_preamble_imports() {
+        let opacity = format!(
+            "export namespace {}",
+            crate::swc::builders::OPACITY_NAMESPACE
         );
-        assert!(
-            loose <= REGISTER_BUDGET,
-            "the runtime initializer needs {loose} registers, over the {REGISTER_BUDGET} budget"
-        );
+        let declarations = [
+            "export function createVelaRuntimeHost",
+            "export function createVelaRemScaler",
+            opacity.as_str(),
+            "VelaRuntimeHostComponent",
+        ];
 
-        for (name, members) in &namespaces {
-            // roblox-ts adds a container local alongside the members.
-            let peak = module_scope + members + 1;
+        for declaration in declarations {
             assert!(
-                peak <= REGISTER_BUDGET,
-                "namespace {name} peaks at {peak} registers, over the {REGISTER_BUDGET} budget"
+                RUNTIME_SOURCE.contains(declaration),
+                "the runtime must export `{declaration}`"
             );
         }
+    }
 
+    /// The emit says only how a theme differs from the defaults, so the runtime
+    /// has to be reading the same defaults this crate diffs against. A second
+    /// copy of them anywhere would drift, and the drift would show up as a
+    /// wrong color rather than as a build failure.
+    #[test]
+    fn the_runtime_reads_the_defaults_this_crate_diffs_against() {
         assert!(
-            namespaces.len() > 1,
-            "the runtime must stay grouped into namespaces"
+            RUNTIME_SOURCE.contains("from \"./config-defaults.json\""),
+            "the runtime must read the shared defaults, not a copy of its own"
         );
+
+        let materialize = include_str!("../../../runtime/scripts/materialize-config-defaults.cjs");
+        assert!(
+            materialize.contains("\"config\", \"src\", \"defaults.json\""),
+            "the runtime's defaults must be copied from packages/config"
+        );
+    }
+
+    /// A rule carries its prop values as the source text the static path would
+    /// have written, and the runtime parses them back into real values. A
+    /// constructor the emit can produce but the parser never learned reaches the
+    /// instance as a string, which React rejects at assignment time — the whole
+    /// tree dies rather than the one prop.
+    #[test]
+    fn the_runtime_parses_every_value_constructor_the_emit_can_write() {
+        const CONSTRUCTORS: [&str; 11] = [
+            "new UDim(",
+            "new UDim2(",
+            "UDim2.fromOffset(",
+            "UDim2.fromScale(",
+            "Color3.fromRGB(",
+            "new Vector2(",
+            "new ColorSequence(",
+            "new ColorSequenceKeypoint(",
+            "new NumberSequence(",
+            "new NumberSequenceKeypoint(",
+            "new Font(",
+        ];
+
+        for constructor in CONSTRUCTORS {
+            assert!(
+                RUNTIME_SOURCE.contains(&format!("\"{constructor}\"")),
+                "runtime host never parses a `{constructor}` prop value"
+            );
+        }
     }
 
     /// A family the static path lowers but the runtime host never matches is

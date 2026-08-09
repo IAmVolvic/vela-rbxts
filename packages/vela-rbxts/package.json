@@ -68,6 +68,7 @@
   "dependencies": {
     "@rbxts/react": "^17.3.7-ts.1",
     "@rbxts/services": "^1.6.0",
+    "@rbxts/vela-runtime": "workspace:*",
     "@vela-rbxts/config": "workspace:*",
     "@vela-rbxts/rbxtsc-host": "workspace:*",
     "@vela-rbxts/types": "workspace:*"

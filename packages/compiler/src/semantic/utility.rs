@@ -1033,7 +1033,10 @@ pub(crate) fn is_known_unsupported_border_payload(payload: &str) -> bool {
         return true;
     }
 
-    if payload.contains('/') {
+    // A trailing `/N` lowers to `UIStroke.Transparency`; any other slash is a
+    // Tailwind shape this family does not implement.
+    let (payload, opacity) = split_color_opacity(payload);
+    if opacity.is_none() && payload.contains('/') {
         return true;
     }
 

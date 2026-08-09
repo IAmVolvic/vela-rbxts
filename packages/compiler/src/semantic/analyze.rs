@@ -164,6 +164,10 @@ fn supports_opacity_modifier(utility: &UtilityKind) -> bool {
             | UtilityKind::ShadowColor
             | UtilityKind::Ring
             | UtilityKind::Outline
+            | UtilityKind::GradientFrom
+            | UtilityKind::GradientVia
+            | UtilityKind::GradientTo
+            | UtilityKind::DivideColor
     )
 }
 
