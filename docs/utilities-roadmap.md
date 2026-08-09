@@ -125,8 +125,11 @@ React.createElement(VelaRuntimeHost, {
 - The `hover:` variant is supported by the host tracking state through
   MouseEnter/MouseLeave (composed with consumer Event handlers). Arbitrary
   `bg-[#hex]` colors and the `color/opacity` modifier (`bg-blue-600/50` →
-  transparency prop) are supported too — the modifier only works on families that
-  have a transparency prop (bg/text/image/shadow/ring/outline).
+  transparency prop) are supported too — the modifier works on every family with a
+  transparency channel (bg/text/image/border/shadow/ring/outline/scrollbar, the
+  divide separators, and the gradient stops, which carry theirs in a
+  `UIGradient.Transparency` sequence). `placeholder-` has none, so it keeps the
+  diagnostic.
 - An element with only transition tokens and no runtime rule is lowered statically
   today, so the presence of `transition` must **promote it to the host** (added to
   the `needsRuntimeHost` condition).
@@ -264,6 +267,116 @@ receive the config, so the weight table alone is enough to branch on).
   `packages/vela-rbxts/schema.json`, `config/model.rs` (serde `fontFamily`),
   `config/merge.rs`.
 
+### `theme.rem` — offsets follow the viewport
+
+Every pixel offset a utility lowered was a literal, so a class list that read well on
+a 1080p monitor was oversized on a phone and undersized on a 4K screen. `theme.rem`
+makes the offset a rem unit: the curve is Littensy's rem provider (viewport diagonal
+against `baseResolution`, capped at a 19:9 aspect, gentler falloff in portrait,
+rounded then clamped into `[min, max]`).
+
+The two lowering paths need different mechanics, because only one of them re-renders:
+
+- **Static path** — the element never renders again, so `__VelaRem.scale(value)` hands
+  its offsets over as a React binding the reconciler writes through. The file gets the
+  `__VelaRem` namespace inlined above it, alongside the opacity namespace if it needs
+  that too.
+- **Runtime host path** — the host already re-renders when the environment changes, so
+  its own props stay values and it is handed `__velaRem`, the names of the props to
+  scale. A value resolved from a rule or a dynamic class list is scaled as it enters
+  the resolution, so composition never sees a raw offset. Helper children take the
+  binding on this path as well, since the host renders them as plain children and
+  never reads them back.
+
+`min >= max` leaves the clamp no room, so every viewport resolves the same rem and the
+compiler drops the scaling from the emit entirely — the pre-rem literal output, opt-out
+included.
+
+- Only offsets scale. `UDim2.fromScale`, a `UDim` with a zero offset, and a literal `0`
+  keep their values, and `carries_offset` is what decides.
+- Wiring: `config/defaults.json`, `packages/config/src/index.ts`,
+  `packages/vela-rbxts/schema.json`, `config/model.rs` (serde `rem`), `config/merge.rs`,
+  `transform/rem.rs` (the scaled-prop table), and its mirror in the runtime's
+  `__VelaRem.SCALED_PROPS`.
+
+### Known branches in a class value
+
+A class value the compiler could not decide used to travel whole: the element was
+swapped for the runtime host and the class list was parsed in-game, against the
+resolver's own prefix subset. But `active ? "text-lg" : "text-sm"` names every token
+it can ever apply — only *which* of them apply is undecided — and `text-lg` has no
+runtime resolution at all, so the branch resolved to nothing.
+
+The reading is now a list of segments in source order: static tokens, branches, and
+whatever is left for the runtime. A branch is resolved here through
+`resolve_class_tokens`, the same call the static path makes, and what it comes to
+becomes a `RuntimeRule` the host applies when its condition holds.
+
+- **The condition is an index, not an expression.** The tests reach the host as
+  `__velaTests`, narrowed to booleans where they are written, and
+  `RuntimeCondition::Test { index, expected }` names one. A nested ternary reuses its
+  test's index across every branch below it, so an expression is evaluated once
+  however many rules hang on it.
+- **A branch is resolved among the tokens written around it**, then diffed against
+  the base — which is what keeps `["w-40", tall && "h-10"]` one `Size` rather than a
+  branch that overwrites the width, and what lets a static token written *after* a
+  branch still win.
+- **A variant inside a branch meets the branch's own test** as
+  `All [Test, Hover]`; `RuntimeCondition::All` already composed that way.
+- **The bundle is the boundary.** A rule carries props and helpers, so a branch whose
+  resolution differs from the base in `text`, `margin`, `divide`, `transition`,
+  `animation` or `opacity_alpha` — all of which the host reads off its own props —
+  cannot ride one. `diff_effects` returns `None` there and the whole class value is
+  re-read with `collapse_class_value_expr_without_branches`, which is the pre-branch
+  emit exactly.
+- **`||` keeps its left side.** A truthy left *is* the class value and can name
+  anything, so it stays on `className` while the literal behind it becomes a rule
+  gated on the test being false. The two never both apply.
+- Two branches that touch the same prop are applied in written order, so the later
+  one wins. Two that touch different halves of one prop (`[a && "w-40", b && "h-10"]`)
+  are two writes to `Size`, which the resolution cannot merge — the same limit the
+  runtime resolver always had.
+- **A rule's prop values are source text, and the runtime parses them back.**
+  `parseRuntimePropValue` knew `Color3.fromRGB`, `UDim`, `UDim2` and `Enum.*`, but not
+  `Vector2`, `ColorSequence` or `Font` — so `md:min-w-16`, `md:bg-gradient-to-r` and
+  `md:font-bold` had been assigning strings to Roblox properties all along, which
+  React rejects loudly enough to take the whole tree down. Branches reach those
+  families far more often, which is how it surfaced. The parser now covers every
+  constructor the emit can write, and
+  `the_runtime_parses_every_value_constructor_the_emit_can_write` guards the seam.
+- Base helpers a rule also names are hoisted into an unconditional rule
+  (`All { conditions: [] }`) so they merge by tag inside the resolution. The host
+  renders `resolution.helpers` next to the children it was handed, so leaving the
+  base helper as a child would put two `UIPadding` under one instance — which the
+  variant path had been doing all along.
+- Wiring: `class_value/collapse.rs` (segments and tests), `transform/branch.rs`
+  (resolution, diff and hoisting), `ir/model.rs` (`RuntimeCondition::Test`),
+  `swc/builders.rs` (`create_tests_attr`), and the runtime's `RuntimeEnvironment.tests`
+  and `matchesRuntimeCondition`.
+
+### The inlined config carries only what the file reads
+
+The host inlines the resolved config, and the config is mostly scales: the color
+palette alone is 12KB of the 19KB it serializes to. Every one of those keys exists
+for `applyToken`, which runs over `normalizeClassValue(className)` and nothing else
+— so a file that never hands the host a class value carries the whole table unread.
+
+That is most files, and more of them since branches: a variant, a branch, a text
+transform, a margin, a divide or a preset animation all reach the host through props
+resolved at compile time. `prune_resolver_tables` empties `colors`, `radius`,
+`spacing`, `fontFamily` and `plugins.utilities` for those, taking the config from
+~19KB to ~400 bytes. `preflight`, `rem` and the motion driver stay — the host reads
+those whatever it renders.
+
+- **The signal is per file, because the config is inlined per file.** One element
+  with a class value the compiler cannot read keeps the tables for the whole module.
+- **A spread counts as a class value.** `<frame {...rest} className="hover:bg-*" />`
+  hands the host whatever `rest` holds, and `className` is a declared prop, so the
+  tables have to survive it.
+- Wiring: `transform/context.rs` (`resolves_class_values`), `transform/runtime_host.rs`
+  (`prune_resolver_tables`). The harness keeps `surfaceClass(active)` for the sole
+  purpose of holding the unpruned path open end to end.
+
 ### Host awareness in `opacity-*`
 
 `opacity-*` used to lower only to `BackgroundTransparency`, but a CanvasGroup
@@ -326,10 +439,11 @@ one. `__VelaOpacity` holds a context, a provider and a consumer:
 - The walk stops at anything that reads the context itself. Fading a runtime host or
   a component from outside as well would apply the same alpha twice.
 
-The context is created once on a shared global rather than per module: the runtime is
-inlined into every file that needs it, so `createContext` in each copy would make one
-context per module and nothing would ever cross. A file that needs only the fade
-inlines the namespace alone rather than the whole host.
+The context is created once, in the runtime module every file imports, so it is the
+same object wherever the alpha crosses a component boundary. It used to be stashed on
+`_G`: the runtime was copied into every file that needed it, and `createContext` in
+each copy made one context per module that nothing could cross. A file that needs only
+the fade imports the opacity namespace alone rather than the whole host.
 
 Because the boundary is now crossed at render time, a class value that only settles
 then is left whole to the runtime: the transformer stops fading the subtree under a

@@ -1,7 +1,7 @@
 # vela-rbxts
 
 `vela-rbxts` is a Tailwind-style `className` integration layer for [roblox-ts](https://roblox-ts.com/).
-This monorepo contains the native compiler, the `rbxtsc` host adapter, shared config and type packages, the inline runtime helper used by the transformer, a standalone Rust LSP adapter, and three harness apps.
+This monorepo contains the native compiler, the `rbxtsc` host adapter, shared config and type packages, the runtime the transformer imports, a standalone Rust LSP adapter, and three harness apps.
 
 Release workflow documentation is available in `docs/release.md`.
 
@@ -12,7 +12,7 @@ The implementation is intentionally narrow and focuses on Roblox UI styling rath
 - `className?: ClassValue` is added to `React.Attributes` through `vela-rbxts`.
 - Supported TSX files are lowered by the `rbxtsc` transformer when they target supported Roblox host elements or your own components.
 - The `vela` CLI lowers the same files ahead of `rbxtsc` for projects that cannot register a transform plugin.
-- Dynamic `ClassValue` expressions and supported Roblox-oriented variants are rewritten with an inline runtime helper when needed.
+- Dynamic `ClassValue` expressions and supported Roblox-oriented variants are rewritten against an imported runtime helper when needed.
 - The standalone Rust LSP server under `packages/lsp` provides completions, hover, document colors, quickfixes, and diagnostics in editors.
 - Unsupported utility families and unknown theme keys produce diagnostics instead of being silently ignored.
 
@@ -22,7 +22,8 @@ Full documentation lives at [docs.astra-void.xyz/vela-rbxts](https://docs.astra-
 
 | Path | What it does |
 | --- | --- |
-| `packages/vela-rbxts` | The only package an app installs. Re-exports config helpers, `createTransformer`, shared types, the `./transformer` subpath export, and the `vela` CLI that lowers a source tree without the transformer. |
+| `packages/vela-rbxts` | The only package an app installs by hand. Re-exports config helpers, `createTransformer`, shared types, the `./transformer` subpath export, and the `vela` CLI that lowers a source tree without the transformer. |
+| `packages/runtime` | Published as `@rbxts/vela-runtime` and installed with `vela-rbxts`. The class resolver every transformed module imports, as one ModuleScript the place shares. |
 | `packages/compiler` | Native compiler implementation that resolves, validates, and lowers utility classes. |
 | `packages/lsp` | Standalone Rust stdio LSP server that adapts the compiler's editor APIs for completions, hover, colors, quickfixes, and diagnostics. |
 | `packages/vscode-extension` | VS Code client for the LSP, published to the marketplace as `astra-void.vela-rbxts-lsp`. |
@@ -130,7 +131,9 @@ Do not name it `src/vela-rbxts.d.ts`. A roblox-ts project sets `baseUrl` to `src
 ### 5. Serve the project
 
 Use your normal Rojo project setup and serve the compiled roblox-ts output as usual.
-Vela does not require an extra runtime package, generated folder, or Vela-specific Rojo mapping.
+Vela needs no generated folder and no Vela-specific Rojo mapping. Its runtime, `@rbxts/vela-runtime`, installs as a dependency of `vela-rbxts`, so it lands in the `node_modules/@rbxts` folder a roblox-ts project already maps and already lists in `typeRoots`.
+
+The one thing your Rojo project does need is the `node_modules/@rbxts` mapping every roblox-ts template already ships — that is where the runtime lands, the same as `@rbxts/react`.
 
 For example, a client output mapping can remain as simple as:
 
@@ -148,7 +151,7 @@ For example, a client output mapping can remain as simple as:
 }
 ```
 
-The transformer inlines its runtime helper into transformed modules only when runtime evaluation is needed.
+A transformed module imports the runtime only when runtime evaluation is needed, and every module that does shares the one copy.
 
 ### 6. Use `className` in TSX
 
@@ -243,6 +246,7 @@ The current config model supports these theme families:
 - `radius`
 - `spacing`
 - `fontFamily`
+- `rem`
 
 `spacing` feeds padding, gap, and sizing utilities in the current compiler slice.
 
@@ -293,6 +297,41 @@ export default defineConfig({
 
 `font-*` then covers both scales the way Tailwind does: the weight names (`font-bold`, `font-medium`, …) win, and every other payload is looked up as a font family key — `font-display` above, or `unknown-theme-key` when there is no such key.
 
+### Rem
+
+Every pixel offset a utility lowers — `p-4`, `w-40`, `rounded-lg`, `text-sm`, `border-2`, `top-2` — is a rem unit, not a raw pixel. One rem is 16px at a 1920×1020 viewport and scales with the viewport from there, so the same class list reads at the same visual weight on a phone, a laptop, and a 4K monitor. This is on by default and needs no provider, no hook, and no wrapper component.
+
+The curve follows [Littensy's rem provider](https://github.com/littensy/slither/blob/main/src/client/providers/rem-provider.tsx): the viewport diagonal against `baseResolution`, capped at a 19:9 aspect ratio so an ultrawide does not inflate the scale, with a gentler falloff in portrait, rounded and then clamped into `[min, max]`.
+
+```ts
+export default defineConfig({
+  theme: {
+    rem: {
+      base: 16,
+      min: 8,
+      max: 64,
+      baseResolution: { x: 1920, y: 1020 },
+    },
+  },
+});
+```
+
+`rem` is a record rather than a keyed scale, so a partial override merges field by field — `theme.rem` and `theme.extend.rem` behave the same, and naming only `min` leaves the rest at their defaults.
+
+Scale-valued utilities are unaffected: `w-full`, `h-1/2`, and `translate-x-1/2` are fractions of the parent, and rem never touches them.
+
+**To pin offsets to literal pixels**, close the clamp:
+
+```ts
+export default defineConfig({
+  theme: { rem: { min: 16, max: 16 } },
+});
+```
+
+With no room left in the clamp every viewport resolves the same rem, and the compiler drops the scaling from the emit entirely — offsets lower to plain `UDim2`/`UDim` literals exactly as they did before rem existed, with no binding and no runtime import.
+
+Otherwise a statically lowered element carries its offsets as React bindings, because it has no render of its own to run again when the viewport changes; the file builds a rem scaler above it. An element that already needs the runtime host keeps plain values and is handed the names of the props to scale, since it re-renders on a rem change anyway.
+
 ### Supported Host Elements
 
 The semantic boundary currently recognizes these Roblox elements:
@@ -327,7 +366,7 @@ The transformer resolves the utilities at compile time and passes the result to 
 
 This means the component has to forward the props and children it does not consume down to a Roblox host element, the same way `className` on the web only works because a component passes it to a DOM node. Components that drop unknown props will silently drop the styling.
 
-Dynamic `ClassValue` expressions and runtime-aware variants work on components too. Those are wrapped in the inline runtime helper, which resolves the class list at runtime and then renders the component with the resulting props.
+Dynamic `ClassValue` expressions and runtime-aware variants work on components too. Those are wrapped in the runtime helper, which resolves the class list at runtime and then renders the component with the resulting props.
 
 Per-element utility restrictions do not apply to components, because the eventual host element is unknown. The editor offers the full utility set inside a component's `className` and never reports `unsupported-host-utility` there.
 
@@ -351,11 +390,11 @@ Roblox exposes no color scheme to a running game — there is no `prefers-color-
 Players.LocalPlayer.SetAttribute("VelaColorScheme", dark ? "dark" : "light");
 ```
 
-An attribute is what makes this work at all: the runtime helper is inlined per module, so a React context or a module-level store could never be shared between them, while every copy can read the same instance.
+An attribute rather than a React context or a settings module: the attribute is readable from anywhere, including code that never rendered a Vela element, and it survives the player rejoining a place.
 
 The three interaction variants attach their listeners only when a rule actually uses them, and compose with whatever handlers you declared in `Event` — yours still run. A press that ends outside the element never reaches its `InputEnded`, so `active:` also clears on `MouseLeave`. There is no `disabled:`: Roblox has no disabled state to observe. Model it with your own prop and `pointer-events-none`.
 
-A variant on a utility that actually resolves forces the runtime path for that element, including inside a plain string literal — `className="sm:w-full"` inlines the whole runtime helper into the module. (A variant on an unsupported utility resolves to nothing and stays static, which is not a feature to rely on.) Use variants where they earn it rather than by reflex.
+A variant on a utility that actually resolves forces the runtime path for that element, including inside a plain string literal — `className="sm:w-full"` moves that element onto the runtime resolver. (A variant on an unsupported utility resolves to nothing and stays static, which is not a feature to rely on.) Use variants where they earn it rather than by reflex.
 
 ### Supported Utility Classes
 
@@ -399,7 +438,7 @@ The exhaustive table of accepted values lives in the [utility reference](https:/
 Two value forms work across every color family (`bg-`, `text-`, `image-`, `placeholder-`, `border-`, `divide-`, `shadow-`, `ring-`, `outline-`, and the gradient stops):
 
 - Arbitrary hex colors: `bg-[#ff0000]` and the short `bg-[#f00]` resolve to `Color3.fromRGB`. Non-hex bracket payloads keep the `unsupported-arbitrary-value` diagnostic.
-- Opacity modifiers: a trailing `/N` (0–100) lowers to the family's transparency prop — `bg-blue-600/50` sets `BackgroundTransparency = 0.5`. Families without a transparency prop (`placeholder-`, gradient stops, `divide-`) report `unsupported-opacity-modifier` instead.
+- Opacity modifiers: a trailing `/N` (0–100) lowers to the family's transparency channel — `bg-blue-600/50` sets `BackgroundTransparency = 0.5`, `border-slate-500/25` sets the `UIStroke` `Transparency`, `divide-slate-500/10` fades the separator frames, and a gradient stop such as `from-blue-600/50` becomes a `UIGradient.Transparency` keypoint. `placeholder-` is the one family Roblox gives no transparency channel, so it still reports `unsupported-opacity-modifier`.
 
 ### Arbitrary Values
 
@@ -431,11 +470,25 @@ Tailwind's own `scroll-*` utilities (`scroll-smooth`, `scroll-m-*`, `scroll-p-*`
 
 The two paths produce very different results, and the difference is worth knowing before you compute a class string.
 
-A `className` that collapses to static tokens is lowered at compile time, and the full utility set above applies. A `className` the compiler cannot collapse takes the runtime path, where the element is swapped for the inlined runtime helper and the class list is resolved in-game.
+A `className` that collapses to static tokens is lowered at compile time, and the full utility set above applies. A `className` the compiler cannot collapse takes the runtime path, where the element is swapped for the runtime helper and the class list is resolved in-game.
 
-**The runtime resolver handles only these prefixes:** `bg-*`, `text-{color}` (colors only — `text-lg` and `text-left` stay static-only), `border` and `border-*`, `rounded-*` (bare `rounded` is static-only), `p-*` through `pl-*`, `gap-*`, `w-*`, `h-*`, `size-*`, the positive margin forms `m-*` through `ml-*`, `divide-*`, the text transforms (`uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` and their resets), and motion (`transition*`, `duration-*`, `delay-*`, `ease-*`, `animate-*`). Anything else in a dynamic `className` is dropped with no diagnostic. Arbitrary length values resolve on both paths and agree; arbitrary hex colors, supported statically, do not resolve dynamically. It drops `fit` and `auto`, and lets a later `w-`/`h-` overwrite an earlier one instead of merging both into one `Size`.
+**A branch whose classes are written out is lowered at compile time as well.** `active ? "text-lg" : "text-sm"`, `["w-40", tall && "h-10"]`, `{ "px-4": roomy, "px-2": !roomy }` and `props.className || "bg-blue-500"` all name their tokens in the source; only *which* of them apply is left for render time. Those tokens are resolved here — full utility set, diagnostics included — and the element is handed the resolved props alongside the tests that decide them. It still renders through the runtime host, because something has to read the tests, but nothing is parsed in-game and the prefix list below does not apply. Each test is evaluated exactly once, however many branches hang on it.
 
-Where it matters, branch between two fully static string literals so both branches stay on the static path.
+```tsx
+// `text-lg` has no runtime resolution at all. Written as a branch it lowers here,
+// so both sizes reach the instance.
+<textlabel className={big ? "text-lg" : "text-sm"} />
+```
+
+Three things send a branch back to the runtime resolver:
+
+- **a token no rule can carry** — `m-*`, `divide-*`, `animate-*`, `transition*`, the text transforms (`uppercase`, `underline`, …) and `opacity-*`. The runtime host reads these off its own props rather than off the resolution, so one of them in any branch takes the whole class value down the runtime path.
+- **a value the source never names** — `` `size-${n}` ``, a variable, a call, a spread.
+- **the left side of `||`**, which is the class value itself when it is truthy. The literal behind it is still resolved here.
+
+Two branches that touch the same property are applied in the order they were written, so `[a && "bg-red-500", b && "bg-blue-500"]` paints blue when both hold. Two branches that touch different halves of one property are not merged: `[a && "w-40", b && "h-10"]` is two writes to `Size`, and the later one wins — write the pair inside a single branch when both axes matter.
+
+**The runtime resolver handles only these prefixes:** `bg-*`, `text-{color}` (colors only — `text-lg` and `text-left` stay static-only), `border` and `border-*`, `rounded-*` (bare `rounded` is static-only), `p-*` through `pl-*`, `gap-*`, `w-*`, `h-*`, `size-*`, the positive margin forms `m-*` through `ml-*`, `divide-*`, the text transforms (`uppercase`, `lowercase`, `capitalize`, `underline`, `line-through` and their resets), and motion (`transition*`, `duration-*`, `delay-*`, `ease-*`, `animate-*`). Anything else in a class value that reaches the runtime is dropped with no diagnostic. Arbitrary length values resolve on both paths and agree; arbitrary hex colors, supported statically, do not resolve dynamically. It drops `fit` and `auto`, and lets a later `w-`/`h-` overwrite an earlier one instead of merging both into one `Size`.
 
 ### Diagnostics
 
@@ -452,7 +505,7 @@ Where it matters, branch between two fully static string literals so both branch
 
 The project config file is named `vela.config.ts` or `vela.config.json` — those exact filenames, with no `.js`, `.mjs`, or `.cjs` variant. The host resolves it by walking upward from each source file and loading the nearest one it finds, preferring `.ts` within a directory and falling back to the built-in defaults when there is none. See [step 3](#3-add-velaconfigts) for the shape and [Theme Axes](#theme-axes) for the merge rules.
 
-The schema is only `preflight`, `plugins`, `theme.colors`, `theme.radius`, `theme.spacing`, `theme.fontFamily`, and their `theme.extend` counterparts. There is no `content`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
+The schema is only `preflight`, `plugins`, `theme.colors`, `theme.radius`, `theme.spacing`, `theme.fontFamily`, `theme.rem`, and their `theme.extend` counterparts. There is no `content`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
 
 ### `preflight`
 
@@ -513,7 +566,7 @@ What a plugin utility expands to is checked where it is used, and a class the bo
 
 #### Replacing the motion driver
 
-`transition` and `animate-*` run on `TweenService` by default. `setMotionDriver` points the inlined runtime host at a module of your own instead — a spring library, a shared animation service, whatever the project already uses:
+`transition` and `animate-*` run on `TweenService` by default. `setMotionDriver` points the runtime host at a module of your own instead — a spring library, a shared animation service, whatever the project already uses:
 
 ```ts
 plugin(({ setMotionDriver }) => {
@@ -521,7 +574,7 @@ plugin(({ setMotionDriver }) => {
 });
 ```
 
-The module is imported by the runtime helper, which is inlined into **every** transformed module at whatever depth it sits — so the specifier has to resolve from any of them. Use a package name or a `baseUrl`-relative path (`"client/motion"`); a relative `./motion` is rejected. Omit `export` to import the default export.
+The driver is imported by **every** transformed module that needs it, at whatever depth it sits, and handed to the runtime from there — so the specifier has to resolve from any of them. Use a package name or a `baseUrl`-relative path (`"client/motion"`); a relative `./motion` is rejected. Omit `export` to import the default export.
 
 The driver is an object with two optional methods:
 
