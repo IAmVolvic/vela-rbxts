@@ -2,10 +2,8 @@ use crate::ir::model::{HelperEntry, PropEntry};
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        ArrayLit, Bool, CondExpr, Expr, ExprOrSpread, Ident, IdentName, JSXAttr, JSXAttrName,
-        JSXAttrOrSpread, JSXAttrValue, JSXClosingElement, JSXElement, JSXElementChild,
-        JSXElementName, JSXExpr, JSXExprContainer, JSXMemberExpr, JSXObject, JSXOpeningElement,
-        Lit,
+        Expr, Ident, IdentName, JSXAttr, JSXAttrName, JSXAttrOrSpread, JSXAttrValue, JSXElement,
+        JSXElementChild, JSXElementName, JSXExpr, JSXExprContainer, JSXOpeningElement,
     },
 };
 
@@ -22,41 +20,7 @@ pub(crate) fn create_prop_attr_cast_any(prop: PropEntry) -> JSXAttrOrSpread {
     )
 }
 
-/// The tests the emitted branch rules decide on, as one array the host reads by
-/// index. Each is narrowed to a boolean where it is written, so an expression
-/// the rules hang on is evaluated once however many of them name it.
-pub(crate) fn create_tests_attr(tests: Vec<Expr>) -> JSXAttrOrSpread {
-    let elems = tests
-        .into_iter()
-        .map(|test| {
-            Some(ExprOrSpread {
-                spread: None,
-                expr: Box::new(Expr::Cond(CondExpr {
-                    span: DUMMY_SP,
-                    test: Box::new(test),
-                    cons: Box::new(Expr::Lit(Lit::Bool(Bool {
-                        span: DUMMY_SP,
-                        value: true,
-                    }))),
-                    alt: Box::new(Expr::Lit(Lit::Bool(Bool {
-                        span: DUMMY_SP,
-                        value: false,
-                    }))),
-                })),
-            })
-        })
-        .collect();
-
-    create_prop_attr_with_expr(
-        "__velaTests".to_owned(),
-        Box::new(Expr::Array(ArrayLit {
-            span: DUMMY_SP,
-            elems,
-        })),
-    )
-}
-
-fn create_prop_attr_with_expr(name: String, expr: Box<Expr>) -> JSXAttrOrSpread {
+pub(crate) fn create_prop_attr_with_expr(name: String, expr: Box<Expr>) -> JSXAttrOrSpread {
     JSXAttrOrSpread::JSXAttr(JSXAttr {
         span: DUMMY_SP,
         name: JSXAttrName::Ident(IdentName::new(name.into(), DUMMY_SP)),
@@ -93,75 +57,8 @@ fn create_helper_child_with_expr(
     }))
 }
 
-/// The runtime's opacity provider, wrapped around what the static fade could not
-/// reach. It renders no instance of its own, so the tree it wraps keeps its
-/// shape, its keys and the names Roblox gives them.
-pub(crate) fn create_opacity_provider(
-    alpha: f64,
-    children: Vec<JSXElementChild>,
-) -> Box<JSXElement> {
-    let name = JSXElementName::JSXMemberExpr(JSXMemberExpr {
-        span: DUMMY_SP,
-        obj: JSXObject::Ident(Ident::new_no_ctxt(OPACITY_NAMESPACE.into(), DUMMY_SP)),
-        prop: IdentName::new("Provider".into(), DUMMY_SP),
-    });
-
-    Box::new(JSXElement {
-        span: DUMMY_SP,
-        opening: JSXOpeningElement {
-            name: name.clone(),
-            span: DUMMY_SP,
-            attrs: vec![create_prop_attr_with_expr(
-                "value".to_owned(),
-                parse_expression(&alpha.to_string()),
-            )],
-            self_closing: false,
-            type_args: None,
-        },
-        children,
-        closing: Some(JSXClosingElement {
-            span: DUMMY_SP,
-            name,
-        }),
-    })
-}
-
-/// The runtime's fade consumer, wrapped around what a component returns. A
-/// statically lowered instance cannot read a context, so this is what reads one
-/// on its behalf.
-pub(crate) fn create_fade_element(child: Expr) -> Box<JSXElement> {
-    let name = JSXElementName::JSXMemberExpr(JSXMemberExpr {
-        span: DUMMY_SP,
-        obj: JSXObject::Ident(Ident::new_no_ctxt(OPACITY_NAMESPACE.into(), DUMMY_SP)),
-        prop: IdentName::new("Fade".into(), DUMMY_SP),
-    });
-
-    let child = match child {
-        Expr::JSXElement(element) => JSXElementChild::JSXElement(element),
-        Expr::JSXFragment(fragment) => JSXElementChild::JSXFragment(fragment),
-        other => JSXElementChild::JSXExprContainer(JSXExprContainer {
-            span: DUMMY_SP,
-            expr: JSXExpr::Expr(Box::new(other)),
-        }),
-    };
-
-    Box::new(JSXElement {
-        span: DUMMY_SP,
-        opening: JSXOpeningElement {
-            name: name.clone(),
-            span: DUMMY_SP,
-            attrs: Vec::new(),
-            self_closing: false,
-            type_args: None,
-        },
-        children: vec![child],
-        closing: Some(JSXClosingElement {
-            span: DUMMY_SP,
-            name,
-        }),
-    })
-}
-
+/// The namespace both targets' runtimes export their opacity helpers under.
+/// What `Provider` and `Fade` are shaped like is the target's business.
 pub(crate) const OPACITY_NAMESPACE: &str = "__VelaOpacity";
 
 pub(crate) fn parse_expression(value: &str) -> Box<Expr> {

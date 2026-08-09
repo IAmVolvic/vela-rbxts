@@ -6,8 +6,7 @@ use crate::diagnostics::compiler::{
 };
 use crate::ir::model::{PropEntry, StyleIr, TextSpec};
 use crate::swc::builders::{
-    create_helper_child, create_helper_child_cast_any, create_opacity_provider, create_prop_attr,
-    create_prop_attr_cast_any, create_tests_attr,
+    create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
 };
 use crate::transform::fade::{
     fade_component_function, fade_component_initializer, is_component_binding,
@@ -16,9 +15,7 @@ use crate::transform::jsx::{
     element_expression_source, is_component_element, lower_class_name,
     unsupported_host_class_name_diagnostic,
 };
-use crate::transform::module::{
-    RuntimeNeeds, create_runtime_module_items, element_tag_name, is_supported_host_element,
-};
+use crate::transform::module::{RuntimeNeeds, element_tag_name, is_supported_host_element};
 use crate::transform::opacity::{
     branch_opacity_needs_runtime, compose_inherited_opacity, static_opacity_alpha,
 };
@@ -36,6 +33,9 @@ use swc_core::{
 pub(crate) struct VelaTransformer {
     pub(crate) changed: bool,
     pub(crate) config: crate::config::model::TailwindConfig,
+    /// Which UI library this file is baked for. Everything the semantic layer
+    /// decided is target-neutral; only what reaches JSX goes through here.
+    pub(crate) target: &'static dyn crate::transform::target::EmitTarget,
     pub(crate) diagnostics: Vec<Diagnostic>,
     pub(crate) ir: Vec<StyleIr>,
     pub(crate) runtime_host_needed: bool,
@@ -60,7 +60,7 @@ impl VisitMut for VelaTransformer {
         module.visit_mut_children_with(self);
         self.class_value_scopes.pop();
 
-        let mut runtime_items = create_runtime_module_items(
+        let mut runtime_items = self.target.runtime_module_items(
             &self.config,
             &RuntimeNeeds {
                 host: self.runtime_host_needed,
@@ -89,7 +89,7 @@ impl VisitMut for VelaTransformer {
         declaration.visit_mut_children_with(self);
 
         if is_component_binding(&declaration.ident.sym)
-            && fade_component_function(&mut declaration.function)
+            && fade_component_function(&mut declaration.function, self.target)
         {
             self.opacity_helper_needed = true;
             self.changed = true;
@@ -102,7 +102,7 @@ impl VisitMut for VelaTransformer {
         let DefaultDecl::Fn(function) = &mut declaration.decl else {
             return;
         };
-        if fade_component_function(&mut function.function) {
+        if fade_component_function(&mut function.function, self.target) {
             self.opacity_helper_needed = true;
             self.changed = true;
         }
@@ -121,7 +121,7 @@ impl VisitMut for VelaTransformer {
         let Some(init) = declarator.init.as_deref_mut() else {
             return;
         };
-        if fade_component_initializer(init) {
+        if fade_component_initializer(init, self.target) {
             self.opacity_helper_needed = true;
             self.changed = true;
         }
@@ -385,7 +385,7 @@ impl VisitMut for VelaTransformer {
                 }));
             }
             if !tests.is_empty() {
-                attrs.push(create_tests_attr(tests));
+                attrs.push(self.target.tests_attr(tests));
             }
             if let Some(transition) = &lowered.style_ir.transition {
                 attrs.push(create_prop_attr(PropEntry {
@@ -430,8 +430,10 @@ impl VisitMut for VelaTransformer {
                 name: "__velaTag".into(),
                 value: runtime_tag,
             }));
-            element.opening.name =
-                JSXElementName::Ident(Ident::new_no_ctxt("VelaRuntimeHost".into(), DUMMY_SP));
+            element.opening.name = JSXElementName::Ident(Ident::new_no_ctxt(
+                self.target.host_element_name().into(),
+                DUMMY_SP,
+            ));
             if let Some(closing) = element.closing.as_mut() {
                 closing.name = element.opening.name.clone();
             }
@@ -554,7 +556,8 @@ impl VelaTransformer {
                     expr: JSXExpr::JSXEmptyExpr(JSXEmptyExpr { span: DUMMY_SP }),
                 }),
             );
-            *child = JSXElementChild::JSXElement(create_opacity_provider(alpha, vec![wrapped]));
+            *child =
+                JSXElementChild::JSXElement(self.target.opacity_provider(alpha, vec![wrapped]));
             self.changed = true;
             self.opacity_helper_needed = true;
         }
@@ -568,7 +571,7 @@ impl VelaTransformer {
             return;
         }
 
-        let mut provider = create_opacity_provider(alpha, Vec::new());
+        let mut provider = self.target.opacity_provider(alpha, Vec::new());
         std::mem::swap(element, provider.as_mut());
         element.children.push(JSXElementChild::JSXElement(provider));
         self.changed = true;

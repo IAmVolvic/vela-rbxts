@@ -8,6 +8,7 @@ pub(crate) mod opacity;
 pub(crate) mod rem;
 pub(crate) mod runtime;
 pub(crate) mod runtime_host;
+pub(crate) mod target;
 
 use crate::api::{Diagnostic, EditorRange, TransformOptions, TransformResult};
 use crate::config::resolve::parse_config_with_diagnostic;
@@ -96,6 +97,7 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
     let mut transformer = VelaTransformer {
         changed: false,
         config,
+        target: crate::transform::target::react_target(),
         diagnostics,
         ir: Vec::new(),
         runtime_host_needed: false,
@@ -323,6 +325,29 @@ mod tests {
                 .code
                 .contains("as unknown as VelaRuntimeHostComponent"),
             "the host instance must be cast to that component type"
+        );
+    }
+
+    /// The preamble declares a binding and the lowered element reaches for it.
+    /// Both names come off the target now, and a target that disagreed with
+    /// itself would fail at the consumer's build rather than here.
+    #[test]
+    fn the_host_binding_the_preamble_declares_is_the_one_elements_are_retagged_to() {
+        let host = crate::transform::target::react_target().host_element_name();
+        let result = transform_impl(
+            "const ui = <frame className=\"hover:bg-red-500\" />;".to_owned(),
+            None,
+        );
+
+        assert!(
+            result.code.contains(&format!("const {host} =")),
+            "the preamble must declare `{host}`: {}",
+            result.code
+        );
+        assert!(
+            result.code.contains(&format!("<{host} ")),
+            "the lowered element must be retagged to `{host}`: {}",
+            result.code
         );
     }
 
