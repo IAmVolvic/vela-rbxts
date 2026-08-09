@@ -704,7 +704,7 @@ fn describe_token(
                 Some(payload) => match classify_stroke_payload(&analysis.utility, payload) {
                     StrokePayload::Thickness(thickness) => format!(
                         "{variant_prefix}Sets `UIStroke.Thickness` to {} with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`.",
-                        offset_value_text(config, &thickness)
+                        offset_value_text(config, &thickness.offset(config))
                     ),
                     StrokePayload::Unsupported => return None,
                     StrokePayload::Color => {
@@ -846,7 +846,7 @@ fn describe_token(
         }
         UtilityKind::TextSize => {
             let size_key = analysis.payload()?;
-            let value = resolve_text_size_value(size_key)?;
+            let value = resolve_text_size_value(config, size_key)?;
             Some(HoverContent {
                 display: format!("`{token}` -> TextSize"),
                 documentation: format!(
@@ -1119,7 +1119,7 @@ fn describe_border_token(
             display: format!("`{token}` -> UIStroke.Thickness"),
             documentation: format!(
                 "{variant_prefix}Sets `UIStroke.Thickness` to {}.",
-                offset_value_text(config, &thickness)
+                offset_value_text(config, &thickness.offset(config))
             ),
         });
     }

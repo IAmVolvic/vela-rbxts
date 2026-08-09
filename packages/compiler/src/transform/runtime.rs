@@ -744,7 +744,7 @@ fn apply_analyzed_token(
             if let Some(border_key) = analysis.payload() {
                 apply_border_utility(style, config, diagnostics, border_key, &analysis.parsed.raw);
             } else if let Some(value) = resolve_border_thickness_value(None) {
-                style.set_helper_prop("uistroke", "Thickness", value.to_owned());
+                style.set_helper_prop("uistroke", "Thickness", value.offset(config));
             }
         }
         UtilityKind::Radius => {
@@ -1498,8 +1498,8 @@ fn apply_analyzed_token(
         }
         UtilityKind::TextSize => {
             if let Some(size_key) = analysis.payload() {
-                if let Some(value) = resolve_text_size_value(size_key) {
-                    style.set_prop("TextSize", value.to_owned());
+                if let Some(value) = resolve_text_size_value(config, size_key) {
+                    style.set_prop("TextSize", value);
                 } else {
                     diagnostics.push(unsupported_text_size_diagnostic(
                         size_key,
@@ -1731,7 +1731,7 @@ fn apply_border_utility(
     token: &str,
 ) {
     if let Some(thickness) = resolve_border_thickness_value(Some(border_key)) {
-        style.set_helper_prop("uistroke", "Thickness", thickness.to_owned());
+        style.set_helper_prop("uistroke", "Thickness", thickness.offset(config));
         return;
     }
 
@@ -1804,7 +1804,7 @@ fn apply_stroke_utility(
 
     match classify_stroke_payload(&analysis.utility, payload) {
         StrokePayload::Thickness(thickness) => {
-            style.set_helper_prop("uistroke", "Thickness", thickness.to_owned());
+            style.set_helper_prop("uistroke", "Thickness", thickness.offset(config));
             style.set_helper_prop(
                 "uistroke",
                 "ApplyStrokeMode",

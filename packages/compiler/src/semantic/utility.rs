@@ -888,7 +888,7 @@ fn classify_text_utility(payload: &str) -> UtilityKind {
         UtilityKind::TextXAlignment
     } else if TEXT_WRAP_VALUES.contains(&payload) {
         UtilityKind::TextWrap
-    } else if parse_arbitrary_number(payload, "px").is_some() {
+    } else if parse_arbitrary_length(payload).is_some() {
         // `text-[#f00]` stays a color; only a number reads as a size.
         UtilityKind::TextSize
     } else {
@@ -896,9 +896,9 @@ fn classify_text_utility(payload: &str) -> UtilityKind {
     }
 }
 
-pub(crate) fn resolve_text_size_value(key: &str) -> Option<String> {
-    if let Some(size) = parse_arbitrary_number(key, "px") {
-        return Some(format_number(size));
+pub(crate) fn resolve_text_size_value(config: &TailwindConfig, key: &str) -> Option<String> {
+    if let Some(size) = parse_arbitrary_length(key) {
+        return Some(size.offset(config));
     }
 
     TEXT_SIZE_VALUES
@@ -995,14 +995,17 @@ pub(crate) fn resolve_flex_wrap_value(key: &str) -> Option<&'static str> {
     }
 }
 
-pub(crate) fn resolve_border_thickness_value(payload: Option<&str>) -> Option<String> {
+/// The thickness itself rather than the pixels it comes to, so a caller without
+/// a config — the analyzer, deciding only whether the payload is supported —
+/// can still ask.
+pub(crate) fn resolve_border_thickness_value(payload: Option<&str>) -> Option<Length> {
     match payload {
-        None => Some("1".to_owned()),
-        Some("0") => Some("0".to_owned()),
-        Some("1") => Some("1".to_owned()),
-        Some("2") => Some("2".to_owned()),
-        Some("4") => Some("4".to_owned()),
-        Some(value) => parse_arbitrary_number(value, "px").map(format_number),
+        None => Some(Length::Pixels(1.0)),
+        Some("0") => Some(Length::Pixels(0.0)),
+        Some("1") => Some(Length::Pixels(1.0)),
+        Some("2") => Some(Length::Pixels(2.0)),
+        Some("4") => Some(Length::Pixels(4.0)),
+        Some(value) => parse_arbitrary_length(value),
     }
 }
 
@@ -1168,12 +1171,34 @@ pub(crate) fn resolve_color_value(
     }
 }
 
+/// A length before the theme turns it into pixels. `px` and a unitless number
+/// already are pixels, matching Tailwind's own `w-[120]`-style shorthand; `rem`
+/// is the unit the viewport scales by, so it only becomes a number once
+/// `theme.rem.base` is known.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Length {
+    Pixels(f64),
+    Rem(f64),
+}
+
+impl Length {
+    pub(crate) fn pixels(self, config: &TailwindConfig) -> f64 {
+        match self {
+            Self::Pixels(pixels) => pixels,
+            Self::Rem(rem) => rem * config.theme.rem.base,
+        }
+    }
+
+    pub(crate) fn offset(self, config: &TailwindConfig) -> String {
+        format_number(self.pixels(config))
+    }
+}
+
 /// A `[...]` payload, already split into the two shapes a Roblox `UDim` axis
-/// can take. A unitless number reads as pixels, matching Tailwind's own
-/// `w-[120]`-style shorthand.
+/// can take.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ArbitraryValue {
-    Offset(f64),
+    Length(Length),
     Scale(f64),
 }
 
@@ -1187,8 +1212,21 @@ pub(crate) fn parse_arbitrary_value(payload: &str) -> Option<ArbitraryValue> {
         return parse_finite(percent).map(|value| ArbitraryValue::Scale(value / 100.0));
     }
 
-    let number = inner.strip_suffix("px").unwrap_or(inner);
-    parse_finite(number).map(ArbitraryValue::Offset)
+    parse_length(inner).map(ArbitraryValue::Length)
+}
+
+/// The `[...]` payload of a family that only counts in pixels — a thickness, a
+/// text size — where a percentage would have nothing to be a fraction of.
+pub(crate) fn parse_arbitrary_length(payload: &str) -> Option<Length> {
+    parse_length(payload.strip_prefix('[')?.strip_suffix(']')?.trim())
+}
+
+fn parse_length(value: &str) -> Option<Length> {
+    if let Some(rem) = value.strip_suffix("rem") {
+        return parse_finite(rem).map(Length::Rem);
+    }
+
+    parse_finite(value.strip_suffix("px").unwrap_or(value)).map(Length::Pixels)
 }
 
 /// The plain number behind a `[...]` payload, for families that count in
@@ -1217,23 +1255,23 @@ pub(crate) fn format_number(value: f64) -> String {
     value.to_string()
 }
 
-fn arbitrary_udim(value: ArbitraryValue) -> String {
+fn arbitrary_udim(config: &TailwindConfig, value: ArbitraryValue) -> String {
     match value {
-        ArbitraryValue::Offset(offset) => format!("new UDim(0, {})", format_number(offset)),
+        ArbitraryValue::Length(length) => format!("new UDim(0, {})", length.offset(config)),
         ArbitraryValue::Scale(scale) => format!("new UDim({}, 0)", format_number(scale)),
     }
 }
 
-fn arbitrary_size_axis(value: ArbitraryValue) -> SizeAxisValue {
+fn arbitrary_size_axis(config: &TailwindConfig, value: ArbitraryValue) -> SizeAxisValue {
     match value {
-        ArbitraryValue::Offset(offset) => SizeAxisValue::offset(format_number(offset)),
+        ArbitraryValue::Length(length) => SizeAxisValue::offset(length.offset(config)),
         ArbitraryValue::Scale(scale) => SizeAxisValue::scale(format_number(scale)),
     }
 }
 
 pub(crate) fn resolve_radius_value(config: &TailwindConfig, key: &str) -> Option<String> {
     if let Some(value) = parse_arbitrary_value(key) {
-        return Some(arbitrary_udim(value));
+        return Some(arbitrary_udim(config, value));
     }
 
     config.theme.radius.get(key).cloned()
@@ -1241,7 +1279,7 @@ pub(crate) fn resolve_radius_value(config: &TailwindConfig, key: &str) -> Option
 
 pub(crate) fn resolve_spacing_value(config: &TailwindConfig, key: &str) -> Option<String> {
     if let Some(value) = parse_arbitrary_value(key) {
-        return Some(arbitrary_udim(value));
+        return Some(arbitrary_udim(config, value));
     }
 
     config
@@ -1259,7 +1297,7 @@ pub(crate) fn resolve_size_axis_value(
     token: &str,
 ) -> Option<SizeAxisValue> {
     if let Some(value) = parse_arbitrary_value(size_key) {
-        return Some(arbitrary_size_axis(value));
+        return Some(arbitrary_size_axis(config, value));
     }
 
     if size_key == "px" {
@@ -1285,7 +1323,7 @@ pub(crate) fn resolve_position_axis_value(
     negative: bool,
 ) -> Option<SizeAxisValue> {
     let base = if let Some(value) = parse_arbitrary_value(position_key) {
-        arbitrary_size_axis(value)
+        arbitrary_size_axis(config, value)
     } else if position_key == "px" {
         SizeAxisValue::offset("1")
     } else if position_key == "full" {
@@ -1679,7 +1717,7 @@ pub(crate) fn resolve_canvas_size_value(key: &str) -> Option<&'static str> {
 /// `ring`/`outline` payloads with a stroke meaning; anything else falls
 /// through to color resolution.
 pub(crate) enum StrokePayload {
-    Thickness(String),
+    Thickness(Length),
     Unsupported,
     Color,
 }
@@ -1688,16 +1726,17 @@ pub(crate) fn classify_stroke_payload(kind: &UtilityKind, payload: &str) -> Stro
     if let Some(thickness) = RING_THICKNESS_VALUES
         .iter()
         .find(|value| **value == payload)
+        .and_then(|thickness| parse_finite(thickness))
     {
-        return StrokePayload::Thickness((*thickness).to_owned());
+        return StrokePayload::Thickness(Length::Pixels(thickness));
     }
 
     if matches!(kind, UtilityKind::Outline) && matches!(payload, "none" | "hidden") {
-        return StrokePayload::Thickness("0".to_owned());
+        return StrokePayload::Thickness(Length::Pixels(0.0));
     }
 
-    if let Some(thickness) = parse_arbitrary_number(payload, "px") {
-        return StrokePayload::Thickness(format_number(thickness));
+    if let Some(thickness) = parse_arbitrary_length(payload) {
+        return StrokePayload::Thickness(thickness);
     }
 
     if matches!(payload, "inset" | "solid" | "dashed" | "dotted" | "double")
@@ -2004,6 +2043,45 @@ mod tests {
         assert_eq!(resolve_aspect_ratio_value("[1/0]"), None);
     }
 
+    /// A rem payload is written in the unit the viewport scales by, so it has to
+    /// land as the pixels the theme's base says it is worth and nothing else —
+    /// the runtime multiplies from there.
+    #[test]
+    fn an_arbitrary_rem_resolves_against_the_theme_base() {
+        let mut config = TailwindConfig::default();
+        let mut diagnostics = Vec::new();
+
+        assert_eq!(
+            parse_arbitrary_value("[2rem]"),
+            Some(ArbitraryValue::Length(Length::Rem(2.0)))
+        );
+        assert_eq!(
+            parse_arbitrary_value("[2px]"),
+            Some(ArbitraryValue::Length(Length::Pixels(2.0)))
+        );
+        assert_eq!(parse_arbitrary_value("[2em]"), None);
+        assert_eq!(parse_arbitrary_value("[rem]"), None);
+
+        let size = resolve_size_axis_value(&config, &mut diagnostics, "[1.5rem]", "w-[1.5rem]")
+            .expect("rem size");
+        assert_eq!(size.offset, "24");
+        assert_eq!(size.scale, "0");
+        assert_eq!(
+            resolve_text_size_value(&config, "[1.5rem]").as_deref(),
+            Some("24")
+        );
+        assert_eq!(
+            resolve_border_thickness_value(Some("[0.125rem]")),
+            Some(Length::Rem(0.125))
+        );
+
+        config.theme.rem.base = 20.0;
+        let rebased = resolve_size_axis_value(&config, &mut diagnostics, "[2rem]", "w-[2rem]")
+            .expect("rem size");
+        assert_eq!(rebased.offset, "40");
+        assert_eq!(diagnostics.len(), 0);
+    }
+
     #[test]
     fn resolves_position_and_anchor_values() {
         let config = TailwindConfig::default();
@@ -2075,8 +2153,12 @@ mod tests {
             UtilityKind::TextTruncate
         ));
 
-        assert_eq!(resolve_text_size_value("2xl").as_deref(), Some("24"));
-        assert_eq!(resolve_text_size_value("huge"), None);
+        let config = TailwindConfig::default();
+        assert_eq!(
+            resolve_text_size_value(&config, "2xl").as_deref(),
+            Some("24")
+        );
+        assert_eq!(resolve_text_size_value(&config, "huge"), None);
         assert_eq!(
             resolve_font_weight_value("bold"),
             Some(format!(

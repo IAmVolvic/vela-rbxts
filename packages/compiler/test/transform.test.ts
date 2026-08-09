@@ -291,7 +291,7 @@ test("lowers border utilities to UIStroke helpers", () => {
 
 test("reports unsupported border forms with a targeted diagnostic", () => {
 	const result = transform(
-		'<frame className="border-dashed border-x border-8 border-[3rem] border-opacity-50" />',
+		'<frame className="border-dashed border-x border-8 border-[3em] border-opacity-50" />',
 	);
 
 	expect(result.changed).toBe(true);
@@ -316,7 +316,7 @@ test("reports unsupported border forms with a targeted diagnostic", () => {
 			expect.objectContaining({
 				level: "warning",
 				code: "unsupported-arbitrary-value",
-				token: "border-[3rem]",
+				token: "border-[3em]",
 			}),
 			expect.objectContaining({
 				level: "warning",
@@ -343,7 +343,7 @@ test("border static and runtime classifiers stay in parity", () => {
 		"l",
 		"x-2",
 		"opacity-50",
-		"[3rem]",
+		"[3em]",
 		"500/50",
 		"8",
 	] as const;
@@ -4102,12 +4102,58 @@ test("resolves arbitrary length values", () => {
 
 	// A unit the family cannot read is still reported instead of guessed at.
 	const invalid = transform(
-		`export const C = () => <frame className="w-[3rem]" />;`,
+		`export const C = () => <frame className="w-[3em]" />;`,
 		withoutPreflight,
 	);
 	expect(invalid.diagnostics).toEqual([
 		expect.objectContaining({ code: "unsupported-arbitrary-value" }),
 	]);
+});
+
+test("resolves arbitrary rem values against the theme's rem base", () => {
+	const result = transform(
+		`export const A = () => <frame className="w-[2rem] p-[0.5rem] rounded-[0.25rem] left-[-1rem] border-[0.125rem]" />;`,
+		withoutPreflight,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(32, 0\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/PaddingTop=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 4\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/Position=\{__VelaRem\.scale\(UDim2\.fromOffset\(-16, 0\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(/Thickness=\{__VelaRem\.scale\(2, \d+\)\}/);
+
+	const typography = transform(
+		`export const B = () => <textlabel className="text-[1.5rem] ring-[0.25rem]" />;`,
+		withoutPreflight,
+	);
+	expect(typography.diagnostics).toEqual([]);
+	expect(typography.code).toMatch(
+		/TextSize=\{__VelaRem\.scaleText\(24, \d+\)\}/,
+	);
+	expect(typography.code).toMatch(/Thickness=\{__VelaRem\.scale\(4, \d+\)\}/);
+
+	// A base the config moved moves what a rem payload is worth with it.
+	const rebased = transform(
+		`export const C = () => <frame className="w-[2rem]" />;`,
+		{
+			configJson: JSON.stringify(
+				defineConfig({ preflight: false, theme: { rem: { base: 20 } } }),
+			),
+		},
+	);
+	expect(rebased.diagnostics).toEqual([]);
+	expect(rebased.code).toMatch(
+		/Size=\{__VelaRem\.scale\(UDim2\.fromOffset\(40, 0\), \d+\)\}/,
+	);
 });
 
 test("resolves arbitrary hex colors", () => {

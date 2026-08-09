@@ -142,6 +142,12 @@ export namespace __VelaRem {
 		return config.base > 0 ? rem / config.base : 1;
 	}
 
+	/// What a `[2rem]` payload is worth before the viewport has its say, which
+	/// is the same base the compiler resolves such a payload against.
+	export function pixels(rem: number): number {
+		return rem * config.base;
+	}
+
 	/// Roblox stops honoring `TextSize` past 100 and does it silently, so a
 	/// scaled size stops there too. Left uncapped, a transition would tween
 	/// toward a size the engine never paints and stall part-way.
@@ -1849,7 +1855,7 @@ export namespace __VelaToken {
 	/// Mirrors TEXT_SIZE_VALUES on the static path. `text-[15px]` is a size too;
 	/// only a number reads that way, so `text-[#f00]` stays a color.
 	export function resolveTextSizeValue(key: string): number | undefined {
-		const arbitrary = __VelaValue.parseArbitraryNumber(key, "px");
+		const arbitrary = __VelaValue.parseArbitraryLength(key);
 		if (arbitrary !== undefined) return arbitrary;
 		if (key === "xs") return 12;
 		if (key === "sm") return 14;
@@ -2788,7 +2794,7 @@ export namespace __VelaToken {
 			]);
 		}
 
-		const arbitraryThickness = __VelaValue.parseArbitraryNumber(key, "px");
+		const arbitraryThickness = __VelaValue.parseArbitraryLength(key);
 		if (arbitraryThickness !== undefined) {
 			return helperEffect("uistroke", [
 				{ name: "Thickness", value: arbitraryThickness },
@@ -2841,7 +2847,7 @@ export namespace __VelaToken {
 			return 0;
 		}
 
-		return __VelaValue.parseArbitraryNumber(key, "px");
+		return __VelaValue.parseArbitraryLength(key);
 	}
 
 	export function isUnsupportedStrokeKey(key: string): boolean {
@@ -3706,8 +3712,8 @@ export namespace __VelaValue {
 	}
 
 	/// Mirrors the compiler's `parse_arbitrary_value`: a percentage is a scale, and
-	/// a pixel or unitless number is an offset. The two must agree, or a class
-	/// resolves differently depending on whether it was static or dynamic.
+	/// a length is an offset. The two must agree, or a class resolves differently
+	/// depending on whether it was static or dynamic.
 	export function parseArbitraryValue(
 		key: string,
 	): RuntimeSizeAxisValue | undefined {
@@ -3723,12 +3729,35 @@ export namespace __VelaValue {
 				: { scale: percent / 100, offset: 0 };
 		}
 
-		const numeric = __VelaLua.toNumber(
+		const numeric = parseLength(inner);
+		return numeric === undefined ? undefined : { scale: 0, offset: numeric };
+	}
+
+	/// Mirrors `parse_arbitrary_length`: the `[...]` payload of a family that
+	/// only counts in pixels, where a percentage would have nothing to be a
+	/// fraction of.
+	export function parseArbitraryLength(key: string): number | undefined {
+		if (!__VelaLua.startsWith(key, "[") || !__VelaLua.endsWith(key, "]")) {
+			return undefined;
+		}
+
+		return parseLength(__VelaLua.substring(key, 1, -1));
+	}
+
+	/// `px` and a unitless number already are pixels; `rem` is the unit the
+	/// viewport scales by, so it lands as what one rem is worth at the base
+	/// resolution and follows the curve from there like any other offset.
+	function parseLength(inner: string): number | undefined {
+		if (__VelaLua.endsWith(inner, "rem")) {
+			const rem = __VelaLua.toNumber(__VelaLua.substring(inner, 0, -3));
+			return rem === undefined ? undefined : __VelaRem.pixels(rem);
+		}
+
+		return __VelaLua.toNumber(
 			__VelaLua.endsWith(inner, "px")
 				? __VelaLua.substring(inner, 0, -2)
 				: inner,
 		);
-		return numeric === undefined ? undefined : { scale: 0, offset: numeric };
 	}
 
 	/// The plain number behind a `[...]` payload, for families that count in

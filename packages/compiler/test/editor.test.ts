@@ -600,7 +600,7 @@ test("reports editor diagnostics for unsupported z-index forms", () => {
 
 test("reports editor diagnostics for unsupported border forms", () => {
 	const source =
-		'<frame className="border-dashed border-x border-8 border-[3rem] border-opacity-50" />';
+		'<frame className="border-dashed border-x border-8 border-[3em] border-opacity-50" />';
 	const result = getDiagnostics({ source });
 
 	expect(result.diagnostics).toEqual(
@@ -619,7 +619,7 @@ test("reports editor diagnostics for unsupported border forms", () => {
 			}),
 			expect.objectContaining({
 				code: "unsupported-arbitrary-value",
-				token: "border-[3rem]",
+				token: "border-[3em]",
 			}),
 			expect.objectContaining({
 				code: "unsupported-border-value",
