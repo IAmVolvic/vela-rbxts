@@ -12,7 +12,6 @@ pub(crate) mod ir;
 pub(crate) mod semantic;
 pub(crate) mod swc;
 pub(crate) mod transform;
-pub(crate) mod utilities;
 
 pub use api::{
     ClassNameEdit, ClassTokenSpan, CompletionItem, CompletionRequest, CompletionResponse,
