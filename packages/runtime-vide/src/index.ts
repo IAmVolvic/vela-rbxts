@@ -15,6 +15,7 @@ import type {
 import {
 	__VelaApply,
 	__VelaEnv as __VelaEnvCore,
+	__VelaMargin,
 	__VelaMotion,
 	__VelaOpacity as __VelaOpacityCore,
 	__VelaRem as __VelaRemCore,
@@ -328,7 +329,33 @@ export function createVelaRuntimeHost(
 			return (tag as (props: never) => Vide.Node)(applied as never);
 		}
 
-		return videJsx(hostTag as string, applied);
+		// `m-*` is spacing outside the instance, which Roblox has no property
+		// for. The element moves inside a padded wrapper that takes over the
+		// layout props it was positioned by — which has to happen before the
+		// instance is created, since Vide applies props as it builds.
+		const margin = __VelaMargin.resolveMarginConfig(
+			undefined,
+			shape.margin,
+			shape.remRatio ?? 1,
+		);
+		if (margin === undefined) {
+			return videJsx(hostTag as string, applied);
+		}
+
+		const wrapperProps = __VelaMargin.prepareMarginWrapper(margin, applied);
+		const element = videJsx(hostTag as string, applied);
+		const padding = videJsx("uipadding", {
+			PaddingTop: new UDim(0, margin.top),
+			PaddingRight: new UDim(0, margin.right),
+			PaddingBottom: new UDim(0, margin.bottom),
+			PaddingLeft: new UDim(0, margin.left),
+		});
+
+		return videJsx("frame", {
+			...wrapperProps,
+			[1]: padding,
+			[2]: element,
+		});
 	};
 }
 

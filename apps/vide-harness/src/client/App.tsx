@@ -47,6 +47,9 @@ function StaticUtilities() {
 					<frame className="size-3 bg-blue-500 rounded-full" />
 				</frame>
 			</Row>
+			<Row label="m-2 wrapper">
+				<frame className="w-24 h-6 bg-fuchsia-500 m-2 rounded-sm" />
+			</Row>
 			<Row label="aspect + z">
 				<frame className="h-6 aspect-square bg-amber-500 rounded-sm z-10" />
 			</Row>
