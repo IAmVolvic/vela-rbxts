@@ -89,13 +89,14 @@ export namespace __VelaRem {
 	};
 
 	let config = DEFAULT_CONFIG;
-	let onConfigured: (() => void) | undefined;
+	const configured: Array<() => void> = [];
 
 	/// A host runtime puts its own reactive layer over this curve — a binding
 	/// under React, a source under Vide — and only it knows how to push the new
-	/// value out when a config arrives after that layer is already live.
+	/// value out when a config arrives after that layer is already live. More
+	/// than one thing can be reading the curve, so they all hear about it.
 	export function whenConfigured(listener: () => void) {
-		onConfigured = listener;
+		configured.push(listener);
 	}
 
 	export function configure(resolved: RuntimeRemConfig | undefined) {
@@ -104,7 +105,9 @@ export namespace __VelaRem {
 		}
 
 		config = resolved;
-		onConfigured?.();
+		for (const listener of configured) {
+			listener();
+		}
 	}
 
 	export function resolve(camera: RuntimeCamera | undefined): number {

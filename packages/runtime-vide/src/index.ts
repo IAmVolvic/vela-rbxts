@@ -52,7 +52,8 @@ type VelaRuntimeHostComponent = (props: VelaRuntimeHostProps) => Vide.Node;
 
 /// One reading of the viewport for the whole place, as a source rather than a
 /// per-component subscription: every host derives from it, and Vide only reruns
-/// the ones whose resolution actually reads what changed.
+/// the ones whose resolution actually reads what changed. Rem is a field of it,
+/// so the scaler reads the same source rather than keeping a second one.
 namespace __VelaEnvSource {
 	function read(): RuntimeEnvironment {
 		return __VelaEnvCore.readRuntimeEnvironment(
@@ -83,64 +84,23 @@ namespace __VelaEnvSource {
 	});
 	watchCamera();
 
+	// This module is loaded by the emitted preamble, which only then calls the
+	// factory that configures the curve — so the first read above used the
+	// default one. Without this the correction would be left to whichever
+	// viewport signal happened to fire next.
+	__VelaRemCore.whenConfigured(refresh);
+
 	export const current = state as () => RuntimeEnvironment;
-	export const reread = refresh;
 }
 
-/// The rem curve lives in the core; this is the source a Vide tree reads it
-/// through. There is no slot table because a thunk costs nothing to rebuild —
-/// React needed one only because a fresh binding reads as a new subscription.
 namespace __VelaRemSource {
-	const rem = Vide.source(__VelaRemCore.resolve(undefined));
-
-	function refresh() {
-		rem(
-			__VelaRemCore.resolve(
-				__VelaWorkspace.CurrentCamera as RuntimeCamera | undefined,
-			),
-		);
+	function ratio(): number {
+		return __VelaRemCore.ratio(__VelaEnvSource.current().rem);
 	}
 
-	let connected = false;
-
-	function connect() {
-		if (connected) {
-			return;
-		}
-
-		connected = true;
-		let cameraConnection: RBXScriptConnection | undefined;
-
-		const watch = () => {
-			cameraConnection?.Disconnect();
-			const camera = __VelaWorkspace.CurrentCamera;
-			cameraConnection =
-				camera === undefined
-					? undefined
-					: camera.GetPropertyChangedSignal("ViewportSize").Connect(refresh);
-		};
-
-		__VelaWorkspace.GetPropertyChangedSignal("CurrentCamera").Connect(() => {
-			watch();
-			refresh();
-		});
-		watch();
-		refresh();
-	}
-
-	__VelaRemCore.whenConfigured(() => {
-		if (connected) {
-			refresh();
-		}
-	});
-
-	export function ratio(): number {
-		return __VelaRemCore.ratio(rem());
-	}
-
+	/// No slot table: a thunk costs nothing to rebuild, and React needed one
+	/// only because a fresh binding reads as a new subscription.
 	export function scaler(): VelaRemScaler {
-		connect();
-
 		function scale<T>(value: T, _slot: number): () => T {
 			return () => __VelaRemCore.apply(value as never, ratio()) as never;
 		}
@@ -317,7 +277,7 @@ export function createVelaRuntimeHost(
 		}
 
 		let slot = 1;
-		for (const helper of helperChildren(shape.helpers)) {
+		for (const helper of helperChildren(shape, resolution)) {
 			(applied as Record<number, unknown>)[slot] = helper;
 			slot += 1;
 		}
@@ -355,15 +315,47 @@ function composedProps(
 	return hostProps;
 }
 
-function helperChildren(helpers: RuntimeHelper[]): defined[] {
-	__VelaApply.applyHelperDefaults(helpers);
+function helperProps(
+	resolution: RuntimeResolution,
+	tag: string,
+): Record<string, unknown> | undefined {
+	__VelaApply.applyHelperDefaults(resolution.helpers);
+
+	for (const helper of resolution.helpers) {
+		if (helper.tag === tag) {
+			return __VelaApply.helperToProps(helper.props);
+		}
+	}
+
+	return undefined;
+}
+
+/// A helper carries resolved values like any other prop — a `p-4` padding
+/// follows rem, and a variant can repaint a stroke. Built from the snapshot
+/// alone they would freeze at creation, which for rem means freezing at the
+/// 1x1 viewport the first frame has not replaced yet.
+///
+/// Which helpers exist is still fixed here; a rule that introduces one lands
+/// with the tracking that would create and destroy it.
+function helperChildren(
+	shape: RuntimeResolution,
+	resolution: () => RuntimeResolution,
+): defined[] {
+	__VelaApply.applyHelperDefaults(shape.helpers);
 
 	const children: defined[] = [];
-	for (const helper of helpers) {
-		const child = videJsx(
-			__VelaApply.hostClassName(helper.tag),
-			__VelaApply.helperToProps(helper.props),
-		);
+	for (const helper of shape.helpers) {
+		const tag = helper.tag;
+		const initial = __VelaApply.helperToProps(helper.props);
+		const props: Record<string, unknown> = {};
+
+		for (const [name, value] of pairs(initial)) {
+			const propName = name as string;
+			props[propName] = () =>
+				helperProps(resolution(), tag)?.[propName] ?? value;
+		}
+
+		const child = videJsx(__VelaApply.hostClassName(tag), props);
 		if (child !== undefined) {
 			children.push(child);
 		}
