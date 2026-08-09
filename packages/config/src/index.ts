@@ -69,8 +69,14 @@ export type ThemeConfig = {
 	rem: RemConfig;
 };
 
+/// Which UI library the project's JSX is compiled for. `jsxFactory` is a
+/// program-wide setting, so this is a project-wide choice rather than a
+/// per-file one.
+export type Framework = "react" | "vide";
+
 export type TailwindConfig = {
 	preflight: boolean;
+	framework: Framework;
 	theme: ThemeConfig;
 	plugins: ResolvedPlugins;
 };
@@ -94,6 +100,7 @@ export type ThemeConfigInput = {
 
 export type TailwindConfigInput = {
 	preflight?: boolean;
+	framework?: Framework;
 	theme?: ThemeConfigInput;
 	plugins?: PluginsInput;
 };
@@ -110,6 +117,7 @@ const staticRem: RemConfig = {
 
 const emptyConfig: TailwindConfig = {
 	preflight: false,
+	framework: "react",
 	theme: {
 		colors: {},
 		radius: {},
@@ -161,6 +169,7 @@ function resolveConfig(
 
 	return {
 		preflight: input.preflight ?? base.preflight,
+		framework: input.framework ?? base.framework,
 		theme,
 		// Plugins run against the resolved theme so `theme()` reads the same
 		// scale the utilities do.

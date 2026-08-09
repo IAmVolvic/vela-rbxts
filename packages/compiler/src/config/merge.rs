@@ -142,11 +142,13 @@ pub(crate) fn resolve_config_input(
     base: &TailwindConfig,
 ) -> TailwindConfig {
     let preflight = input.preflight.unwrap_or(base.preflight);
+    let framework = input.framework.unwrap_or(base.framework);
     let plugins = merge_plugin_config(&base.plugins, input.plugins);
 
     let Some(theme) = input.theme else {
         return TailwindConfig {
             preflight,
+            framework,
             plugins,
             ..base.clone()
         };
@@ -156,6 +158,7 @@ pub(crate) fn resolve_config_input(
 
     TailwindConfig {
         preflight,
+        framework,
         plugins,
         theme: crate::config::model::ThemeConfig {
             colors: resolve_color_input(

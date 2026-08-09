@@ -13,6 +13,12 @@
 			"default": true,
 			"description": "Neutralizes the Roblox defaults (opaque gray background, 1px border) on every className-bearing host element, so only explicit bg-* and border utilities paint. Set to false to keep the engine defaults."
 		},
+		"framework": {
+			"type": "string",
+			"enum": ["react", "vide"],
+			"default": "react",
+			"description": "Which UI library the project's JSX is compiled for. Decides which runtime a transformed module imports and how a dynamic class value is handed to it. jsxFactory is program-wide, so this is a project-wide choice."
+		},
 		"theme": {
 			"type": "object",
 			"additionalProperties": false,

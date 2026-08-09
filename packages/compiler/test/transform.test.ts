@@ -53,6 +53,7 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 
 	expect(config).toEqual({
 		preflight: true,
+		framework: "react",
 		theme: {
 			colors: {
 				primary: "Color3.fromRGB(99, 102, 241)",

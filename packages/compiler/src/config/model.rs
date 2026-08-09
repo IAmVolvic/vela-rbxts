@@ -5,16 +5,40 @@ use std::collections::BTreeMap;
 pub(crate) struct TailwindConfig {
     #[serde(default = "preflight_default")]
     pub(crate) preflight: bool,
+    /// Emit-only, like the motion driver's specifier: it decides which runtime
+    /// the preamble reaches for, and the runtime itself never reads it. It is
+    /// still serialized so a config can round-trip through `configJson`; what
+    /// travels to the runtime is reset first.
+    #[serde(default, skip_serializing_if = "Framework::is_default")]
+    pub(crate) framework: Framework,
     #[serde(default)]
     pub(crate) theme: ThemeConfig,
     #[serde(default)]
     pub(crate) plugins: PluginConfig,
 }
 
+/// Which UI library the project's JSX is compiled for. `jsxFactory` is a
+/// program-wide setting, so this is a project-wide choice rather than a per-file
+/// one.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Framework {
+    #[default]
+    React,
+    Vide,
+}
+
+impl Framework {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 impl Default for TailwindConfig {
     fn default() -> Self {
         Self {
             preflight: preflight_default(),
+            framework: Framework::default(),
             theme: ThemeConfig::default(),
             plugins: PluginConfig::default(),
         }
@@ -135,6 +159,7 @@ pub(crate) type ColorScale = BTreeMap<String, String>;
 #[derive(Clone, Deserialize, Default)]
 pub(crate) struct TailwindConfigInput {
     pub(crate) preflight: Option<bool>,
+    pub(crate) framework: Option<Framework>,
     pub(crate) theme: Option<ThemeConfigInput>,
     pub(crate) plugins: Option<PluginConfig>,
 }
