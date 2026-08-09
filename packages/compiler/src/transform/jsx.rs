@@ -28,6 +28,7 @@ pub(crate) fn lower_class_name(
     config: &crate::config::model::TailwindConfig,
     element_tag: Option<&str>,
     scopes: &ClassValueScopeStack,
+    target: &dyn crate::transform::target::EmitTarget,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<LoweredClassName> {
     let class_name_attr = attrs.iter().find_map(|attr| match attr {
@@ -103,6 +104,12 @@ pub(crate) fn lower_class_name(
                 });
             };
 
+            let deferred = target
+                .class_value_is_deferred()
+                .then(|| crate::swc::builders::deferred_body(expr))
+                .flatten();
+            let expr: &Expr = deferred.unwrap_or(expr);
+
             let mut collapse = collapse_class_value_expr(expr, scopes);
             let mut style =
                 resolve_class_tokens(collapse.static_tokens(), config, element_tag, diagnostics);
@@ -146,11 +153,20 @@ pub(crate) fn lower_class_name(
                 || style.animation.is_some()
                 || style.margin.is_some()
                 || style.divide.is_some();
-            let runtime_class_name = collapse.dynamic_expr.map(|expr| {
+            let runtime_class_name = collapse.dynamic_expr.map(|leftover| {
+                // What is left of a deferred class value goes back deferred:
+                // read once, it would hold whatever its sources said at
+                // creation and never look again.
+                let leftover = if deferred.is_some() {
+                    Box::new(crate::swc::builders::thunk(*leftover))
+                } else {
+                    leftover
+                };
+
                 let mut runtime_attr = class_name_attr.clone();
                 runtime_attr.value = Some(JSXAttrValue::JSXExprContainer(JSXExprContainer {
                     span: container.span,
-                    expr: JSXExpr::Expr(expr),
+                    expr: JSXExpr::Expr(leftover),
                 }));
                 runtime_attr
             });

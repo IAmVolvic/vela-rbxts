@@ -24,6 +24,11 @@ pub(crate) trait EmitTarget {
     /// is what a lowered element is retagged to.
     fn host_element_name(&self) -> &'static str;
 
+    /// Whether a class value reaches the host deferred. Vide has no re-render,
+    /// so a dynamic one is written as a thunk — which the collapser has to look
+    /// inside before it can read any of it, and put back if anything is left.
+    fn class_value_is_deferred(&self) -> bool;
+
     /// The expressions the emitted branch rules decide on, as one attribute the
     /// host reads by index.
     fn tests_attr(&self, tests: Vec<Expr>) -> JSXAttrOrSpread;

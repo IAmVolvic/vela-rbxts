@@ -66,11 +66,16 @@ expect(
 	/CornerRadius = __VelaRem\.scale\(UDim\.new\(0, 8\), \d+\)/.test(source),
 );
 
-// A Vide source has to stay deferred all the way to the host. The transformer
-// cannot yet see inside the arrow to collapse it into branch rules, so the
-// whole class value travels — still as a thunk, which is the contract.
+// The collapser opens the thunk a Vide class value is written as, so a
+// readable one lowers to branch rules and its tests go back deferred.
 expect(
-	"a derivable class value reaches the host deferred",
+	"a deferred class value collapses to rules with deferred tests",
+	/__velaTests = \{ function\(\)/.test(source) && /kind = "test"/.test(source),
+);
+
+// What it could not read goes back deferred rather than being read once.
+expect(
+	"an unreadable remainder stays deferred",
 	/className = function\(\)/.test(source),
 );
 
@@ -98,4 +103,4 @@ if (failures.length > 0) {
 	process.exit(1);
 }
 
-console.log("vide-harness: verified 8 lowering contracts");
+console.log(`vide-harness: verified ${9} lowering contracts`);

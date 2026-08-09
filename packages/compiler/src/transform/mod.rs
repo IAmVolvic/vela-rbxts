@@ -389,6 +389,75 @@ mod tests {
         );
     }
 
+    /// A Vide source is read through a thunk, so a class value that depends on
+    /// one is written as an arrow. Left unopened it would take the whole class
+    /// list to the runtime; opened, it lowers exactly like a plain one and the
+    /// tests it hangs on go back deferred.
+    #[test]
+    fn the_vide_target_collapses_a_deferred_class_value() {
+        let source =
+            "const ui = <frame className={() => active() ? \"bg-red-500\" : \"bg-blue-500\"} />;"
+                .to_owned();
+        let result = transform_impl(
+            source,
+            Some(TransformOptions {
+                config_json: Some(vide_config_json()),
+            }),
+        );
+        let flat = result.code.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            flat.contains("__velaTests={[ ()=>active() ? true : false ]}"),
+            "the arrow's test must reach the host deferred: {}",
+            result.code
+        );
+        assert!(
+            !flat.contains("className="),
+            "nothing should be left for the runtime to parse: {}",
+            result.code
+        );
+        assert!(
+            flat.contains("\"kind\": \"test\""),
+            "the branches must lower to rules: {}",
+            result.code
+        );
+    }
+
+    /// What the collapser could not read still has to go back as a thunk. Read
+    /// once, it would hold whatever its sources said at creation.
+    #[test]
+    fn a_deferred_class_value_leaves_its_remainder_deferred() {
+        let source = "const ui = <frame className={() => \"p-2 \" + label()} />;".to_owned();
+        let result = transform_impl(
+            source,
+            Some(TransformOptions {
+                config_json: Some(vide_config_json()),
+            }),
+        );
+
+        assert!(
+            result.code.contains("className={()=>\"p-2 \" + label()}"),
+            "the remainder must stay deferred: {}",
+            result.code
+        );
+    }
+
+    /// React has no deferred class value, so the arrow is a value like any
+    /// other and opening it would change what the element renders.
+    #[test]
+    fn the_react_target_leaves_an_arrow_class_value_alone() {
+        let source =
+            "const ui = <frame className={() => active() ? \"bg-red-500\" : \"bg-blue-500\"} />;"
+                .to_owned();
+        let result = transform_impl(source, None);
+
+        assert!(
+            result.code.contains("className={()=>active()"),
+            "react must hand the arrow over untouched: {}",
+            result.code
+        );
+    }
+
     /// A Vide place must never resolve the React runtime, which is the whole
     /// reason the two ship as separate packages.
     #[test]

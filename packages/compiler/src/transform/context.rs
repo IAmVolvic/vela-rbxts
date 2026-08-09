@@ -202,6 +202,7 @@ impl VisitMut for VelaTransformer {
             &self.config,
             element_tag.as_deref(),
             &self.class_value_scopes,
+            self.target,
             &mut self.diagnostics,
         ) else {
             // An element with no `className` still sits inside the fade, and it

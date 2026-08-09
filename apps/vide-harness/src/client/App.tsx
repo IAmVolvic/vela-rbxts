@@ -57,7 +57,10 @@ function StaticUtilities() {
 /// Reaches the runtime host, because a derivable class value cannot be read at
 /// compile time. Its helper children have to follow rem the same way the static
 /// path's do.
-function DerivableClassValue(props: { active: () => boolean }) {
+function DerivableClassValue(props: {
+	active: () => boolean;
+	padded: () => string;
+}) {
 	return (
 		<>
 			<Row label="derivable bg">
@@ -69,8 +72,10 @@ function DerivableClassValue(props: { active: () => boolean }) {
 					}
 				/>
 			</Row>
-			<Row label="derivable + p-4">
-				<frame className={() => "w-40 h-6 bg-slate-700 p-4 rounded-md"} />
+			<Row label="remainder + p-4">
+				<frame
+					className={() => `w-40 h-6 bg-slate-700 p-4 ${props.padded()}`}
+				/>
 			</Row>
 			<Row label="dictionary">
 				<frame
@@ -119,6 +124,9 @@ function InheritedOpacity() {
 
 export function App() {
 	const active = Vide.source(false);
+	// A template the collapser cannot read, so this one stays on the runtime
+	// path and keeps rem covered there after the arrow unwrap folds the rest.
+	const padded = Vide.source("rounded-md");
 
 	// Nothing re-renders in Vide, so a flipping source is the only way to see
 	// whether a derivable class value actually re-resolves.
@@ -138,7 +146,7 @@ export function App() {
 				Size={UDim2.fromOffset(520, 460)}
 			>
 				{StaticUtilities()}
-				{DerivableClassValue({ active })}
+				{DerivableClassValue({ active, padded })}
 				{EnvironmentVariants()}
 				{InheritedOpacity()}
 			</frame>

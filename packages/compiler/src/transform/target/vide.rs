@@ -1,5 +1,7 @@
 use crate::config::model::TailwindConfig;
-use crate::swc::builders::{OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression};
+use crate::swc::builders::{
+    OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression, thunk,
+};
 use crate::transform::runtime_host::{
     RuntimeNeeds, VIDE_RUNTIME_MODULE, create_runtime_module_items,
 };
@@ -7,29 +9,13 @@ use crate::transform::target::EmitTarget;
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        ArrayLit, ArrowExpr, BlockStmtOrExpr, Bool, CondExpr, Expr, ExprOrSpread, Ident, IdentName,
-        JSXAttrOrSpread, JSXClosingElement, JSXElement, JSXElementChild, JSXElementName, JSXExpr,
-        JSXExprContainer, JSXMemberExpr, JSXObject, JSXOpeningElement, Lit, ModuleItem,
+        ArrayLit, Bool, CondExpr, Expr, ExprOrSpread, Ident, IdentName, JSXAttrOrSpread,
+        JSXClosingElement, JSXElement, JSXElementChild, JSXElementName, JSXExpr, JSXExprContainer,
+        JSXMemberExpr, JSXObject, JSXOpeningElement, Lit, ModuleItem,
     },
 };
 
 pub(crate) struct VideTarget;
-
-/// Vide reads a `Derivable<T>`: a function value on a non-event property
-/// becomes an effect. Wrapping is what keeps an expression re-readable, since
-/// nothing here re-renders to read it again.
-fn thunk(expr: Expr) -> Expr {
-    Expr::Arrow(ArrowExpr {
-        span: DUMMY_SP,
-        params: Vec::new(),
-        body: Box::new(BlockStmtOrExpr::Expr(Box::new(expr))),
-        is_async: false,
-        is_generator: false,
-        type_params: None,
-        return_type: None,
-        ctxt: Default::default(),
-    })
-}
 
 impl EmitTarget for VideTarget {
     fn runtime_module_items(
@@ -42,6 +28,10 @@ impl EmitTarget for VideTarget {
 
     fn host_element_name(&self) -> &'static str {
         "VelaRuntimeHost"
+    }
+
+    fn class_value_is_deferred(&self) -> bool {
+        true
     }
 
     /// The React target can hand the host a boolean, because a re-render brings
