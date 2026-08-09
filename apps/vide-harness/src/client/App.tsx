@@ -6,6 +6,13 @@ import Vide from "@rbxts/vide";
 //
 // Probes are grouped by what they are meant to catch, not by how they look.
 
+// Behind a call, the one shape the compiler cannot read, so what it names is
+// left for the runtime resolver.
+const remClass = (active: boolean) =>
+	active
+		? "w-[6rem] p-[0.5rem] rounded-[0.25rem]"
+		: "w-[96px] p-[8px] rounded-[4px]";
+
 function Row(props: { label: string; children?: Vide.Node }) {
 	return (
 		<frame className="w-full h-8">
@@ -50,8 +57,22 @@ function StaticUtilities() {
 			<Row label="m-2 wrapper">
 				<frame className="w-24 h-6 bg-fuchsia-500 m-2 rounded-sm" />
 			</Row>
+			<Row label="divide-x">
+				<frame className="w-24 h-6 bg-slate-800 flex flex-row divide-x-2 divide-blue-500">
+					<frame className="w-8 h-full bg-slate-600" />
+					<frame className="w-8 h-full bg-slate-600" />
+				</frame>
+			</Row>
 			<Row label="aspect + z">
 				<frame className="h-6 aspect-square bg-amber-500 rounded-sm z-10" />
+			</Row>
+			{/* Written in the unit rem scales by: the row beside it says the same
+			    thing in pixels, so the two have to stay the same width. */}
+			<Row label="arbitrary rem">
+				<frame className="w-[6rem] h-[1.5rem] bg-teal-500 rounded-[0.25rem] border-[0.125rem] border-teal-200" />
+			</Row>
+			<Row label="arbitrary px">
+				<frame className="w-[96px] h-[24px] bg-teal-500 rounded-[4px] border-[2px] border-teal-200" />
 			</Row>
 		</>
 	);
@@ -80,6 +101,22 @@ function DerivableClassValue(props: {
 					className={() => `w-40 h-6 bg-slate-700 p-4 ${props.padded()}`}
 				/>
 			</Row>
+			<Row label="helper appears">
+				<frame
+					className={() =>
+						props.active()
+							? "w-24 h-6 bg-slate-700 border-2 border-amber-500"
+							: "w-24 h-6 bg-slate-700"
+					}
+				/>
+			</Row>
+			{/* Behind a call, so the rem length is parsed by the runtime resolver
+			    rather than by the compiler. */}
+			<Row label="rem on the host">
+				<frame
+					className={() => `h-6 bg-teal-500 ${remClass(props.active())}`}
+				/>
+			</Row>
 			<Row label="dictionary">
 				<frame
 					className={() => ({
@@ -102,6 +139,12 @@ function InteractionVariants() {
 				<textbutton
 					className="w-24 h-6 bg-slate-700 hover:bg-blue-500 text-white text-xs rounded-sm"
 					Text="hover"
+				/>
+			</Row>
+			<Row label="hover: axis">
+				<textbutton
+					className="w-24 h-6 bg-slate-700 hover:w-1/2 text-white text-xs"
+					Text="wide"
 				/>
 			</Row>
 			<Row label="active:">

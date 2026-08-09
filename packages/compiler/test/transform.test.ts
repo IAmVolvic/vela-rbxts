@@ -14,6 +14,10 @@ const runtimeSource = [
 ]
 	.map((url) => readFileSync(url, "utf8"))
 	.join("\n");
+const videRuntimeSource = readFileSync(
+	new URL("../../runtime-vide/src/index.ts", import.meta.url),
+	"utf8",
+);
 
 function buildColorPalette(entries: Record<string, string>) {
 	return entries;
@@ -4497,6 +4501,33 @@ test("a runtime host is named the props it should scale itself", () => {
 	// takes the binding on this path too.
 	expect(emitted(result.code)).toContain(
 		"PaddingTop={(__VelaRem.scale(new UDim(0, 8), 0) as never)}",
+	);
+});
+
+test("the Vide runtime host consumes rem metadata reactively", () => {
+	const result = transform('<frame className="w-4 hover:w-8" />', {
+		configJson: JSON.stringify(defineConfig({ framework: "vide" })),
+	});
+
+	expect(result.code).toContain('from "@rbxts/vela-runtime-vide"');
+	expect(result.code).toMatch(/__velaRem=\{\[\s*"Size"\s*\]\}/);
+	expect(videRuntimeSource).toContain(
+		"for (const name of props.__velaRem ?? [])",
+	);
+	expect(videRuntimeSource).toContain("current.remRatio ?? 1");
+	expect(videRuntimeSource).toContain("__VelaRemCore.TEXT_SIZE_CEILING");
+});
+
+test("the Vide margin wrapper reads its base spec and current rem ratio", () => {
+	const result = transform('<frame className="m-4 hover:bg-red-500" />', {
+		configJson: JSON.stringify(defineConfig({ framework: "vide" })),
+	});
+
+	expect(result.code).toContain("__velaMargin={");
+	expect(videRuntimeSource).toContain("props.__velaMargin,");
+	expect(videRuntimeSource).toContain("current.margin,");
+	expect(videRuntimeSource).toContain(
+		"PaddingTop: () => new UDim(0, margin()?.top ?? 0)",
 	);
 });
 

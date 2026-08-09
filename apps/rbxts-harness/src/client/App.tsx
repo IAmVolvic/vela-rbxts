@@ -17,6 +17,11 @@ const FadedLabel = (props: { text: string }) => (
 const surfaceClass = (active: boolean) =>
 	active ? "harness-card" : "harness-plate";
 
+// The rem unit behind the same call, so the length is parsed by the runtime
+// resolver rather than by the compiler.
+const remClass = (active: boolean) =>
+	active ? "w-[6rem] p-[0.5rem] text-[1.5rem]" : "w-[96px] p-[8px] text-[24px]";
+
 // The same shape one level deeper, and behind a recipe rather than a literal.
 const FadedCard = (props: { active: boolean; children?: React.Element }) => (
 	<frame className={["bg-slate-700 size-8", props.active && "rounded-md"]}>
@@ -156,10 +161,24 @@ export const App = () => {
 				/>
 				<frame className="bg-white dark:bg-slate-900 size-6" />
 				<frame className="w-[120px] h-[50%] p-[7px] rounded-[10px] bg-slate-500" />
+				{/* The same box twice, once in rem and once in the pixels that rem
+				    is worth at the base: they have to render identically. */}
+				<frame className="w-[6rem] h-[1.5rem] p-[0.5rem] rounded-[0.25rem] border-[0.125rem] border-teal-200 bg-teal-500" />
+				<frame className="w-[96px] h-[24px] p-[8px] rounded-[4px] border-[2px] border-teal-200 bg-teal-500" />
 				<textlabel
 					BackgroundTransparency={1}
 					Text="arbitrary probe"
 					className="text-[13px] leading-[1.6] z-[15]"
+				/>
+				<textlabel
+					BackgroundTransparency={1}
+					Text="rem probe"
+					className="text-[1.5rem] ring-[0.25rem] ring-teal-200"
+				/>
+				{/* The rem payload the runtime resolver parses rather than the emit. */}
+				<textlabel
+					Text="rem on the host"
+					className={["h-6", remClass(active)]}
 				/>
 				<textbox
 					PlaceholderText="type here"
