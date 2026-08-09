@@ -141,7 +141,9 @@ async function main() {
 			"@vela-rbxts/core",
 			"@vela-rbxts/rbxtsc-host",
 			// Every transformed module imports this, so a break here breaks all
-			// of them. It compiles before the release.
+			// of them. It compiles before the release, and the core it is built
+			// on compiles before it.
+			"@rbxts/vela-runtime-core",
 			"@rbxts/vela-runtime",
 			// Wasm build of the compiler crate, so a missing wasm toolchain
 			// fails here beside the native targets rather than at pack time.

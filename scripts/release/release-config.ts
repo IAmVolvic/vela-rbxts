@@ -5,6 +5,12 @@ import { discoverWorkspacePackages, type WorkspacePackage } from "./utils/packag
 /// package whose scope directory is one of the configured `typeRoots`.
 export const RUNTIME_PACKAGE_NAME = "@rbxts/vela-runtime";
 
+/// The framework-neutral half every host runtime is built on. It publishes
+/// under the same scope and for the same reason: a consumer's stock Rojo
+/// project already maps `node_modules/@rbxts`, so it arrives with no new
+/// mapping of its own.
+export const RUNTIME_CORE_PACKAGE_NAME = "@rbxts/vela-runtime-core";
+
 export const RELEASE_TAGS = ["next", "latest"] as const;
 export type ReleaseTag = (typeof RELEASE_TAGS)[number];
 
@@ -24,6 +30,7 @@ export type ReleaseUnit = {
 export const EXPECTED_PUBLIC_RELEASE_NAMES = [
   "vela-rbxts",
   "@rbxts/vela-runtime",
+  "@rbxts/vela-runtime-core",
   "@vela-rbxts/compiler",
   "@vela-rbxts/compiler-wasm",
   "@vela-rbxts/config",
@@ -36,6 +43,7 @@ export const EXPECTED_PUBLIC_RELEASE_NAMES = [
 ] as const;
 
 export const WORKSPACE_PUBLISH_PRIORITY = [
+  "@rbxts/vela-runtime-core",
   "@rbxts/vela-runtime",
   "@vela-rbxts/types",
   "@vela-rbxts/config",
@@ -143,6 +151,7 @@ function classifyPackageKind(path: string, packageName: string): ReleaseKind | u
   if (
     packageName === "vela-rbxts" ||
     packageName === RUNTIME_PACKAGE_NAME ||
+    packageName === RUNTIME_CORE_PACKAGE_NAME ||
     packageName.startsWith("@vela-rbxts/")
   ) {
     return "npm";
@@ -165,10 +174,11 @@ function validateReleaseUnitNames(releaseUnits: readonly ReleaseUnit[]) {
     if (
       unit.name !== "vela-rbxts" &&
       unit.name !== RUNTIME_PACKAGE_NAME &&
+      unit.name !== RUNTIME_CORE_PACKAGE_NAME &&
       !unit.name.startsWith("@vela-rbxts/")
     ) {
       throw new Error(
-        `Unexpected package name "${unit.name}" at ${unit.path}. Expected "vela-rbxts", "${RUNTIME_PACKAGE_NAME}" or "@vela-rbxts/*".`,
+        `Unexpected package name "${unit.name}" at ${unit.path}. Expected "vela-rbxts", "${RUNTIME_PACKAGE_NAME}", "${RUNTIME_CORE_PACKAGE_NAME}" or "@vela-rbxts/*".`,
       );
     }
   }
