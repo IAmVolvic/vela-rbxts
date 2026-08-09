@@ -3,52 +3,117 @@ import Vide from "@rbxts/vide";
 // The source form a Vide project actually writes. Everything here is lowered by
 // the transformer against `framework: "vide"`, so what Studio renders is the
 // real emit rather than a hand-port of the React one.
+//
+// Probes are grouped by what they are meant to catch, not by how they look.
 
-function Row(props: { children?: Vide.Node }) {
+function Row(props: { label: string; children?: Vide.Node }) {
 	return (
-		<frame BackgroundTransparency={1} Size={new UDim2(1, 0, 0, 72)}>
+		<frame className="w-full h-8">
+			<uilistlayout
+				FillDirection={Enum.FillDirection.Horizontal}
+				Padding={new UDim(0, 6)}
+				VerticalAlignment={Enum.VerticalAlignment.Center}
+			/>
+			<textlabel
+				className="w-32 h-full text-slate-400 text-left text-xs"
+				Text={props.label}
+			/>
 			{props.children}
 		</frame>
 	);
 }
 
-function StaticCase() {
+/// Statically lowered: props, helper children and rem-scaled offsets all land
+/// in the emit, and none of it reaches the runtime.
+function StaticUtilities() {
 	return (
-		<frame className="bg-slate-800 rounded-lg p-4 size-full">
-			<textlabel
-				className="text-white size-full"
-				BackgroundTransparency={1}
-				Text="static + rem"
-				TextSize={18}
-			/>
-		</frame>
+		<>
+			<Row label="bg + rounded + p">
+				<frame className="w-24 h-6 bg-slate-800 rounded-lg p-2" />
+			</Row>
+			<Row label="border">
+				<frame className="w-24 h-6 bg-slate-800 border-2 border-blue-500 rounded-md" />
+			</Row>
+			<Row label="text">
+				<textlabel
+					className="w-40 h-6 bg-slate-800 text-white text-sm font-bold uppercase rounded-sm"
+					Text="text utilities"
+				/>
+			</Row>
+			<Row label="flex + gap">
+				<frame className="w-40 h-6 bg-slate-800 flex flex-row items-center gap-2 px-2">
+					<frame className="size-3 bg-red-500 rounded-full" />
+					<frame className="size-3 bg-emerald-500 rounded-full" />
+					<frame className="size-3 bg-blue-500 rounded-full" />
+				</frame>
+			</Row>
+			<Row label="aspect + z">
+				<frame className="h-6 aspect-square bg-amber-500 rounded-sm z-10" />
+			</Row>
+		</>
 	);
 }
 
-function ClassValueCase(props: { active: () => boolean }) {
-	// A Vide source has to reach the host as a thunk; the transformer keeps the
-	// branch tests deferred for exactly this.
+/// Reaches the runtime host, because a derivable class value cannot be read at
+/// compile time. Its helper children have to follow rem the same way the static
+/// path's do.
+function DerivableClassValue(props: { active: () => boolean }) {
 	return (
-		<frame
-			className={() => (props.active() ? "bg-red-500" : "bg-blue-500")}
-			Size={UDim2.fromScale(1, 1)}
-		/>
+		<>
+			<Row label="derivable bg">
+				<frame
+					className={() =>
+						props.active()
+							? "w-24 h-6 bg-red-500 rounded-lg"
+							: "w-24 h-6 bg-blue-500 rounded-lg"
+					}
+				/>
+			</Row>
+			<Row label="derivable + p-4">
+				<frame className={() => "w-40 h-6 bg-slate-700 p-4 rounded-md"} />
+			</Row>
+			<Row label="dictionary">
+				<frame
+					className={() => ({
+						"w-24 h-6 rounded-lg": true,
+						"bg-emerald-500": props.active(),
+						"bg-slate-600": !props.active(),
+					})}
+				/>
+			</Row>
+		</>
 	);
 }
 
-function BreakpointCase() {
-	return <frame className="w-full md:w-1/2 bg-emerald-500 h-full" />;
+/// Resolved against the environment rather than the class list alone.
+function EnvironmentVariants() {
+	return (
+		<>
+			<Row label="md: width">
+				<frame className="w-full md:w-1/2 h-6 bg-violet-500 rounded-sm" />
+			</Row>
+			<Row label="md: color">
+				<frame className="w-24 h-6 bg-slate-700 md:bg-cyan-500 rounded-sm" />
+			</Row>
+			<Row label="dark:">
+				<frame className="w-24 h-6 bg-white dark:bg-slate-900 rounded-sm" />
+			</Row>
+		</>
+	);
 }
 
-function OpacityCase() {
+/// The alpha crosses a component boundary as context, so it reaches instances
+/// this pass never saw.
+function InheritedOpacity() {
 	return (
-		<frame className="opacity-50 size-full">
-			<textlabel
-				className="bg-red-500 size-full"
-				Text="opacity-50"
-				TextSize={18}
-			/>
-		</frame>
+		<Row label="opacity-50">
+			<frame className="w-40 h-6 opacity-50">
+				<textlabel
+					className="size-full bg-red-500 text-white text-xs rounded-sm"
+					Text="faded"
+				/>
+			</frame>
+		</Row>
 	);
 }
 
@@ -56,7 +121,7 @@ export function App() {
 	const active = Vide.source(false);
 
 	// Nothing re-renders in Vide, so a flipping source is the only way to see
-	// whether the thunked test actually re-drives the rule.
+	// whether a derivable class value actually re-resolves.
 	task.spawn(() => {
 		while (true) {
 			task.wait(1);
@@ -67,23 +132,15 @@ export function App() {
 	return (
 		<screengui ResetOnSpawn={false} IgnoreGuiInset={true}>
 			<frame
-				BackgroundColor3={Color3.fromRGB(15, 20, 32)}
-				BorderSizePixel={0}
-				Position={UDim2.fromScale(0.5, 0.5)}
+				className="bg-slate-950 rounded-xl p-4 flex flex-col gap-1"
 				AnchorPoint={new Vector2(0.5, 0.5)}
-				Size={UDim2.fromOffset(420, 360)}
+				Position={UDim2.fromScale(0.5, 0.5)}
+				Size={UDim2.fromOffset(520, 460)}
 			>
-				<uilistlayout Padding={new UDim(0, 8)} />
-				<uipadding
-					PaddingTop={new UDim(0, 12)}
-					PaddingRight={new UDim(0, 12)}
-					PaddingBottom={new UDim(0, 12)}
-					PaddingLeft={new UDim(0, 12)}
-				/>
-				<Row>{StaticCase()}</Row>
-				<Row>{ClassValueCase({ active })}</Row>
-				<Row>{BreakpointCase()}</Row>
-				<Row>{OpacityCase()}</Row>
+				{StaticUtilities()}
+				{DerivableClassValue({ active })}
+				{EnvironmentVariants()}
+				{InheritedOpacity()}
 			</frame>
 		</screengui>
 	);
