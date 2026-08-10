@@ -294,6 +294,10 @@ included.
 
 - Only offsets scale. `UDim2.fromScale`, a `UDim` with a zero offset, and a literal `0`
   keep their values, and `carries_offset` is what decides.
+- `rem` is also an authoring unit. A `[2rem]` payload resolves against `theme.rem.base`
+  on the way in — `Length::Rem` is what carries it until a config is at hand — so it
+  lands as a plain offset and takes the same curve from there. Both parses mirror:
+  `parse_arbitrary_length` in the compiler, `parseArbitraryLength` in the runtime.
 - Wiring: `config/defaults.json`, `packages/config/src/index.ts`,
   `packages/vela-rbxts/schema.json`, `config/model.rs` (serde `rem`), `config/merge.rs`,
   `transform/rem.rs` (the scaled-prop table), and its mirror in the runtime's
