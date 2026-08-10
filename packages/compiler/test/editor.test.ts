@@ -302,8 +302,8 @@ test("reads class values a function returns", () => {
 
 test("reads class values through the shapes they are written in", () => {
 	for (const source of [
-		'<frame className={`p-4 ${flag ? "rotate-17" : ""}`} />',
-		'<frame className={`p-4 ${cn("rotate-17")}`} />',
+		`<frame className={\`p-4 \${flag ? "rotate-17" : ""}\`} />`,
+		`<frame className={\`p-4 \${cn("rotate-17")}\`} />`,
 		'<frame className={"rotate-17" as const} />',
 		'<frame className={["rotate-17"] as const} />',
 		'<frame className={"rotate-17" satisfies string} />',
@@ -323,8 +323,7 @@ test("reads class values through the shapes they are written in", () => {
 });
 
 test("a file that does not parse still reads only the class text", () => {
-	const source =
-		'<frame className={`p-4 ${flag ? "rotate-17" : ""}`} />\nconst broken = ;';
+	const source = `<frame className={\`p-4 \${flag ? "rotate-17" : ""}\`} />\nconst broken = ;`;
 	const start = source.indexOf("rotate-17");
 
 	expect(getDiagnostics({ source }).diagnostics).toEqual([
@@ -337,8 +336,7 @@ test("a file that does not parse still reads only the class text", () => {
 });
 
 test("sorting keeps the whitespace an interpolation sits between", () => {
-	const source =
-		"<frame className={`bg-slate-700 p-4 ${flag} rounded-md z-10`} />";
+	const source = `<frame className={\`bg-slate-700 p-4 \${flag} rounded-md z-10\`} />`;
 	const result = sortClassNames({ source });
 
 	expect(result.edits.map((edit: { text: string }) => edit.text)).toEqual([
@@ -356,7 +354,9 @@ test("completes and hovers inside a class value a function returns", () => {
 
 	expect(completions.isInClassNameContext).toBe(true);
 	expect(completions.items).toEqual(
-		expect.arrayContaining([expect.objectContaining({ label: "bg-slate-700" })]),
+		expect.arrayContaining([
+			expect.objectContaining({ label: "bg-slate-700" }),
+		]),
 	);
 
 	const hover = getHover({
