@@ -267,10 +267,14 @@ function loadTypeScriptProjectConfig(
 	// The only place the input is still readable: what comes back has already
 	// resolved an unset framework to the default.
 	let declaresFramework = false;
+	const resolvedConfigs = new Set<unknown>();
 	const trackedDefineConfig: ConfigLoader = (input) => {
 		declaresFramework ||= isRecord(input) && "framework" in input;
 
-		return defineConfig(input);
+		const resolved = defineConfig(input);
+		resolvedConfigs.add(resolved);
+
+		return resolved;
 	};
 	const executeModule = new Function(
 		"exports",
@@ -306,10 +310,15 @@ function loadTypeScriptProjectConfig(
 
 	const exported = normalizeConfigExport(module.exports);
 
+	// A config `defineConfig` returned always carries a framework it resolved
+	// itself, so only an export it never produced can be read as a declaration.
 	return {
 		config: coerceTailwindConfig(exported, configFilePath),
 		declaresFramework:
-			declaresFramework || (isRecord(exported) && "framework" in exported),
+			declaresFramework ||
+			(!resolvedConfigs.has(exported) &&
+				isRecord(exported) &&
+				"framework" in exported),
 	};
 }
 

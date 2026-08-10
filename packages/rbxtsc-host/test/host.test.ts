@@ -439,6 +439,14 @@ test("follows a relative tsconfig extends to find the factory", () => {
 	expect(resolveProjectConfig(project.sourceFile).framework).toBe("vide");
 });
 
+test("infers from the tsconfig through a config that names no framework", () => {
+	const project = createProject(`export default defineConfig({});`);
+	writeTsconfig(project.root, { compilerOptions: { jsxFactory: "Vide.jsx" } });
+	clearProjectConfigCache();
+
+	expect(resolveProjectConfig(project.sourceFile).framework).toBe("vide");
+});
+
 test("a config that names its framework is not overridden by the tsconfig", () => {
 	const project = createProject(
 		`export default defineConfig({ framework: "react" });`,
