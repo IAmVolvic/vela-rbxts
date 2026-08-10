@@ -24,11 +24,11 @@
 		"runtime",
 		"vide"
 	],
-	"homepage": "https://github.com/astra-void/vela-rbxts#readme",
+	"homepage": "https://docs.astra-void.xyz/vela-rbxts/",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/astra-void/vela-rbxts.git",
-		"directory": "packages/runtime-core"
+		"directory": "packages/runtime-vide"
 	},
 	"bugs": {
 		"url": "https://github.com/astra-void/vela-rbxts/issues"
