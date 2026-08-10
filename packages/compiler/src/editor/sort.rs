@@ -20,15 +20,21 @@ pub(crate) fn sort_class_names_impl(request: SortClassNamesRequest) -> SortClass
             continue;
         }
 
-        let text = order
+        let sorted = order
             .into_iter()
             .map(|index| tokens[index].text.as_str())
             .collect::<Vec<_>>()
             .join(" ");
 
+        // The space either side of a template's `${}` belongs to the class
+        // value: dropping it would run the neighbouring token into whatever the
+        // interpolation resolves to.
+        let leading = &context.value[..context.value.len() - context.value.trim_start().len()];
+        let trailing = &context.value[context.value.trim_end().len()..];
+
         edits.push(ClassNameEdit {
             range: context.value_range.clone(),
-            text,
+            text: format!("{leading}{sorted}{trailing}"),
         });
     }
 

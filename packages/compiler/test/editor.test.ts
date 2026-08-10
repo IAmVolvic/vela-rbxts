@@ -336,6 +336,16 @@ test("a file that does not parse still reads only the class text", () => {
 	]);
 });
 
+test("sorting keeps the whitespace an interpolation sits between", () => {
+	const source =
+		"<frame className={`bg-slate-700 p-4 ${flag} rounded-md z-10`} />";
+	const result = sortClassNames({ source });
+
+	expect(result.edits.map((edit: { text: string }) => edit.text)).toEqual([
+		"p-4 bg-slate-700 ",
+		" z-10 rounded-md",
+	]);
+});
 
 test("completes and hovers inside a class value a function returns", () => {
 	const source = '<frame className={() => ["p-4", "bg-"]} />';
