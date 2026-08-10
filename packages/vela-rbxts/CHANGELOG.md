@@ -1,5 +1,13 @@
 # vela-rbxts
 
+## 0.11.1
+
+### Patch Changes
+
+- @vela-rbxts/rbxtsc-host@0.11.1
+- @vela-rbxts/config@0.11.1
+- @vela-rbxts/types@0.11.1
+
 ## 0.11.0
 
 ### Minor Changes
