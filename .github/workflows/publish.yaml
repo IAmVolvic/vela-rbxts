@@ -447,6 +447,85 @@ jobs:
             exit 1
           fi
 
+  # A dry run stops at npm, so the whole job is gated rather than each step.
+  github-release:
+    name: github release
+    runs-on: ubuntu-24.04
+    needs:
+      - publish-npm
+      - release-metadata
+    if: ${{ needs.release-metadata.outputs.dry_run == 'false' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-metadata.outputs.release_tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve release notes
+        id: notes
+        env:
+          RELEASE_TAG: ${{ needs.release-metadata.outputs.release_tag }}
+        run: pnpm release:notes --release-tag "${RELEASE_TAG}" --out release-notes.md
+
+      # A re-run of a published tag edits the existing release rather than
+      # failing on the name already being taken.
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.release-metadata.outputs.release_tag }}
+          NPM_TAG: ${{ needs.release-metadata.outputs.npm_tag }}
+          NOTES_SOURCE: ${{ steps.notes.outputs.notes_source }}
+        run: |
+          if [ "${NPM_TAG}" = "next" ]; then
+            prerelease="true"
+          else
+            prerelease="false"
+          fi
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            # `gh release edit` cannot generate notes, so a re-run with no
+            # changelog entries leaves the existing body alone.
+            notes_args=()
+            if [ "${NOTES_SOURCE}" != "generated" ]; then
+              notes_args+=(--notes-file release-notes.md)
+            fi
+
+            echo "Release ${RELEASE_TAG} already exists; updating it."
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --prerelease="${prerelease}" \
+              "${notes_args[@]}"
+          else
+            if [ "${NOTES_SOURCE}" = "generated" ]; then
+              notes_args=(--generate-notes)
+            else
+              notes_args=(--notes-file release-notes.md)
+            fi
+
+            gh release create "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --verify-tag \
+              --prerelease="${prerelease}" \
+              "${notes_args[@]}"
+          fi
+
+          echo "Published the GitHub release for ${RELEASE_TAG}."
+
   dispatch-vscode-extension:
     name: dispatch vscode extension
     runs-on: ubuntu-24.04

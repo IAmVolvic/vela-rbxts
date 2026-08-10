@@ -34,8 +34,9 @@ gh workflow run release.yaml --ref main
 2. It commits the bump straight to `main` as `chore(release): vX.Y.Z`, tags that commit, and
    dispatches `publish.yaml` on the tag.
 3. `publish.yaml` validates, builds every target, packs, verifies, and publishes to npm.
-4. `publish.yaml` then dispatches `publish-vscode.yaml`, which packages the VSIX from the
-   binaries npm just received and publishes it to the Marketplace.
+4. `publish.yaml` then creates the GitHub release for the tag — see
+   [GitHub Release](#github-release) — and dispatches `publish-vscode.yaml`, which packages the
+   VSIX from the binaries npm just received and publishes it to the Marketplace.
 
 Nothing opens a pull request. Releasing is the moment the workflow is dispatched, so changesets
 can pile up for as long as you like and go out in one batch.
@@ -48,6 +49,32 @@ The dispatch in step 2 is deliberate: a tag pushed with `GITHUB_TOKEN` raises no
 so `on: push: tags` never fires for an automated release. `workflow_dispatch` through the API
 is the documented exception, which is why no PAT is involved. `on: push: tags` remains only for
 a tag someone pushes by hand.
+
+## GitHub Release
+
+The `github release` job in `publish.yaml` creates the release for the tag once `publish npm`
+succeeds, so a release page never appears for a version that failed to reach the registry. It is
+skipped entirely on a dry run.
+
+The body comes from `CHANGELOG.md`, resolved by `release:notes`:
+
+```bash
+pnpm release:notes --release-tag v0.11.0 --out release-notes.md
+```
+
+It takes the `## [X.Y.Z]` section for the tag. The root changelog is hand-maintained, so a release
+can reach this point with its entries still under `## [Unreleased]`; those are used instead, and
+the run logs which of the two it took. With neither carrying entries the release falls back to
+GitHub's generated notes rather than failing the run.
+
+A version with a prerelease segment is marked as a prerelease, matching the `next` dist-tag it
+publishes under. Re-running a published tag edits the existing release instead of failing on the
+name — with one exception: generated notes are only written on creation, since `gh release edit`
+cannot generate them, so a re-run leaves that body alone.
+
+The job covers both entry points into `publish.yaml`. An automated release arrives through the
+`workflow_dispatch` from `release.yaml`, a hand-pushed tag through `on: push: tags`, and either
+way the release is created at the end of the same pipeline.
 
 ## npm Authentication
 

@@ -29,6 +29,7 @@
     "release:vsix": "tsx ./scripts/release/package-vsix.ts",
     "release:vsix:version": "tsx ./scripts/release/resolve-vsix-version.ts",
     "release:lsp:fetch": "tsx ./scripts/release/fetch-lsp-binaries.ts",
+    "release:notes": "tsx ./scripts/release/release-notes.ts",
     "release:dry-run:next": "pnpm release:plan --tag next --dry-run && pnpm release:build && pnpm release:pack && pnpm release:verify && pnpm release:publish:npm --tag next --dry-run && pnpm release:vsix --dry-run",
     "release:next": "pnpm release:plan --tag next && pnpm release:build && pnpm release:pack && pnpm release:verify && pnpm release:publish:npm --tag next && pnpm release:vsix",
     "release:dry-run:latest": "pnpm release:plan --tag latest --dry-run && pnpm release:build && pnpm release:pack && pnpm release:verify && pnpm release:publish:npm --tag latest --dry-run && pnpm release:vsix --dry-run",
