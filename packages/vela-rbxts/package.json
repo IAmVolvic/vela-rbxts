@@ -67,36 +67,16 @@
   },
   "dependencies": {
     "@rbxts/services": "^1.6.0",
+    "@rbxts/vela-runtime": "workspace:*",
+    "@rbxts/vela-runtime-vide": "workspace:*",
     "@vela-rbxts/config": "workspace:*",
     "@vela-rbxts/rbxtsc-host": "workspace:*",
     "@vela-rbxts/types": "workspace:*"
-  },
-  "peerDependencies": {
-    "@rbxts/react": "^17.3.7-ts.1",
-    "@rbxts/vela-runtime": ">=0.11.1",
-    "@rbxts/vela-runtime-vide": ">=0.11.1",
-    "@rbxts/vide": "^0.6.1"
-  },
-  "peerDependenciesMeta": {
-    "@rbxts/react": {
-      "optional": true
-    },
-    "@rbxts/vela-runtime": {
-      "optional": true
-    },
-    "@rbxts/vela-runtime-vide": {
-      "optional": true
-    },
-    "@rbxts/vide": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@rbxts/compiler-types": "^3.0.0-types.0",
     "@rbxts/react": "^17.3.7-ts.1",
     "@rbxts/types": "^1.0.935",
-    "@rbxts/vela-runtime": "workspace:*",
-    "@rbxts/vela-runtime-vide": "workspace:*",
     "roblox-ts": "^3.0.0"
   }
 }

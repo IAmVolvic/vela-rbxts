@@ -56,5 +56,10 @@
 	},
 	"peerDependencies": {
 		"@rbxts/vide": "^0.6.1"
+	},
+	"peerDependenciesMeta": {
+		"@rbxts/vide": {
+			"optional": true
+		}
 	}
 }

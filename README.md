@@ -48,18 +48,18 @@ Full documentation lives at [docs.astra-void.xyz/vela-rbxts](https://docs.astra-
 Install Vela alongside the normal roblox-ts React dependencies:
 
 ```bash
-pnpm add vela-rbxts @rbxts/vela-runtime @rbxts/react @rbxts/react-roblox @rbxts/services
+pnpm add vela-rbxts @rbxts/react @rbxts/react-roblox @rbxts/services
 pnpm add -D @rbxts/compiler-types @rbxts/types roblox-ts typescript
 ```
 
-A [Vide](https://centau.github.io/vide/) project installs the Vide host instead — see [`framework`](#framework):
+A [Vide](https://centau.github.io/vide/) project swaps the UI library and sets [`framework`](#framework); nothing else changes:
 
 ```bash
-pnpm add vela-rbxts @rbxts/vela-runtime-vide @rbxts/vide @rbxts/services
+pnpm add vela-rbxts @rbxts/vide @rbxts/services
 pnpm add -D @rbxts/compiler-types @rbxts/types roblox-ts typescript
 ```
 
-The two hosts are optional peers rather than dependencies, so a project installs only the one it emits for. This is not cosmetic: Rojo maps the whole `node_modules/@rbxts` directory into the place, so a runtime you never import still ships — and the React host would drag `@rbxts/react` in with it.
+Both host runtimes arrive with `vela-rbxts`, so neither has to be named by hand. Each one declares its UI library as an *optional* peer, which is what keeps a Vide project from installing React — Rojo maps the whole `node_modules/@rbxts` directory into the place, and `@rbxts/react` is not something a Vide place should be carrying. The host you do not emit for is one inert ModuleScript.
 
 If you are starting from an existing roblox-ts project, keep your current workspace tooling and add only the missing packages.
 

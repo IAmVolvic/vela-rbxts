@@ -49,6 +49,11 @@
 	"peerDependencies": {
 		"@rbxts/react": "^17.3.7-ts.1"
 	},
+	"peerDependenciesMeta": {
+		"@rbxts/react": {
+			"optional": true
+		}
+	},
 	"devDependencies": {
 		"@rbxts/compiler-types": "^3.0.0-types.0",
 		"@rbxts/react": "^17.3.7-ts.1",

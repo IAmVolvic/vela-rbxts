@@ -294,9 +294,12 @@ importers:
       '@rbxts/services':
         specifier: ^1.6.0
         version: 1.6.0
-      '@rbxts/vide':
-        specifier: ^0.6.1
-        version: 0.6.1
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@rbxts/vela-runtime-vide':
+        specifier: workspace:*
+        version: link:../runtime-vide
       '@vela-rbxts/config':
         specifier: workspace:*
         version: link:../config
@@ -316,12 +319,6 @@ importers:
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
-      '@rbxts/vela-runtime':
-        specifier: workspace:*
-        version: link:../runtime
-      '@rbxts/vela-runtime-vide':
-        specifier: workspace:*
-        version: link:../runtime-vide
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
