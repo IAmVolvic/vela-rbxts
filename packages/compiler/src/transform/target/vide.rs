@@ -34,6 +34,13 @@ impl EmitTarget for VideTarget {
         true
     }
 
+    /// The element is parented by the time its resolution first runs, and the
+    /// margin box goes above it — so the host builds one whenever a margin is
+    /// still possible rather than when it is already known.
+    fn needs_margin_box_hint(&self) -> bool {
+        true
+    }
+
     /// The React target can hand the host a boolean, because a re-render brings
     /// the next one. A Vide component body runs once, so a test that arrived
     /// evaluated would pin its rule to whatever was true at creation.

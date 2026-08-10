@@ -21,6 +21,10 @@ pub(crate) struct LoweredClassName {
     /// The expressions the emitted branch rules decide on, in the order they
     /// name them. Empty unless a branch was lowered.
     pub(crate) tests: Vec<Expr>,
+    /// Whether a margin this pass could read is left for the runtime to
+    /// resolve. The box one needs is an instance above the element, so a target
+    /// that builds its tree bottom-up has to be told before the element exists.
+    pub(crate) runtime_margin: bool,
 }
 
 pub(crate) fn lower_class_name(
@@ -81,6 +85,9 @@ pub(crate) fn lower_class_name(
                 runtime_class_name: None,
                 needs_runtime_host,
                 tests: Vec::new(),
+                // A literal names its margin here, so the host is handed the
+                // margin itself rather than told to expect one.
+                runtime_margin: false,
             })
         }
         Some(JSXAttrValue::JSXExprContainer(container)) => {
@@ -101,6 +108,7 @@ pub(crate) fn lower_class_name(
                     runtime_class_name: Some(class_name_attr.clone()),
                     needs_runtime_host: true,
                     tests: Vec::new(),
+                    runtime_margin: false,
                 });
             };
 
@@ -111,6 +119,9 @@ pub(crate) fn lower_class_name(
             let expr: &Expr = deferred.unwrap_or(expr);
 
             let mut collapse = collapse_class_value_expr(expr, scopes);
+            // Read before the fallback below, which drops the branch tokens that
+            // may be the only place a margin is named.
+            let readable_margin = class_value_names_margin(&collapse, config, element_tag);
             let mut style =
                 resolve_class_tokens(collapse.static_tokens(), config, element_tag, diagnostics);
             let mut tests = Vec::new();
@@ -171,6 +182,8 @@ pub(crate) fn lower_class_name(
                 runtime_attr
             });
 
+            let runtime_margin = readable_margin && style.margin.is_none();
+
             Some(LoweredClassName {
                 style_ir: StyleIr {
                     runtime_class_value,
@@ -180,6 +193,7 @@ pub(crate) fn lower_class_name(
                 runtime_class_name,
                 needs_runtime_host,
                 tests,
+                runtime_margin,
             })
         }
         _ => Some(LoweredClassName {
@@ -198,8 +212,39 @@ pub(crate) fn lower_class_name(
             runtime_class_name: Some(class_name_attr.clone()),
             needs_runtime_host: true,
             tests: Vec::new(),
+            // Nothing here was readable, so nothing can be said about a margin.
+            runtime_margin: false,
         }),
     }
+}
+
+/// Whether a class value names a margin anywhere this pass could read it —
+/// a static token or a branch's. What it resolves to is the runtime's to decide;
+/// that one may be coming is all a target needs in order to build the box.
+fn class_value_names_margin(
+    collapse: &crate::class_value::collapse::ClassValueCollapse,
+    config: &crate::config::model::TailwindConfig,
+    element_tag: Option<&str>,
+) -> bool {
+    use crate::class_value::collapse::ClassValueSegment;
+
+    let mut tokens: Vec<&str> = Vec::new();
+    for segment in &collapse.segments {
+        match segment {
+            ClassValueSegment::Static(token) => tokens.push(token.as_str()),
+            ClassValueSegment::Branch(branch) => {
+                tokens.extend(branch.tokens.iter().map(String::as_str));
+            }
+        }
+    }
+
+    if tokens.is_empty() {
+        return false;
+    }
+
+    resolve_class_tokens(tokens, config, element_tag, &mut Vec::new())
+        .margin
+        .is_some()
 }
 
 fn attach_token_ranges(diagnostics: &mut [Diagnostic], spans: &[ClassToken]) {

@@ -442,6 +442,59 @@ mod tests {
         );
     }
 
+    /// A margin is the one effect a target that builds bottom-up cannot apply
+    /// after the fact, because the box it needs goes above an element that is
+    /// already parented. No rule can carry one either, so the branch takes the
+    /// whole class value to the runtime — and the host is told to expect it.
+    #[test]
+    fn a_margin_only_a_branch_names_is_hinted_to_the_vide_host() {
+        let source = "const ui = <frame className={() => on() ? \"m-4 p-2\" : \"p-2\"} />;".to_owned();
+
+        let react = transform_impl(source.clone(), None);
+        let vide = transform_impl(
+            source,
+            Some(TransformOptions {
+                config_json: Some(vide_config_json()),
+            }),
+        );
+
+        assert!(
+            vide.code.contains("__velaMarginBox={true}"),
+            "the vide host must be told a margin is coming: {}",
+            vide.code
+        );
+        // React renders the wrapper on the render that resolves the margin, and
+        // a prop no host reads would land on the instance.
+        assert!(
+            !react.code.contains("__velaMarginBox"),
+            "react must not be handed the hint: {}",
+            react.code
+        );
+    }
+
+    /// The hint is for what the runtime still has to resolve. A margin this
+    /// pass read outright travels as the margin itself.
+    #[test]
+    fn a_statically_known_margin_is_not_hinted() {
+        let result = transform_impl(
+            "const ui = <frame className=\"m-4 p-2\" />;".to_owned(),
+            Some(TransformOptions {
+                config_json: Some(vide_config_json()),
+            }),
+        );
+
+        assert!(
+            result.code.contains("__velaMargin={"),
+            "the margin itself must travel: {}",
+            result.code
+        );
+        assert!(
+            !result.code.contains("__velaMarginBox"),
+            "nothing is left to expect: {}",
+            result.code
+        );
+    }
+
     /// React has no deferred class value, so the arrow is a value like any
     /// other and opening it would change what the element renders.
     #[test]

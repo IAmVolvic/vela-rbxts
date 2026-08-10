@@ -32,6 +32,11 @@ impl EmitTarget for ReactTarget {
         false
     }
 
+    /// A render that resolves a margin also renders the wrapper around it.
+    fn needs_margin_box_hint(&self) -> bool {
+        false
+    }
+
     /// Each test is narrowed to a boolean where it is written, so an expression
     /// the rules hang on is evaluated once however many of them name it. A
     /// re-render is what brings the next value, so the value itself travels.

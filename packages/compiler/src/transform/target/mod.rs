@@ -29,6 +29,12 @@ pub(crate) trait EmitTarget {
     /// inside before it can read any of it, and put back if anything is left.
     fn class_value_is_deferred(&self) -> bool;
 
+    /// Whether the host has to be told that a margin may arrive before the
+    /// element exists. React re-renders and can wrap whenever one does; Vide
+    /// builds its tree bottom-up, and the box a margin needs is an instance
+    /// above one that is already parented.
+    fn needs_margin_box_hint(&self) -> bool;
+
     /// The expressions the emitted branch rules decide on, as one attribute the
     /// host reads by index.
     fn tests_attr(&self, tests: Vec<Expr>) -> JSXAttrOrSpread;

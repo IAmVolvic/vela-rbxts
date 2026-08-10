@@ -321,6 +321,7 @@ impl VisitMut for VelaTransformer {
         self.ir.push(lowered.style_ir.clone());
 
         let tests = std::mem::take(&mut lowered.tests);
+        let runtime_margin = lowered.runtime_margin;
         let mut attrs = lowered.preserved_attrs;
         if let Some(runtime_class_name) = lowered.runtime_class_name {
             attrs.push(JSXAttrOrSpread::JSXAttr(runtime_class_name));
@@ -419,6 +420,11 @@ impl VisitMut for VelaTransformer {
                     name: "__velaMargin".into(),
                     value: serde_json::to_string(margin)
                         .expect("margin spec must serialize to JSON"),
+                }));
+            } else if runtime_margin && self.target.needs_margin_box_hint() {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaMarginBox".into(),
+                    value: "true".to_owned(),
                 }));
             }
             if inherited_opacity_at_runtime {
