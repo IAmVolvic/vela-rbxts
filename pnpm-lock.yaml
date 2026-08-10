@@ -87,6 +87,9 @@ importers:
       '@rbxts/services':
         specifier: ^1.6.0
         version: 1.6.0
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       vela-rbxts:
         specifier: workspace:*
         version: link:../../packages/vela-rbxts
@@ -97,9 +100,6 @@ importers:
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
-      '@rbxts/vela-runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
@@ -118,6 +118,9 @@ importers:
       '@rbxts/services':
         specifier: ^1.6.0
         version: 1.6.0
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       vela-rbxts:
         specifier: workspace:*
         version: link:../../packages/vela-rbxts
@@ -128,9 +131,6 @@ importers:
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
-      '@rbxts/vela-runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
@@ -291,15 +291,12 @@ importers:
 
   packages/vela-rbxts:
     dependencies:
-      '@rbxts/react':
-        specifier: ^17.3.7-ts.1
-        version: 17.3.7-ts.1
       '@rbxts/services':
         specifier: ^1.6.0
         version: 1.6.0
-      '@rbxts/vela-runtime':
-        specifier: workspace:*
-        version: link:../runtime
+      '@rbxts/vide':
+        specifier: ^0.6.1
+        version: 0.6.1
       '@vela-rbxts/config':
         specifier: workspace:*
         version: link:../config
@@ -313,9 +310,18 @@ importers:
       '@rbxts/compiler-types':
         specifier: ^3.0.0-types.0
         version: 3.0.0-types.0
+      '@rbxts/react':
+        specifier: ^17.3.7-ts.1
+        version: 17.3.7-ts.1
       '@rbxts/types':
         specifier: ^1.0.935
         version: 1.0.935
+      '@rbxts/vela-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@rbxts/vela-runtime-vide':
+        specifier: workspace:*
+        version: link:../runtime-vide
       roblox-ts:
         specifier: ^3.0.0
         version: 3.0.0
