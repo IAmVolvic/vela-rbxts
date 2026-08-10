@@ -6,8 +6,10 @@ import { transform } from "@vela-rbxts/compiler";
 import { beforeEach, expect, test, vi } from "vitest";
 import { defaultConfig, defineConfig } from "../../config/src/index";
 import {
+	clearProjectConfigCache,
 	createRbxtscTransformerBridge,
 	isTransformableHostFile,
+	resolveProjectConfig,
 	transformSourceForHost,
 } from "../src/index";
 
@@ -403,6 +405,50 @@ test("bridge exposes selection and transform entrypoints", () => {
 	);
 });
 
+// `jsxFactory` is program-wide, so a project pointing it at Vide cannot compile
+// React JSX at all — a config that never named a framework is taking the
+// default rather than asking for React.
+test("infers the Vide framework from the tsconfig jsxFactory", () => {
+	const project = createProject();
+	writeTsconfig(project.root, { compilerOptions: { jsxFactory: "Vide.jsx" } });
+	clearProjectConfigCache();
+
+	expect(resolveProjectConfig(project.sourceFile).framework).toBe("vide");
+});
+
+test("keeps React when the tsconfig names no Vide factory", () => {
+	const project = createProject();
+	writeTsconfig(project.root, {
+		compilerOptions: { jsxFactory: "React.createElement" },
+	});
+	clearProjectConfigCache();
+
+	expect(resolveProjectConfig(project.sourceFile).framework).toBe("react");
+});
+
+test("follows a relative tsconfig extends to find the factory", () => {
+	const project = createProject();
+	writeTsconfig(project.root, { extends: "./tsconfig.base.json" });
+	fs.writeFileSync(
+		path.join(project.root, "tsconfig.base.json"),
+		JSON.stringify({ compilerOptions: { jsxFactory: "Vide.jsx" } }),
+		"utf8",
+	);
+	clearProjectConfigCache();
+
+	expect(resolveProjectConfig(project.sourceFile).framework).toBe("vide");
+});
+
+test("a config that names its framework is not overridden by the tsconfig", () => {
+	const project = createProject(
+		`export default defineConfig({ framework: "react" });`,
+	);
+	writeTsconfig(project.root, { compilerOptions: { jsxFactory: "Vide.jsx" } });
+	clearProjectConfigCache();
+
+	expect(resolveProjectConfig(project.sourceFile).framework).toBe("react");
+});
+
 test("does not expose semantic utility resolution functions from the host", async () => {
 	const hostExports = await import("../src/index");
 
@@ -431,4 +477,12 @@ function createProject(
 		sourceFile,
 		root,
 	};
+}
+
+function writeTsconfig(root: string, contents: object) {
+	fs.writeFileSync(
+		path.join(root, "tsconfig.json"),
+		JSON.stringify(contents),
+		"utf8",
+	);
 }

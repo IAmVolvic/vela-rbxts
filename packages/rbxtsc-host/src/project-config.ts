@@ -48,10 +48,16 @@ export function resolveProjectConfig(sourceFileName: string): TailwindConfig {
 	const configFilePath = findProjectConfigFile(sourceFileName);
 
 	if (!configFilePath) {
-		return defaultConfig;
+		return inferFramework(sourceFileName, defaultConfig, false);
 	}
 
-	return loadProjectConfig(configFilePath);
+	const loaded = loadProjectConfig(configFilePath);
+
+	return inferFramework(
+		sourceFileName,
+		loaded.config,
+		loaded.declaresFramework,
+	);
 }
 
 export function resolveProjectConfigInfo(sourceFileName: string): {
@@ -63,50 +69,177 @@ export function resolveProjectConfigInfo(sourceFileName: string): {
 
 	if (!configFilePath) {
 		return {
-			config: defaultConfig,
+			config: inferFramework(sourceFileName, defaultConfig, false),
 			projectRoot: path.dirname(path.resolve(sourceFileName)),
 		};
 	}
 
+	const loaded = loadProjectConfig(configFilePath);
+
 	return {
-		config: loadProjectConfig(configFilePath),
+		config: inferFramework(
+			sourceFileName,
+			loaded.config,
+			loaded.declaresFramework,
+		),
 		configFilePath,
 		projectRoot: path.dirname(configFilePath),
 	};
 }
 
+type LoadedProjectConfig = {
+	config: TailwindConfig;
+	/// `defineConfig` resolves an unset framework to the default, so whether the
+	/// project asked for one has to be read off the input rather than the result.
+	declaresFramework: boolean;
+};
+
 // Every source file resolves its own config, so a host that walks a whole
 // project would otherwise transpile and evaluate the same file once per file.
 const configCache = new Map<
 	string,
-	{ sourceText: string; config: TailwindConfig }
+	{ sourceText: string; loaded: LoadedProjectConfig }
 >();
 
 export function clearProjectConfigCache(): void {
 	configCache.clear();
+	jsxFactoryCache.clear();
 }
 
-function loadProjectConfig(configFilePath: string): TailwindConfig {
+const TSCONFIG_FILE_NAME = "tsconfig.json";
+const MAX_TSCONFIG_EXTENDS_DEPTH = 8;
+const jsxFactoryCache = new Map<string, string | undefined>();
+
+/// `jsxFactory` is program-wide, so a project pointing it at Vide cannot
+/// compile React JSX at all — a config that never named a framework is taking
+/// the default rather than asking for React.
+function inferFramework(
+	sourceFileName: string,
+	config: TailwindConfig,
+	declared: boolean,
+): TailwindConfig {
+	if (declared) {
+		return config;
+	}
+
+	const factory = findJsxFactory(sourceFileName);
+	if (factory === undefined || !factory.startsWith("Vide.")) {
+		return config;
+	}
+
+	return { ...config, framework: "vide" };
+}
+
+function findJsxFactory(sourceFileName: string): string | undefined {
+	let currentDirectory = path.dirname(path.resolve(sourceFileName));
+
+	while (true) {
+		const candidate = path.join(currentDirectory, TSCONFIG_FILE_NAME);
+		if (isExistingFile(candidate)) {
+			return readJsxFactory(candidate, 0);
+		}
+
+		const parentDirectory = path.dirname(currentDirectory);
+		if (parentDirectory === currentDirectory) {
+			return undefined;
+		}
+
+		currentDirectory = parentDirectory;
+	}
+}
+
+function readJsxFactory(
+	tsconfigPath: string,
+	depth: number,
+): string | undefined {
+	if (depth > MAX_TSCONFIG_EXTENDS_DEPTH) {
+		return undefined;
+	}
+
+	if (jsxFactoryCache.has(tsconfigPath)) {
+		return jsxFactoryCache.get(tsconfigPath);
+	}
+
+	const parsed = readTsconfig(tsconfigPath);
+	const compilerOptions = isRecord(parsed?.compilerOptions)
+		? parsed.compilerOptions
+		: undefined;
+	let factory =
+		typeof compilerOptions?.jsxFactory === "string"
+			? compilerOptions.jsxFactory
+			: undefined;
+
+	// Only a relative base is followed: a package specifier would have to be
+	// resolved the way TypeScript does, and roblox-ts projects set the factory
+	// in the tsconfig they compile with.
+	const extended = parsed?.extends;
+	if (factory === undefined && typeof extended === "string") {
+		if (extended.startsWith(".")) {
+			const base = path.join(path.dirname(tsconfigPath), extended);
+			const basePath = base.endsWith(".json") ? base : `${base}.json`;
+			if (isExistingFile(basePath)) {
+				factory = readJsxFactory(basePath, depth + 1);
+			}
+		}
+	}
+
+	jsxFactoryCache.set(tsconfigPath, factory);
+
+	return factory;
+}
+
+function readTsconfig(
+	tsconfigPath: string,
+): Record<string, unknown> | undefined {
+	let sourceText: string;
+
+	try {
+		sourceText = fs.readFileSync(tsconfigPath, "utf8");
+	} catch {
+		return undefined;
+	}
+
+	// A tsconfig is JSONC, so TypeScript's own reader is preferred; a project
+	// without it falls back to plain JSON rather than losing the inference.
+	try {
+		const ts = loadTypeScript(tsconfigPath);
+		const parsed = ts.parseConfigFileTextToJson(tsconfigPath, sourceText);
+		if (parsed.error === undefined && isRecord(parsed.config)) {
+			return parsed.config;
+		}
+	} catch {
+		// fall through to JSON.parse
+	}
+
+	try {
+		const parsed: unknown = JSON.parse(sourceText);
+		return isRecord(parsed) ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function loadProjectConfig(configFilePath: string): LoadedProjectConfig {
 	const sourceText = fs.readFileSync(configFilePath, "utf8");
 	const cached = configCache.get(configFilePath);
 
 	if (cached !== undefined && cached.sourceText === sourceText) {
-		return cached.config;
+		return cached.loaded;
 	}
 
-	const config = configFilePath.endsWith(".json")
+	const loaded = configFilePath.endsWith(".json")
 		? loadJsonProjectConfig(configFilePath, sourceText)
 		: loadTypeScriptProjectConfig(configFilePath, sourceText);
 
-	configCache.set(configFilePath, { sourceText, config });
+	configCache.set(configFilePath, { sourceText, loaded });
 
-	return config;
+	return loaded;
 }
 
 function loadTypeScriptProjectConfig(
 	configFilePath: string,
 	rawSourceText: string,
-): TailwindConfig {
+): LoadedProjectConfig {
 	const ts = loadTypeScript(configFilePath);
 	const sourceText = stripVelaRbxtsImports(ts, rawSourceText);
 	const transpiled = ts.transpileModule(sourceText, {
@@ -131,6 +264,14 @@ function loadTypeScriptProjectConfig(
 
 	const localRequire = createRequire(configFilePath);
 	const module = { exports: {} as unknown };
+	// The only place the input is still readable: what comes back has already
+	// resolved an unset framework to the default.
+	let declaresFramework = false;
+	const trackedDefineConfig: ConfigLoader = (input) => {
+		declaresFramework ||= isRecord(input) && "framework" in input;
+
+		return defineConfig(input);
+	};
 	const executeModule = new Function(
 		"exports",
 		"require",
@@ -158,21 +299,24 @@ function loadTypeScriptProjectConfig(
 		module,
 		configFilePath,
 		path.dirname(configFilePath),
-		defineConfig,
+		trackedDefineConfig,
 		defaultConfig,
 		plugin,
 	);
 
-	return coerceTailwindConfig(
-		normalizeConfigExport(module.exports),
-		configFilePath,
-	);
+	const exported = normalizeConfigExport(module.exports);
+
+	return {
+		config: coerceTailwindConfig(exported, configFilePath),
+		declaresFramework:
+			declaresFramework || (isRecord(exported) && "framework" in exported),
+	};
 }
 
 function loadJsonProjectConfig(
 	configFilePath: string,
 	sourceText: string,
-): TailwindConfig {
+): LoadedProjectConfig {
 	let parsed: unknown;
 
 	try {
@@ -185,7 +329,12 @@ function loadJsonProjectConfig(
 		);
 	}
 
-	return coerceTailwindConfig(stripSchemaKey(parsed), configFilePath);
+	const stripped = stripSchemaKey(parsed);
+
+	return {
+		config: coerceTailwindConfig(stripped, configFilePath),
+		declaresFramework: isRecord(stripped) && "framework" in stripped,
+	};
 }
 
 function stripSchemaKey(value: unknown): unknown {
