@@ -9,6 +9,36 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-10
+
+### Added
+
+- [Vide](https://centau.github.io/vide/) as a second target. A project sets `framework: "vide"` in `vela.config.ts`, installs `@rbxts/vide` instead of `@rbxts/react`, and writes the same classes — everything else is unchanged. `className` is added to `Vide.Attributes` the way it is to `React.Attributes`, the static lowering is byte-identical between the two targets, and the runtime path covers what React's does: variants, branches, rem, `opacity-*` across component boundaries, `divide-*`, margins, text transforms, and `transition-*`/`animate-*` on the same motion driver seam. A project that never names a framework has it inferred from the nearest `tsconfig.json`, where a `jsxFactory` of `Vide.jsx` selects Vide.
+- `theme.rem`, so every pixel offset a utility lowers follows the viewport. `p-4`, `w-40`, `rounded-lg`, `text-sm`, `border-2` and `top-2` are rem units now: one rem is 16px at a 1920×1020 viewport and scales from there along the viewport diagonal, capped at a 19:9 aspect ratio with a gentler falloff in portrait, then rounded and clamped into `[min, max]`. No provider, hook or wrapper component is involved. `base`, `min`, `max` and `baseResolution` are configurable and merge field by field. Scale-valued utilities — `w-full`, `h-1/2`, `translate-x-1/2` — stay fractions of the parent. An arbitrary value can name the unit directly, as in `w-[2rem]`.
+- The `/N` color opacity modifier on every family that has a transparency channel. `border-{color}/N` lowers to `UIStroke.Transparency`, `divide-{color}/N` to the separator frames' `BackgroundTransparency`, and `from-*/N`, `via-*/N`, `to-*/N` to a `UIGradient.Transparency` sequence whose keypoints line up with the color stops, so one faded stop does not fade the others. `placeholder-*` is the one family left reporting `unsupported-opacity-modifier`, now with a message that says why: Roblox has no placeholder transparency.
+- Compile-time resolution of a class value's known branches. `active ? "text-lg" : "text-sm"` used to travel whole to the runtime resolver, which parses only a subset of the utility set, so neither size ever reached the instance. The compiler resolves the branches through the same call the static path makes and hands the element the resolved props alongside the tests that decide them: the full utility set applies inside a branch, a bad utility written in one reports a diagnostic instead of vanishing, a variant inside a branch answers to both, and each test is evaluated once however many branches hang on it. It reads ternaries, `&&`, the literal behind `||`, arrays and object maps, and resolves a branch among the tokens written around it, so `["w-40", tall && "h-10"]` is one `Size` rather than a branch that overwrites the width.
+
+### Changed
+
+- The runtime ships as `@rbxts/vela-runtime` instead of being inlined into every module that needs it. A place with ten components that use a variant used to carry ten copies of the same 5,500 lines, each running its own camera subscription, rem binding and React context; it is one ModuleScript the whole place shares now. In the reference app `App.luau` went from 190,260 bytes to 27,912. Setup is unchanged — the package installs as a dependency of `vela-rbxts` and sits under the `@rbxts` scope every roblox-ts project already lists in `typeRoots` and every Rojo template already maps. The neutral half is `@rbxts/vela-runtime-core`, shipped as a ModuleScript with a child per namespace.
+- The emit sends the theme a project changed rather than the whole palette. An untouched scale sends nothing, `theme.extend.colors.brand` sends `brand`, overriding one shade sends that color family so the shades around it survive the merge, and a top-level `theme.colors` — which replaces rather than extends — travels whole and is named in `theme.replaced`. A file that hands the runtime host no class value to parse carries its scales emptied entirely, roughly 400 bytes where the full tables are about 19KB.
+- Both hosts ship with `vela-rbxts`, and each declares its UI library as an optional peer. A Vide project no longer installs `@rbxts/react` as a side effect of installing Vela — which matters because Rojo maps the whole `node_modules/@rbxts` directory into the place. The host a project does not emit for is one inert ModuleScript.
+- Hover and completion docs read scaled offsets in rem — `` `1rem` (16px at the base viewport)`` — across padding, gap, margin, sizes, positions, radius, text size, stroke and separator thickness, and scrollbar width. A config that pins rem keeps the old pixel wording, matching the emit it produces.
+- Both hosts settle a viewport resize before resolving it, instead of re-reading the rem curve for every intermediate size a window drag reports.
+- **Breaking:** with `theme.rem` active, rendering changes on any viewport other than the base resolution, and `TextSize` stops at 100 — where Roblox itself stops honoring it — so `text-6xl` and up land on that ceiling. To keep literal-pixel behavior, close the clamp with `theme: { rem: { min: 16, max: 16 } }`; the compiler then drops the scaling from the emit entirely, lowering offsets to plain `UDim2`/`UDim` literals with no binding and no runtime import.
+
+### Fixed
+
+- A branched `opacity-*` faded the element but never its subtree. The subtree wrapper is built from the tokens that always apply, and a branch is not among them, so a class value with a branch naming an opacity now goes back to the runtime host, which resolves it and hands the subtree one alpha. A `canvasgroup` stays on the rule path, and an opacity written beside a branch stays as static as it ever was.
+- A base helper a variant rule overwrote — `p-4 hover:p-8` — was emitted as a child *and* resolved by the host, leaving two `UIPadding` under one instance.
+- `md:min-w-16`, `md:bg-gradient-to-r` and `md:font-bold` tore down the tree. A rule carries its prop values as source text for the runtime to parse back, and the parser did not know `Vector2`, `ColorSequence`, `Font` or `NumberSequence`, so it assigned a string to a Roblox property.
+
+## [0.11.1] - 2026-08-08
+
+### Fixed
+
+- The inlined runtime failed to typecheck in a project that sets `noUncheckedIndexedAccess`. A `className` carrying a state variant pulls the runtime host into the emit, where it is checked under the consumer's compiler options rather than this repo's, and its indexed reads of parsed call arguments, enum segments and gradient stops were typed as if an index could never miss.
+
 ## [0.11.0] - 2026-08-08
 
 ### Added
@@ -264,7 +294,9 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/astra-void/vela-rbxts/compare/v0.11.1...v0.12.0
+[0.11.1]: https://github.com/astra-void/vela-rbxts/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/astra-void/vela-rbxts/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/astra-void/vela-rbxts/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/astra-void/vela-rbxts/compare/v0.8.0...v0.9.0
