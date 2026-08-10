@@ -9,6 +9,12 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-08-10
+
+### Fixed
+
+- A Vide project that left the framework unnamed compiled against the React host, so its emit imported `@rbxts/vela-runtime`, which such a project has no reason to have installed. The tsconfig inference only ever ran for a project with no `vela.config.ts` at all: `defineConfig()` resolves an unset framework to the default before it returns, and that resolved value was read back as a choice the project had made. A config that names `framework` still wins over the tsconfig.
+
 ## [0.12.0] - 2026-08-10
 
 ### Added
@@ -294,7 +300,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/astra-void/vela-rbxts/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/astra-void/vela-rbxts/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/astra-void/vela-rbxts/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/astra-void/vela-rbxts/compare/v0.10.0...v0.11.0
