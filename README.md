@@ -9,7 +9,7 @@ Release workflow documentation is available in `docs/release.md`.
 
 The implementation is intentionally narrow and focuses on Roblox UI styling rather than full Tailwind parity.
 
-- `className?: ClassValue` is added to `React.Attributes` through `vela-rbxts`.
+- `className?: ClassValue` is added to `React.Attributes` — and to `Vide.Attributes`, for projects that set `framework: "vide"` — through `vela-rbxts`.
 - Supported TSX files are lowered by the `rbxtsc` transformer when they target supported Roblox host elements or your own components.
 - The `vela` CLI lowers the same files ahead of `rbxtsc` for projects that cannot register a transform plugin.
 - Dynamic `ClassValue` expressions and supported Roblox-oriented variants are rewritten against an imported runtime helper when needed.
@@ -23,7 +23,9 @@ Full documentation lives at [docs.astra-void.xyz/vela-rbxts](https://docs.astra-
 | Path | What it does |
 | --- | --- |
 | `packages/vela-rbxts` | The only package an app installs by hand. Re-exports config helpers, `createTransformer`, shared types, the `./transformer` subpath export, and the `vela` CLI that lowers a source tree without the transformer. |
-| `packages/runtime` | Published as `@rbxts/vela-runtime` and installed with `vela-rbxts`. The class resolver every transformed module imports, as one ModuleScript the place shares. |
+| `packages/runtime-core` | Published as `@rbxts/vela-runtime-core`. The target-neutral half of the runtime: resolution engine, theme normalization, rem math, rich text, margin and divide computation. |
+| `packages/runtime` | Published as `@rbxts/vela-runtime` and installed with `vela-rbxts`. The React host every transformed module imports, as one ModuleScript the place shares. |
+| `packages/runtime-vide` | Published as `@rbxts/vela-runtime-vide`. The same host for [Vide](https://centau.github.io/vide/), imported instead when the project sets `framework: "vide"`. |
 | `packages/compiler` | Native compiler implementation that resolves, validates, and lowers utility classes. |
 | `packages/lsp` | Standalone Rust stdio LSP server that adapts the compiler's editor APIs for completions, hover, colors, quickfixes, and diagnostics. |
 | `packages/vscode-extension` | VS Code client for the LSP, published to the marketplace as `astra-void.vela-rbxts-lsp`. |
@@ -33,6 +35,7 @@ Full documentation lives at [docs.astra-void.xyz/vela-rbxts](https://docs.astra-
 | `packages/ir` | Internal shared IR and supporting types. |
 | `packages/types` | Shared public utility types such as `ClassValue` and `StylableProps`. |
 | `apps/rbxts-harness` | Local reference app used by maintainers to validate the transformer in a real roblox-ts project. |
+| `apps/vide-harness` | The same, for the Vide target: asserts the lowering contracts on the emit and renders every runtime path in Studio. |
 | `apps/compiler-harness` | Browser-based preview for the compiler API and diagnostics. |
 | `apps/lsp-harness` | Drives the real `vela-rbxts-lsp` binary over stdio and asserts on diagnostics, completions, hover, and document colors. |
 
@@ -45,9 +48,18 @@ Full documentation lives at [docs.astra-void.xyz/vela-rbxts](https://docs.astra-
 Install Vela alongside the normal roblox-ts React dependencies:
 
 ```bash
-pnpm add vela-rbxts @rbxts/react @rbxts/react-roblox @rbxts/services
+pnpm add vela-rbxts @rbxts/vela-runtime @rbxts/react @rbxts/react-roblox @rbxts/services
 pnpm add -D @rbxts/compiler-types @rbxts/types roblox-ts typescript
 ```
+
+A [Vide](https://centau.github.io/vide/) project installs the Vide host instead — see [`framework`](#framework):
+
+```bash
+pnpm add vela-rbxts @rbxts/vela-runtime-vide @rbxts/vide @rbxts/services
+pnpm add -D @rbxts/compiler-types @rbxts/types roblox-ts typescript
+```
+
+The two hosts are optional peers rather than dependencies, so a project installs only the one it emits for. This is not cosmetic: Rojo maps the whole `node_modules/@rbxts` directory into the place, so a runtime you never import still ships — and the React host would drag `@rbxts/react` in with it.
 
 If you are starting from an existing roblox-ts project, keep your current workspace tooling and add only the missing packages.
 
@@ -447,12 +459,13 @@ Length families read a `[...]` payload directly, so a one-off value does not nee
 | Payload | Reads as |
 | --- | --- |
 | `[16px]` or `[16]` | 16 pixels of offset |
+| `[1rem]` | `theme.rem.base` pixels of offset — 16 by default |
 | `[50%]` | scale `0.5` |
 | `[-8px]` | negative offset |
 
-It works on `p-*`/`m-*`/`gap-*`/`space-*`, `w-*`/`h-*`/`size-*`/`min-*`/`max-*`/`basis-*`, `top-*`/`left-*`/`right-*`/`bottom-*`/`inset-*`/`translate-*`, `rounded-*`, and `scrollbar-w-*`. A few families read the number in their own unit instead: `text-[13px]` (`TextSize`), `leading-[1.6]` (`LineHeight`), `rotate-[17deg]` (`Rotation`), `z-[15]` (`ZIndex`, integers only), and `border-[3px]`/`ring-[3px]`/`outline-[3px]` (`UIStroke.Thickness`).
+It works on `p-*`/`m-*`/`gap-*`/`space-*`, `w-*`/`h-*`/`size-*`/`min-*`/`max-*`/`basis-*`, `top-*`/`left-*`/`right-*`/`bottom-*`/`inset-*`/`translate-*`, `rounded-*`, and `scrollbar-w-*`. A few families read the number in their own unit instead: `text-[13px]` (`TextSize`), `leading-[1.6]` (`LineHeight`), `rotate-[17deg]` (`Rotation`), `z-[15]` (`ZIndex`, integers only), and `border-[3px]`/`ring-[3px]`/`outline-[3px]` (`UIStroke.Thickness`). Every family that counts in pixels reads `rem` as well as `px`, so `text-[1.5rem]` and `border-[0.125rem]` say what `text-[24px]` and `border-[2px]` say.
 
-A payload the family cannot read — `w-[3rem]`, `z-[1.5]` — still reports `unsupported-arbitrary-value` rather than being guessed at. CSS units other than `px` and `%` have no Roblox meaning.
+`rem` is resolved against `theme.rem.base`, the same base the viewport scaling divides by, so a rem payload is worth exactly what one written on the spacing scale is — and it follows the viewport from there like any other offset. A payload the family cannot read — `w-[3em]`, `z-[1.5]` — still reports `unsupported-arbitrary-value` rather than being guessed at. CSS units other than `px`, `rem` and `%` have no Roblox meaning.
 
 ### Not Implemented
 
@@ -505,7 +518,21 @@ Two branches that touch the same property are applied in the order they were wri
 
 The project config file is named `vela.config.ts` or `vela.config.json` — those exact filenames, with no `.js`, `.mjs`, or `.cjs` variant. The host resolves it by walking upward from each source file and loading the nearest one it finds, preferring `.ts` within a directory and falling back to the built-in defaults when there is none. See [step 3](#3-add-velaconfigts) for the shape and [Theme Axes](#theme-axes) for the merge rules.
 
-The schema is only `preflight`, `plugins`, `theme.colors`, `theme.radius`, `theme.spacing`, `theme.fontFamily`, `theme.rem`, and their `theme.extend` counterparts. There is no `content`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
+The schema is only `framework`, `preflight`, `plugins`, `theme.colors`, `theme.radius`, `theme.spacing`, `theme.fontFamily`, `theme.rem`, and their `theme.extend` counterparts. There is no `content`, `presets`, `darkMode`, `prefix`, `safelist`, or `variants` option.
+
+### `framework`
+
+Which UI library the project's JSX is compiled for — `"react"` (the default) or `"vide"`. `jsxFactory` is a program-wide TypeScript setting, so the two cannot be mixed in one project and the choice is per project rather than per file.
+
+```ts
+export default defineConfig({ framework: "vide" });
+```
+
+Left unset, it is inferred from the nearest `tsconfig.json`: a `compilerOptions.jsxFactory` of `Vide.jsx` selects Vide. Naming it explicitly always wins over the inference.
+
+The whole token → utility pipeline is shared, and so is every prop and helper child the static path writes — Vide reads the same lowercase host tags and the same Roblox property names React does. What differs is the runtime package the emit imports (`@rbxts/vela-runtime-vide` rather than `@rbxts/vela-runtime`, so React never reaches a Vide place) and the reactive seams: a dynamic class value is written as a thunk (`className={() => active() ? "bg-red-500" : "bg-blue-500"}`), because a Vide component body runs once and has no re-render to refresh it with.
+
+Two limits are inherent to that, and both are narrow. On a **component** element, which props the host can hand down is fixed when the component is called, since it is given its props once rather than written to; a host element has no such limit. And a `m-*` needs a box *above* the element, which cannot be introduced once the element is parented — so the compiler says up front whenever a class value names one anywhere it can read, and the host builds the box before the element. Only a margin arriving out of an opaque call is left, and the runtime warns there rather than rendering it unspaced. Everything else a deferred class value can name later — a prop, a `hover:` prefix, a helper, a `divide-*` — arrives.
 
 ### `preflight`
 

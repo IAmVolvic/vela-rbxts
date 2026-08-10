@@ -4,8 +4,9 @@ Design for making Vela emit for [Vide](https://centau.github.io/vide/) — the
 `@rbxts/vide` port maintained at [littensy/vide](https://github.com/littensy/vide) —
 alongside the React target it emits for today.
 
-Scope agreed for v1: **phases 0–4**. Motion (`transition-*`, `animate-*`) is deferred
-to a follow-up. Runtime packaging is a **three-package split**, decided up front.
+Scope agreed for v1: **phases 0–4**. Motion (`transition-*`, `animate-*`) was deferred
+to a follow-up and landed in the parity pass (§9). Runtime packaging is a
+**three-package split**, decided up front.
 
 ## 1. What is actually different
 
@@ -146,10 +147,11 @@ re-rendered into place; the Vide host creates and destroys it imperatively under
 | 3. Vide host (MVP) | static lowering, runtime `className` resolution, rem. No variants | **done** |
 | 4. Reactive boundary | arrow unwrap, thunked tests, hover/pressed/focused, opacity context, margin/divide | **done** |
 
-Deferred past v1: motion (`transition-*`, `animate-*`) on a Vide `spring()` driver;
-static analysis of `className` inside `<Show>`/`<For>`/`<Index>`/`<Switch>`; the
-`changed()` macro interaction; fine-grained `action` composition ordering (v1 fixes
-"user action runs after Vela's").
+Deferred past v1: static analysis of `className` inside
+`<Show>`/`<For>`/`<Index>`/`<Switch>`; the `changed()` macro interaction;
+fine-grained `action` composition ordering (v1 fixes "user action runs after
+Vela's"). Motion was on this list and landed in §9, on the same neutral
+`__VelaMotion` the React host drives rather than on `spring()`.
 
 Phases 1 and 2 are what make everything after them unable to regress the React path.
 
@@ -268,9 +270,140 @@ materialize script makes, not a symlink. Rebuilding a runtime package and then r
 `rbxtsc` alone leaves that copy stale, and Studio keeps serving the old runtime through
 a reconnect. The order is: build the runtime, materialize, `rbxtsc`, restart `rojo`.
 
+## 9. Parity pass results
+
+A read of the two hosts side by side against what the transformer actually emits
+for `framework: "vide"`. The static path was already at parity; everything below
+was on the runtime host path.
+
+**Fixed.**
+
+- **The host's own props were not all filtered.** `__velaTransition`,
+  `__velaAnimation` and `__velaText` are emitted for every target, and only
+  `__velaMargin`/`__velaDivide` had been named in the Vide passthrough — the
+  other three reached `Instance` and threw there. They are one
+  `HOST_OWN_PROPS` set now, so a new one cannot be missed a name at a time.
+  `apps/vide-harness` never caught it because its `uppercase` probe is a literal
+  `Text` on an otherwise static class list, which the compiler transforms itself.
+- **A rule that stopped matching wrote nil.** Every prop a rule can name is
+  bound, and Vide writes what the thunk returns — so a variant with no static
+  counterpart (`hover:font-bold` on an element that declares no `FontFace`)
+  wrote `nil` to the instance the moment it was created. React drops the prop
+  and the reconciler restores the class default; the fallback reads that default
+  off one unparented probe instance per class. Every harness variant probe had a
+  static base, which is why this was invisible too.
+- **The inherited alpha composed once per bound prop.** `composeInheritedOpacity`
+  mutates the resolution in place and is not idempotent, and every bound prop's
+  thunk read the same memoized table. It moved into the `derive`.
+- **A component tag lost its children.** They were numbered into the array part
+  of the props table, which is where a *host* tag reads them; Vide hands a
+  component `children`.
+- **Every dynamic class value grew a margin wrapper.** The wrap was decided by
+  `className !== undefined` rather than by a margin, so an extra frame and
+  `uipadding` sat between the element and its parent's layout, with the layout
+  props moved onto the wrapper. It follows the resolved margin now, the way
+  `divide` already followed the resolved divide.
+- **Text and motion.** `applyTextConfig` runs in the resolved-prop path, so
+  `uppercase`/`underline` reach a runtime host. `transition-*` binds a covered
+  prop to a per-prop effect that tweens rather than writes — the first reading is
+  what the instance is created holding — and `animate-*` starts a preset under
+  `cleanup()`. Both drive the same neutral `__VelaMotion` the React host does,
+  so a `plugins.motion` driver covers both targets.
+- **The fade consumer reached only the root.** React's `applyAlpha` recurses
+  through children; the Vide one wrote the one instance it was handed. It walks
+  the subtree now, stops at a `CanvasGroup` whose own `GroupTransparency`
+  already carries the fade, and skips what a runtime host already faded for
+  itself — the mark standing in for the element type React recognizes.
+- **Target inference.** D3's tsconfig `jsxFactory` fallback had never landed.
+  `defineConfig` resolves an unset framework to the default, so whether the
+  project named one is read off the input rather than the result.
+
+## 10. Opacity pass results
+
+The parity pass left three holes, all in the same seam: React has one context
+that both the host and the fade consumer read, while Vide has two disjoint
+mechanisms — the host's `__velaOpacity` and a consumer that walks instances —
+and the mark that keeps them from overlapping dropped exactly these.
+
+Each was measured in Studio against what the React host computes for the same
+element, and all three now agree with it.
+
+- **The context's alpha never reached a prop the element was handed.**
+  `composeInheritedOpacity` only touches names the resolution already carries, so
+  a written `BackgroundTransparency={0}` under a component-boundary fade stayed
+  opaque. The channels are composed onto the declared props too now, and bound
+  whether or not anything named them — a channel that was never set still
+  paints.
+- **A component the host renders got nothing.** Every alpha the host applies was
+  behind a `hostTag !== undefined` guard. A component's body runs inside the
+  host, though, which is the one place a real Vide context scope still opens
+  around a subtree — so it is opened there.
+- **A host's own children got nothing from an `opacity-*` it resolved.** React
+  wraps them in a provider they read during their own render, which a child
+  built before its parent cannot do. The alpha is written onto what they built
+  instead, against a remembered base so a resolution that changes it does not
+  compound, skipping any subtree a nested host provides for itself and stopping
+  at a `CanvasGroup` that already composites its own.
+
+**Packaging.** `vela-rbxts` depended on `@rbxts/react` and `@rbxts/vela-runtime`
+outright, so a Vide project installed both — and Rojo maps the whole
+`node_modules/@rbxts` directory into the place, which is the trap §6 recorded.
+Both hosts (and both UI libraries) are optional peers now, so a project installs
+only the one it emits for.
+
+## 11. Lifting the snapshot
+
+Everything above still read its shape off one untracked reading: which props
+were bound, which states were tracked, whether there was a divide. A token only
+a later reading of a deferred `className` produced could not take effect. That
+came from binding a **thunk per prop name**, which forces the names to be known
+before the instance exists.
+
+A host tag is an instance the host owns, so it does not have to be. The thunks
+were replaced with **one effect that writes what the resolution now names** —
+which is what a re-render is for React. Nothing about the prop set is decided in
+advance: a name that appears is written, a name that disappears is restored to
+what the element declared, or to the class default where it declared nothing.
+Tweens moved into the same write, and the `bound`/`tweened` sets are gone.
+
+The rest followed. Trackers attach unconditionally when the class value is
+deferred, because a `hover:` the first reading did not name is exactly the case
+a fixed tracker set would lose — for a class list this pass can read, the
+snapshot is still exact and nothing extra is connected. Separators are built up
+front like the helpers are, one fewer than the children that take a layout slot,
+and the children thunk returns the run the resolution currently asks for.
+
+**Found while doing it.** `declaredProps` read every static through
+`readDerivable`, which calls a function — and in Vide an event handler and a
+derivable prop are both plain functions. A `MouseButton1Click` on any element
+with a dynamic class value was being *called* on every resolution reading. Vide
+tells the two apart by asking the instance whether the property is a signal;
+here the class-default probe answers the same question, and it covers `action`
+and the `*Changed` names too, neither of which is a member at all.
+
+**The margin box.** The one effect that genuinely cannot be applied after the
+fact: the box a margin needs is an instance *above* the element, and the element
+is parented as soon as it is built. So it is not applied after the fact — the
+compiler says up front that one is coming. `EmitTarget::needs_margin_box_hint`
+is what asks; a class value naming a margin anywhere this pass can read (a
+static token, a branch's) emits `__velaMarginBox`, and the host builds the box
+before the element. React answers `false`, because the render that resolves a
+margin also renders the wrapper around it.
+
+What that leaves is a margin named only where nothing can read it — a token that
+arrives out of an opaque call. The runtime warns there rather than rendering it
+unspaced.
+
 **Still open**
 
-- Motion (`transition-*`, `animate-*`) on a Vide `spring()` driver — deferred past v1.
-- `className` inside `<Show>` / `<For>` / `<Index>` / `<Switch>` is not analyzed.
+- On a component element the prop names are still fixed when it is called: it is
+  handed its props once rather than written to, so they have to be derivables.
+  A host element has no such limit.
+- A margin that only an unreadable source names, per above.
 - `@rbxts/vela-runtime-core` and `@rbxts/vela-runtime-vide` are new npm packages and
   need their own OIDC trusted publishers configured before the next release.
+
+**Not a limit, contrary to the earlier note.** `className` inside `<Show>` /
+`<For>` / `<Index>` / `<Switch>` *is* analyzed: the transformer visits nested
+JSX whatever encloses it, so a child of one of those lowers exactly as the same
+element does on its own — statics, rules, deferred remainder and all.
