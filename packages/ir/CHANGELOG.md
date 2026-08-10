@@ -1,5 +1,11 @@
 # @vela-rbxts/ir
 
+## 0.12.1
+
+### Patch Changes
+
+- @vela-rbxts/types@0.12.1
+
 ## 0.12.0
 
 ### Patch Changes
