@@ -147,6 +147,14 @@ function InteractionVariants() {
 					Text="wide"
 				/>
 			</Row>
+			{/* The only tag whose focus is a signal rather than gamepad selection,
+			    so it is the one a headless check can drive. */}
+			<Row label="focus:">
+				<textbox
+					className="w-24 h-6 bg-slate-700 focus:bg-amber-500 text-white text-xs rounded-sm"
+					Text="focus"
+				/>
+			</Row>
 			<Row label="active:">
 				<textbutton
 					className="w-24 h-6 bg-slate-700 active:bg-emerald-500 text-white text-xs rounded-sm"
