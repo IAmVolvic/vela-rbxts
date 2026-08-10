@@ -4,7 +4,9 @@ pub(crate) mod diagnostics;
 pub(crate) mod hover;
 pub(crate) mod sort;
 
-use crate::api::{EditorOptions, EditorRange};
+use crate::api::EditorRange;
+pub(crate) use crate::class_token::{ClassToken, tokenize_class_name_with_ranges, utf16_len};
+pub(crate) use crate::config::resolve::parse_editor_config;
 use crate::transform::jsx::is_component_element;
 use crate::transform::module::{
     is_class_name_attr, is_supported_host_element, is_supported_host_tag,
@@ -27,12 +29,6 @@ pub(crate) struct ClassNameContext {
     pub(crate) element_tag: Option<String>,
     pub(crate) value: String,
     pub(crate) value_range: EditorRange,
-}
-
-#[derive(Clone)]
-pub(crate) struct ClassToken {
-    pub(crate) text: String,
-    pub(crate) range: EditorRange,
 }
 
 /// Returns the element's class name context: `Some(Some(tag))` for a supported
@@ -175,12 +171,6 @@ impl Visit for ClassNameCollector<'_> {
 
         element.visit_children_with(self);
     }
-}
-
-pub(crate) fn parse_editor_config(
-    options: Option<&EditorOptions>,
-) -> crate::config::model::TailwindConfig {
-    crate::config::resolve::parse_editor_config(options)
 }
 
 /// With rem scaling active an emitted offset is only what renders at
@@ -445,46 +435,6 @@ pub(crate) fn byte_to_utf16_position(source: &str, byte_index: usize) -> u32 {
         .unwrap_or_default()
         .encode_utf16()
         .count() as u32
-}
-
-pub(crate) fn utf16_len(value: &str) -> u32 {
-    value.encode_utf16().count() as u32
-}
-
-pub(crate) fn tokenize_class_name_with_ranges(input: &str, source_offset: u32) -> Vec<ClassToken> {
-    let mut tokens = Vec::new();
-    let mut token_start: Option<usize> = None;
-
-    for (index, ch) in input.char_indices() {
-        if ch.is_whitespace() {
-            if let Some(start) = token_start.take() {
-                tokens.push(ClassToken {
-                    text: input[start..index].to_owned(),
-                    range: EditorRange {
-                        start: source_offset + utf16_len(&input[..start]),
-                        end: source_offset + utf16_len(&input[..index]),
-                    },
-                });
-            }
-            continue;
-        }
-
-        if token_start.is_none() {
-            token_start = Some(index);
-        }
-    }
-
-    if let Some(start) = token_start {
-        tokens.push(ClassToken {
-            text: input[start..].to_owned(),
-            range: EditorRange {
-                start: source_offset + utf16_len(&input[..start]),
-                end: source_offset + utf16_len(input),
-            },
-        });
-    }
-
-    tokens
 }
 
 pub(crate) fn current_token_replacement(tokens: &[ClassToken], position: u32) -> EditorRange {

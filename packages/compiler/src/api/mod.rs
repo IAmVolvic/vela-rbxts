@@ -3,7 +3,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Diagnostic {
     pub level: String,
     pub code: String,
@@ -16,14 +16,14 @@ pub struct Diagnostic {
 // napi camel-cases object fields itself; the serde rename keeps the wasm
 // binding on the same names.
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransformOptions {
     pub config_json: Option<String>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransformResult {
     pub code: String,
@@ -34,8 +34,7 @@ pub struct TransformResult {
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct EditorOptions {
     pub config_json: Option<String>,
     pub file_name: Option<String>,
@@ -43,7 +42,7 @@ pub struct EditorOptions {
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct CompletionRequest {
     pub source: String,
     pub position: u32,
@@ -51,7 +50,7 @@ pub struct CompletionRequest {
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct HoverRequest {
     pub source: String,
     pub position: u32,
@@ -59,35 +58,35 @@ pub struct HoverRequest {
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct DiagnosticsRequest {
     pub source: String,
     pub options: Option<EditorOptions>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct DocumentColorsRequest {
     pub source: String,
     pub options: Option<EditorOptions>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct EditorRange {
     pub start: u32,
     pub end: u32,
 }
 
 /// Rust-only editor API surface (not exposed over napi/wasm).
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct ClassTokenSpan {
     pub text: String,
     pub range: EditorRange,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct CompletionItem {
     pub label: String,
     pub insert_text: String,
@@ -103,29 +102,28 @@ pub struct CompletionItem {
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct CompletionResponse {
     pub is_in_class_name_context: bool,
     pub items: Vec<CompletionItem>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct HoverContent {
     pub display: String,
     pub documentation: String,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct HoverResponse {
     pub contents: Option<HoverContent>,
     pub range: Option<EditorRange>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct EditorDiagnostic {
     pub level: String,
     pub code: String,
@@ -135,13 +133,13 @@ pub struct EditorDiagnostic {
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct DiagnosticsResponse {
     pub diagnostics: Vec<EditorDiagnostic>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct DocumentColor {
     pub range: EditorRange,
     pub red: f64,
@@ -153,32 +151,34 @@ pub struct DocumentColor {
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct DocumentColorsResponse {
     pub colors: Vec<DocumentColor>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct SortClassNamesRequest {
     pub source: String,
     pub options: Option<EditorOptions>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct ClassNameEdit {
     pub range: EditorRange,
     pub text: String,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), napi(object))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct SortClassNamesResponse {
     pub edits: Vec<ClassNameEdit>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod editor;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod transform;
 
 #[cfg(target_arch = "wasm32")]

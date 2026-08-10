@@ -1,3 +1,7 @@
+// Parts of this vocabulary are read only by the editor, which the wasm
+// binding leaves out; the native build still checks them for real dead code.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
+
 use crate::ir::model::RuntimeCondition;
 
 /// Runtime variant names paired with the condition they check, phrased for

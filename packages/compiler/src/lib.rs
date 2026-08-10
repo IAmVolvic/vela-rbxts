@@ -4,9 +4,11 @@ use napi_derive::napi;
 use wasm_bindgen::prelude::*;
 
 pub(crate) mod api;
+pub(crate) mod class_token;
 pub(crate) mod class_value;
 pub(crate) mod config;
 pub(crate) mod diagnostics;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod editor;
 pub(crate) mod ir;
 pub(crate) mod semantic;
@@ -23,6 +25,7 @@ pub use api::{
 
 /// All class tokens in `className` attributes of supported host elements,
 /// with UTF-16 source ranges. Rust-only; used by the LSP for highlights.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_class_tokens(source: &str) -> Vec<ClassTokenSpan> {
     editor::collect_class_tokens(source)
         .into_iter()

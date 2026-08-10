@@ -33,6 +33,5 @@ napi = "3.8.3"
 napi-derive = "3.5.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3"
 serde-wasm-bindgen = "0.6"
 wasm-bindgen = "0.2"

@@ -1,12 +1,13 @@
 use crate::api::{Diagnostic, EditorRange};
+use crate::class_token::{ClassToken, tokenize_class_name_with_ranges};
 use crate::class_value::collapse::{
     collapse_class_value_expr, collapse_class_value_expr_without_branches,
 };
 use crate::class_value::scope::ClassValueScopeStack;
 use crate::diagnostics::compiler::transition_without_runtime_diagnostic;
-use crate::editor::ClassToken;
 use crate::ir::model::{StyleEffectBundle, StyleIr};
 use crate::transform::branch::lower_branches;
+use crate::transform::module::is_class_name_attr;
 use crate::transform::runtime::resolve_class_tokens;
 use swc_core::ecma::ast::{
     Expr, JSXAttr, JSXAttrOrSpread, JSXAttrValue, JSXElementName, JSXExpr, JSXExprContainer,
@@ -57,7 +58,7 @@ pub(crate) fn lower_class_name(
             // `span.lo` sits on the opening quote, so it is also the offset of the first
             // value byte once the source map's leading byte is subtracted.
             let value_offset = value.span.lo.0;
-            let spans = crate::editor::tokenize_class_name_with_ranges(&class_name, value_offset);
+            let spans = tokenize_class_name_with_ranges(&class_name, value_offset);
             let diagnostics_before = diagnostics.len();
             let style = resolve_class_tokens(
                 spans.iter().map(|token| token.text.as_str()),
@@ -342,8 +343,4 @@ pub(crate) fn is_component_element(name: &JSXElementName) -> bool {
         JSXElementName::JSXMemberExpr(_) => true,
         JSXElementName::JSXNamespacedName(_) => false,
     }
-}
-
-fn is_class_name_attr(name: &swc_core::ecma::ast::JSXAttrName) -> bool {
-    matches!(name, swc_core::ecma::ast::JSXAttrName::Ident(ident) if ident.sym == "className")
 }

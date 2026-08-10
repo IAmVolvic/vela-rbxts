@@ -1,3 +1,7 @@
+// Parts of this vocabulary are read only by the editor, which the wasm
+// binding leaves out; the native build still checks them for real dead code.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
+
 use crate::api::Diagnostic;
 use crate::config::model::{ColorValue, TailwindConfig};
 use crate::diagnostics::compiler::{

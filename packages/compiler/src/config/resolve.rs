@@ -1,8 +1,11 @@
-use crate::api::{Diagnostic, EditorOptions};
+use crate::api::Diagnostic;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::api::EditorOptions;
 use crate::config::defaults::default_config;
 use crate::config::merge::resolve_config_input as merge_resolve_config_input;
 use crate::config::model::{TailwindConfig, TailwindConfigInput};
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn parse_config(config_json: Option<&str>) -> TailwindConfig {
     parse_config_with_diagnostic(config_json).0
 }
@@ -33,6 +36,7 @@ pub(crate) fn parse_config_with_diagnostic(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn parse_editor_config(options: Option<&EditorOptions>) -> TailwindConfig {
     parse_config(options.and_then(|value| value.config_json.as_deref()))
 }
