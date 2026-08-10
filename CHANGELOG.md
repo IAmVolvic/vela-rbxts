@@ -9,6 +9,14 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-08-11
+
+### Fixed
+
+- A class value written as a function, `className={() => "..."}`, reached completion, hover, diagnostics, colors and sorting only while the file was failing to parse. The editor walks a `className` expression for the class strings written in it, and it had no arm for a function at all, so a deferred class value, which is how a Vide project writes one, was read by nothing but the lexical fallback a broken file falls back to. It follows what a function returns now, along with the shapes that were missing beside it: a template's interpolations, `as const` and `satisfies`, string concatenation, and an object's computed keys and spreads.
+- The lexical fallback read a template's `${...}` as class text, so a file mid-edit reported `${flag` and `?` as unknown utilities. It reads one quasi at a time now and keeps only the strings written inside the interpolation, so what a half-typed file reports is what it would report once it parses.
+- Sorting a class value that contains a template interpolation dropped the space either side of it: `` `bg-slate-700 p-4 ${flag}` `` came back as `` `p-4 bg-slate-700${flag}` ``, running the last token into whatever the interpolation resolves to. The value's leading and trailing whitespace is kept.
+
 ## [0.12.1] - 2026-08-10
 
 ### Fixed
@@ -300,7 +308,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/astra-void/vela-rbxts/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/astra-void/vela-rbxts/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/astra-void/vela-rbxts/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/astra-void/vela-rbxts/compare/v0.11.0...v0.11.1
