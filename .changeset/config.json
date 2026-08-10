@@ -7,7 +7,9 @@
       "vela-rbxts",
       "vela-rbxts-lsp",
       "@vela-rbxts/*",
-      "@rbxts/vela-runtime"
+      "@rbxts/vela-runtime",
+      "@rbxts/vela-runtime-core",
+      "@rbxts/vela-runtime-vide"
     ]
   ],
   "linked": [],
@@ -21,6 +23,7 @@
   "ignore": [
     "compiler-harness",
     "rbxts-harness",
+    "vide-harness",
     "lsp-harness",
     "playground"
   ]
