@@ -277,6 +277,86 @@ test("reports editor diagnostics for unsupported transform and layout values", (
 	]);
 });
 
+test("reads class values a function returns", () => {
+	for (const source of [
+		'<frame className={() => "rotate-17"} />',
+		'<frame className={() => ["p-4", "rotate-17"]} />',
+		'<frame className={() => { return "rotate-17"; }} />',
+		'<frame className={function () { return "rotate-17"; }} />',
+		'<frame className={() => (flag ? "rotate-17" : "p-4")} />',
+	]) {
+		expect(getDiagnostics({ source }).diagnostics).toEqual([
+			expect.objectContaining({
+				code: "unsupported-rotation-value",
+				token: "rotate-17",
+			}),
+		]);
+
+		const start = source.indexOf("rotate-17");
+		expect(getDiagnostics({ source }).diagnostics[0]?.range).toEqual({
+			start,
+			end: start + "rotate-17".length,
+		});
+	}
+});
+
+test("reads class values through the shapes they are written in", () => {
+	for (const source of [
+		'<frame className={`p-4 ${flag ? "rotate-17" : ""}`} />',
+		'<frame className={`p-4 ${cn("rotate-17")}`} />',
+		'<frame className={"rotate-17" as const} />',
+		'<frame className={["rotate-17"] as const} />',
+		'<frame className={"rotate-17" satisfies string} />',
+		'<frame className={"p-4 " + "rotate-17"} />',
+		'<frame className={{ ["rotate-17"]: flag }} />',
+		'<frame className={{ ...{ "rotate-17": flag } }} />',
+	]) {
+		const start = source.indexOf("rotate-17");
+		expect(getDiagnostics({ source }).diagnostics).toEqual([
+			expect.objectContaining({
+				code: "unsupported-rotation-value",
+				token: "rotate-17",
+				range: { start, end: start + "rotate-17".length },
+			}),
+		]);
+	}
+});
+
+test("a file that does not parse still reads only the class text", () => {
+	const source =
+		'<frame className={`p-4 ${flag ? "rotate-17" : ""}`} />\nconst broken = ;';
+	const start = source.indexOf("rotate-17");
+
+	expect(getDiagnostics({ source }).diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-rotation-value",
+			token: "rotate-17",
+			range: { start, end: start + "rotate-17".length },
+		}),
+	]);
+});
+
+
+test("completes and hovers inside a class value a function returns", () => {
+	const source = '<frame className={() => ["p-4", "bg-"]} />';
+	const completions = getCompletions({
+		source,
+		position: positionAfter(source, "bg-"),
+	});
+
+	expect(completions.isInClassNameContext).toBe(true);
+	expect(completions.items).toEqual(
+		expect.arrayContaining([expect.objectContaining({ label: "bg-slate-700" })]),
+	);
+
+	const hover = getHover({
+		source,
+		position: positionAfter(source, "p-4") - 1,
+	});
+
+	expect(hover.contents?.display).toContain("p-4");
+});
+
 test("completes runtime variants", () => {
 	const source = '<frame className="m" />';
 	const result = getCompletions({

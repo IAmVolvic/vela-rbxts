@@ -15,8 +15,9 @@ use swc_core::{
     common::{FileName, SourceMap, sync::Lrc},
     ecma::{
         ast::{
-            BinaryOp, Expr, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementName, JSXExpr,
-            Lit, Prop, PropName, PropOrSpread,
+            ArrowExpr, BinaryOp, BlockStmt, BlockStmtOrExpr, Expr, Function, JSXAttrOrSpread,
+            JSXAttrValue, JSXElement, JSXElementName, JSXExpr, Lit, Prop, PropName, PropOrSpread,
+            ReturnStmt,
         },
         parser::{Syntax, TsSyntax, parse_file_as_module},
         visit::{Visit, VisitWith},
@@ -93,11 +94,19 @@ impl ClassNameCollector<'_> {
         match expr {
             Expr::Paren(paren) => self.collect_expr(element_tag, &paren.expr),
             Expr::TsAs(cast) => self.collect_expr(element_tag, &cast.expr),
+            Expr::TsSatisfies(cast) => self.collect_expr(element_tag, &cast.expr),
+            Expr::TsConstAssertion(cast) => self.collect_expr(element_tag, &cast.expr),
+            Expr::TsTypeAssertion(cast) => self.collect_expr(element_tag, &cast.expr),
             Expr::TsNonNull(non_null) => self.collect_expr(element_tag, &non_null.expr),
             Expr::Lit(Lit::Str(value)) => self.push_literal(element_tag, value.span),
+            // Interleaved so the contexts stay in source order, which is the
+            // order the sort hands its edits back in.
             Expr::Tpl(tpl) => {
-                for quasi in &tpl.quasis {
+                for (index, quasi) in tpl.quasis.iter().enumerate() {
                     self.push_raw(element_tag, quasi.span);
+                    if let Some(expr) = tpl.exprs.get(index) {
+                        self.collect_expr(element_tag, expr);
+                    }
                 }
             }
             Expr::Cond(cond) => {
@@ -107,7 +116,10 @@ impl ClassNameCollector<'_> {
             Expr::Bin(bin)
                 if matches!(
                     bin.op,
-                    BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+                    BinaryOp::LogicalAnd
+                        | BinaryOp::LogicalOr
+                        | BinaryOp::NullishCoalescing
+                        | BinaryOp::Add
                 ) =>
             {
                 self.collect_expr(element_tag, &bin.left);
@@ -120,8 +132,12 @@ impl ClassNameCollector<'_> {
             }
             Expr::Object(object) => {
                 for prop in &object.props {
-                    let PropOrSpread::Prop(prop) = prop else {
-                        continue;
+                    let prop = match prop {
+                        PropOrSpread::Spread(spread) => {
+                            self.collect_expr(element_tag, &spread.expr);
+                            continue;
+                        }
+                        PropOrSpread::Prop(prop) => prop,
                     };
                     let Prop::KeyValue(entry) = &**prop else {
                         continue;
@@ -129,6 +145,7 @@ impl ClassNameCollector<'_> {
                     match &entry.key {
                         PropName::Str(key) => self.push_literal(element_tag, key.span),
                         PropName::Ident(key) => self.push_raw(element_tag, key.span),
+                        PropName::Computed(key) => self.collect_expr(element_tag, &key.expr),
                         _ => {}
                     }
                 }
@@ -138,7 +155,45 @@ impl ClassNameCollector<'_> {
                     self.collect_expr(element_tag, &arg.expr);
                 }
             }
+            // A deferred class value is written as a function, so what it
+            // returns is the class name the editor features are asked about.
+            Expr::Arrow(arrow) => match &*arrow.body {
+                BlockStmtOrExpr::Expr(body) => self.collect_expr(element_tag, body),
+                BlockStmtOrExpr::BlockStmt(body) => self.collect_returns(element_tag, body),
+            },
+            Expr::Fn(function) => {
+                if let Some(body) = &function.function.body {
+                    self.collect_returns(element_tag, body);
+                }
+            }
             _ => {}
+        }
+    }
+
+    fn collect_returns(&mut self, element_tag: &Option<String>, body: &BlockStmt) {
+        let mut returns = ReturnCollector {
+            collector: self,
+            element_tag,
+        };
+        body.visit_with(&mut returns);
+    }
+}
+
+/// The class name a deferred value resolves to is what its body returns.
+/// A nested function returns to its own caller, so its returns are not it.
+struct ReturnCollector<'a, 'b> {
+    collector: &'a mut ClassNameCollector<'b>,
+    element_tag: &'a Option<String>,
+}
+
+impl Visit for ReturnCollector<'_, '_> {
+    fn visit_function(&mut self, _: &Function) {}
+
+    fn visit_arrow_expr(&mut self, _: &ArrowExpr) {}
+
+    fn visit_return_stmt(&mut self, statement: &ReturnStmt) {
+        if let Some(argument) = statement.arg.as_deref() {
+            self.collector.collect_expr(self.element_tag, argument);
         }
     }
 }
@@ -294,7 +349,10 @@ fn lexical_class_name_contexts(source: &str) -> Vec<ClassNameContext> {
 
         let element_tag = lexical_element_tag(source, start);
         match bytes.get(index) {
-            Some(&quote @ (b'"' | b'\'' | b'`')) => {
+            Some(b'`') => {
+                cursor = push_template_contexts(&mut contexts, source, &element_tag, index);
+            }
+            Some(&quote @ (b'"' | b'\'')) => {
                 let (content, next) = quoted_content(source, index, quote);
                 push_lexical_context(&mut contexts, source, &element_tag, content);
                 cursor = next;
@@ -311,7 +369,12 @@ fn lexical_class_name_contexts(source: &str) -> Vec<ClassNameContext> {
                                 break;
                             }
                         }
-                        quote @ (b'"' | b'\'' | b'`') => {
+                        b'`' => {
+                            index =
+                                push_template_contexts(&mut contexts, source, &element_tag, index);
+                            continue;
+                        }
+                        quote @ (b'"' | b'\'') => {
                             let (content, next) = quoted_content(source, index, quote);
                             push_lexical_context(&mut contexts, source, &element_tag, content);
                             index = next;
@@ -349,6 +412,83 @@ fn push_lexical_context(
             end: byte_to_utf16_position(source, end),
         },
     });
+}
+
+/// The template opened at `open`, as one context per quasi, plus the index just
+/// past its closing backtick. An interpolation is not class text: reading one as
+/// class text is what would report `${flag}` as an unknown utility.
+fn push_template_contexts(
+    contexts: &mut Vec<ClassNameContext>,
+    source: &str,
+    element_tag: &Option<String>,
+    open: usize,
+) -> usize {
+    let bytes = source.as_bytes();
+    let mut quasi_start = open + 1;
+    let mut index = quasi_start;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\\' => index += 1,
+            b'\n' => break,
+            b'`' => {
+                push_lexical_context(contexts, source, element_tag, (quasi_start, index));
+                return index + 1;
+            }
+            b'$' if bytes.get(index + 1) == Some(&b'{') => {
+                push_lexical_context(contexts, source, element_tag, (quasi_start, index));
+                index = push_interpolation_contexts(contexts, source, element_tag, index + 1);
+                quasi_start = index;
+                continue;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    let end = index.min(bytes.len());
+    push_lexical_context(contexts, source, element_tag, (quasi_start.min(end), end));
+    end
+}
+
+/// Walks `${ ... }` from its opening brace, keeping the strings written inside
+/// it: a class value chosen there is still one the editor answers for.
+fn push_interpolation_contexts(
+    contexts: &mut Vec<ClassNameContext>,
+    source: &str,
+    element_tag: &Option<String>,
+    open: usize,
+) -> usize {
+    let bytes = source.as_bytes();
+    let mut depth = 0usize;
+    let mut index = open;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return index + 1;
+                }
+            }
+            b'\n' => return index,
+            b'`' => {
+                index = push_template_contexts(contexts, source, element_tag, index);
+                continue;
+            }
+            quote @ (b'"' | b'\'') => {
+                let (content, next) = quoted_content(source, index, quote);
+                push_lexical_context(contexts, source, element_tag, content);
+                index = next;
+                continue;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    index
 }
 
 /// Content byte range of the string opened at `open`, plus the index just past
