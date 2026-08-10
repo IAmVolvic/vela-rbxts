@@ -448,7 +448,8 @@ mod tests {
     /// whole class value to the runtime — and the host is told to expect it.
     #[test]
     fn a_margin_only_a_branch_names_is_hinted_to_the_vide_host() {
-        let source = "const ui = <frame className={() => on() ? \"m-4 p-2\" : \"p-2\"} />;".to_owned();
+        let source =
+            "const ui = <frame className={() => on() ? \"m-4 p-2\" : \"p-2\"} />;".to_owned();
 
         let react = transform_impl(source.clone(), None);
         let vide = transform_impl(
