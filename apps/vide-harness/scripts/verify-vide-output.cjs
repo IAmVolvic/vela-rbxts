@@ -29,8 +29,10 @@ const source = fs.readFileSync(
 );
 
 const failures = [];
+let checked = 0;
 
 function expect(description, condition) {
+	checked += 1;
 	if (!condition) {
 		failures.push(description);
 	}
@@ -96,6 +98,22 @@ expect(
 		/__VelaOpacity\.Provider[\s\S]{0,200}?function\(\)/.test(source),
 );
 
+// Emitted for every target, and every one of them names something no instance
+// has a member for — the host has to read them off itself.
+for (const name of ["__velaText", "__velaTransition", "__velaAnimation"]) {
+	expect(
+		`${name} reaches the runtime host`,
+		new RegExp(`${name} = `).test(source),
+	);
+}
+
+// A component tag is rendered by the host rather than lowered, and its children
+// travel with it.
+expect(
+	"a component tag reaches the host with its children",
+	/__velaTag = ChildSlot,\s*\}, Vide\.jsx\(/.test(source),
+);
+
 if (failures.length > 0) {
 	for (const failure of failures) {
 		console.error(`vide-harness: ${failure}`);
@@ -103,4 +121,4 @@ if (failures.length > 0) {
 	process.exit(1);
 }
 
-console.log(`vide-harness: verified ${9} lowering contracts`);
+console.log(`vide-harness: verified ${checked} lowering contracts`);

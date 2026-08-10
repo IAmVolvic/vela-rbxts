@@ -197,6 +197,200 @@ function InheritedOpacity() {
 	);
 }
 
+/// A nested subtree behind a component boundary: only the consumer wrapped
+/// around what the component returned can still reach it, and it has to reach
+/// past the root it is handed.
+function NestedNode() {
+	return (
+		<frame className="w-40 h-6 bg-slate-700 rounded-sm flex flex-row gap-1 p-1">
+			<frame className="size-4 bg-red-500 rounded-full" />
+			<frame className="size-4 bg-emerald-500 rounded-full" />
+		</frame>
+	);
+}
+
+/// Its root reaches the runtime host, so what the class list could not carry —
+/// the static half of it — is a prop the host was handed rather than one it
+/// resolved. Only the ambient alpha has not met those yet.
+function StaticPropUnderFade() {
+	return (
+		<frame
+			className={() => `w-40 h-6 ${probeClass()}`}
+			BackgroundColor3={Color3.fromRGB(251, 44, 54)}
+			BackgroundTransparency={0}
+		/>
+	);
+}
+
+/// Where the three alphas the runtime has to carry itself are measured: onto
+/// the props the element was handed, into a component the host renders, and
+/// down to children the host already has.
+function RuntimeOpacity() {
+	return (
+		<>
+			<Row label="ambient on static">
+				<StaticPropUnderFade className="opacity-50" />
+			</Row>
+			<Row label="runtime opacity kids">
+				<frame className={() => `w-40 h-6 opacity-50 ${probeClass()}`}>
+					<textlabel
+						className="size-full bg-red-500 text-white text-xs rounded-sm"
+						Text="child"
+					/>
+				</frame>
+			</Row>
+			<Row label="runtime opacity comp">
+				<NestedNode className={() => `opacity-50 ${probeClass()}`} />
+			</Row>
+			{/* A handler and a derivable prop are the same type. Only the property
+			    behind the name tells them apart, and reading one as the other
+			    calls it. */}
+			<Row label="handler not called">
+				<textbutton
+					className={() => `w-40 h-6 bg-slate-700 ${probeClass()}`}
+					Text={() => `clicks: ${clicks()}`}
+					MouseButton1Click={() => clicks(clicks() + 1)}
+				/>
+			</Row>
+		</>
+	);
+}
+
+const clicks = Vide.source(0);
+
+/// Nothing here is in the class list the host is built with. Everything the
+/// resolution can still name — a prop, a variant, a separator — has to arrive
+/// on a later reading rather than be fixed at construction.
+function LateArrivals(props: { active: () => boolean }) {
+	return (
+		<>
+			{/* Neither a rule nor the first reading names a corner radius or a
+			    stroke, so both have to be discovered after the fact. */}
+			<Row label="late prop">
+				<frame
+					className={() =>
+						props.active()
+							? "w-24 h-6 bg-slate-700 rounded-xl border-2 border-amber-500"
+							: "w-24 h-6 bg-slate-700"
+					}
+				/>
+			</Row>
+			{/* `hover:` is absent from the first reading, so a tracker fixed to it
+			    would never bring the state about. */}
+			<Row label="late hover:">
+				<textbutton
+					className={() =>
+						props.active()
+							? "w-24 h-6 bg-slate-700 hover:bg-rose-500 text-white text-xs rounded-sm"
+							: "w-24 h-6 bg-slate-700 text-white text-xs rounded-sm"
+					}
+					Text="late"
+				/>
+			</Row>
+			{/* The one effect that cannot be applied after the fact: the box a
+			    margin needs goes above an element that is parented as soon as it
+			    is built, so the transformer says up front that one is coming. */}
+			<Row label="late margin">
+				<frame
+					className={() =>
+						props.active()
+							? "w-24 h-6 bg-fuchsia-500 m-2 rounded-sm"
+							: "w-24 h-6 bg-fuchsia-500 rounded-sm"
+					}
+				/>
+			</Row>
+			<Row label="late divide">
+				<frame
+					className={() =>
+						props.active()
+							? "w-24 h-6 bg-slate-800 flex flex-row divide-x-2 divide-blue-500"
+							: "w-24 h-6 bg-slate-800 flex flex-row"
+					}
+				>
+					<frame className="w-8 h-full bg-slate-600" />
+					<frame className="w-8 h-full bg-slate-600" />
+				</frame>
+			</Row>
+		</>
+	);
+}
+
+const probeClass = () => "rounded-sm";
+
+/// Props the host reads off itself rather than off the resolution. Every one of
+/// them is a name no instance has a member for.
+function HostOwnProps() {
+	return (
+		<>
+			{/* A literal `Text` on a runtime host is transformed by the runtime
+			    rather than at compile time, because the class list has to reach
+			    the host for the variant beside it. */}
+			<Row label="uppercase + hover:">
+				<textbutton
+					className="w-40 h-6 bg-slate-700 uppercase hover:bg-blue-500 text-white text-xs rounded-sm"
+					Text="text case"
+				/>
+			</Row>
+			<Row label="underline">
+				<textbutton
+					className="w-40 h-6 bg-slate-700 underline hover:bg-blue-500 text-white text-xs rounded-sm"
+					Text="decorated"
+				/>
+			</Row>
+			<Row label="transition">
+				<textbutton
+					className="w-24 h-6 bg-slate-700 transition-colors duration-300 hover:bg-fuchsia-500 text-white text-xs rounded-sm"
+					Text="tween"
+				/>
+			</Row>
+			<Row label="animate-spin">
+				<frame className="size-6 bg-amber-500 rounded-sm animate-spin" />
+			</Row>
+			{/* No static counterpart for the rule to fall back to: off hover the
+			    resolution names nothing, and what the class was created with is
+			    all that is left to write. */}
+			<Row label="variant-only prop">
+				<textbutton
+					className="w-24 h-6 bg-slate-700 hover:font-bold text-white text-xs rounded-sm"
+					Text="weight"
+				/>
+			</Row>
+			{/* Behind a call, so the class value stays on the runtime path and the
+			    host renders the component itself rather than stepping aside. */}
+			<Row label="component children">
+				<ChildSlot className={() => `w-40 h-6 ${slotClass()}`}>
+					<textlabel
+						className="size-full bg-emerald-600 text-white text-xs rounded-sm"
+						Text="children arrived"
+					/>
+				</ChildSlot>
+			</Row>
+			<Row label="opacity over subtree">
+				<NestedNode className="opacity-25" />
+			</Row>
+		</>
+	);
+}
+
+const slotClass = () => "rounded-sm";
+
+/// A component the runtime host renders rather than an instance. Vide hands a
+/// component its children under `children`, so a host that numbered them into
+/// the array part would leave this one with none. What the host resolved
+/// arrives alongside them, which is why the props are open.
+function ChildSlot(props: { children?: Vide.Node } & Record<string, unknown>) {
+	return (
+		<frame className="w-40 h-6 bg-slate-800 rounded-sm">
+			{props.children ?? (
+				<textlabel
+					className="size-full bg-red-600 text-white text-xs rounded-sm"
+					Text="no children"
+				/>
+			)}
+		</frame>
+	);
+}
+
 export function App() {
 	const active = Vide.source(false);
 	// A template the collapser cannot read, so this one stays on the runtime
@@ -225,6 +419,9 @@ export function App() {
 				{InteractionVariants()}
 				{EnvironmentVariants()}
 				{InheritedOpacity()}
+				{RuntimeOpacity()}
+				{HostOwnProps()}
+				{LateArrivals({ active })}
 			</frame>
 		</screengui>
 	);
