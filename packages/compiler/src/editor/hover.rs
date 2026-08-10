@@ -99,6 +99,122 @@ fn describe_token(
     }
 
     match &analysis.utility {
+        UtilityKind::BackgroundColor
+        | UtilityKind::TextColor
+        | UtilityKind::ImageColor
+        | UtilityKind::PlaceholderColor
+        | UtilityKind::DivideColor
+        | UtilityKind::ScrollbarColor
+        | UtilityKind::ShadowColor
+        | UtilityKind::GradientDirection
+        | UtilityKind::GradientFrom
+        | UtilityKind::GradientVia
+        | UtilityKind::GradientTo => {
+            describe_color_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::Border | UtilityKind::Radius | UtilityKind::Ring | UtilityKind::Outline => {
+            describe_border_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::Padding(_)
+        | UtilityKind::Gap
+        | UtilityKind::Margin(_)
+        | UtilityKind::SpaceX
+        | UtilityKind::SpaceY
+        | UtilityKind::CenterX
+        | UtilityKind::CenterY => {
+            describe_spacing_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::Width
+        | UtilityKind::Height
+        | UtilityKind::Size
+        | UtilityKind::AspectRatio
+        | UtilityKind::Basis
+        | UtilityKind::MinWidth
+        | UtilityKind::MaxWidth
+        | UtilityKind::MinHeight
+        | UtilityKind::MaxHeight => {
+            describe_size_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::ZIndex
+        | UtilityKind::Rotation
+        | UtilityKind::Scale
+        | UtilityKind::PositionX
+        | UtilityKind::PositionY
+        | UtilityKind::Inset
+        | UtilityKind::PositionRight
+        | UtilityKind::PositionBottom
+        | UtilityKind::AnchorPoint
+        | UtilityKind::TranslateX
+        | UtilityKind::TranslateY => {
+            describe_position_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::GridAutoRows
+        | UtilityKind::GridAutoColumns
+        | UtilityKind::FlexDirection
+        | UtilityKind::JustifyContent
+        | UtilityKind::AlignItems
+        | UtilityKind::AlignContent
+        | UtilityKind::AlignSelf
+        | UtilityKind::LayoutOrder
+        | UtilityKind::Grid
+        | UtilityKind::GridColumns
+        | UtilityKind::GridRows
+        | UtilityKind::Visibility
+        | UtilityKind::Overflow
+        | UtilityKind::FlexWrap
+        | UtilityKind::FlexItem => {
+            describe_layout_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::LineHeight
+        | UtilityKind::TextTransform
+        | UtilityKind::TextDecoration
+        | UtilityKind::Whitespace
+        | UtilityKind::FontStyle
+        | UtilityKind::TextSize
+        | UtilityKind::FontWeight
+        | UtilityKind::FontFamily
+        | UtilityKind::TextXAlignment
+        | UtilityKind::TextYAlignment
+        | UtilityKind::TextWrap
+        | UtilityKind::TextTruncate => {
+            describe_text_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::ObjectFit
+        | UtilityKind::PointerEvents
+        | UtilityKind::Overscroll
+        | UtilityKind::ScrollDirection
+        | UtilityKind::ScrollbarThickness
+        | UtilityKind::CanvasSize => {
+            describe_host_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::Opacity
+        | UtilityKind::DivideX
+        | UtilityKind::DivideY
+        | UtilityKind::ShadowSize => {
+            describe_effects_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::Transition
+        | UtilityKind::TransitionDuration
+        | UtilityKind::TransitionDelay
+        | UtilityKind::TransitionEase
+        | UtilityKind::Animation => {
+            describe_motion_family(&analysis, token, config, element_tag, &variant_prefix)
+        }
+        UtilityKind::Unknown => None,
+    }
+}
+
+/// Color, gradient stops and the gradient direction they are read with.
+fn describe_color_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
         UtilityKind::BackgroundColor => describe_color_token(
             token,
             analysis.payload()?,
@@ -131,6 +247,122 @@ fn describe_token(
             "PlaceholderColor3",
             variant_prefix,
         ),
+        UtilityKind::DivideColor => {
+            let (color_key, opacity) = split_color_opacity(analysis.payload()?);
+            let mut diagnostics = Vec::new();
+            let resolution = resolve_color_value(
+                config,
+                &mut diagnostics,
+                DIVIDE_COLOR_FAMILY,
+                color_key,
+                token,
+            )?;
+            let ColorResolution::Expression(value) = resolution else {
+                return None;
+            };
+            let fade = match opacity_modifier_transparency(opacity) {
+                Some(transparency) => {
+                    format!(" Sets each separator's `BackgroundTransparency` to `{transparency}`.")
+                }
+                None => String::new(),
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> separator color"),
+                documentation: format!(
+                    "{variant_prefix}Paints the `divide-x`/`divide-y` separators with `{value}`.{fade}"
+                ),
+            })
+        }
+        UtilityKind::ScrollbarColor => describe_color_token(
+            token,
+            analysis.payload()?,
+            config,
+            SCROLLBAR_COLOR_FAMILY,
+            "ScrollBarImageColor3",
+            variant_prefix,
+        ),
+        UtilityKind::ShadowColor => {
+            let color_key = analysis.payload()?;
+            let mut diagnostics = Vec::new();
+            let resolution = resolve_color_value(
+                config,
+                &mut diagnostics,
+                SHADOW_COLOR_FAMILY,
+                color_key,
+                token,
+            )?;
+            let documentation = match resolution {
+                ColorResolution::Expression(value) => {
+                    format!("{variant_prefix}Sets `UIShadow.Color` to `{value}`.")
+                }
+                ColorResolution::Transparent => {
+                    format!("{variant_prefix}Sets `UIShadow.Transparency` to `1`.")
+                }
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIShadow.Color"),
+                documentation,
+            })
+        }
+        UtilityKind::GradientDirection => {
+            let rotation = resolve_gradient_rotation(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGradient.Rotation"),
+                documentation: format!(
+                    "{variant_prefix}Creates a Roblox UIGradient with `Rotation = {rotation}`. Combine with `from-*`, `via-*`, and `to-*` color stops."
+                ),
+            })
+        }
+        UtilityKind::GradientFrom | UtilityKind::GradientVia | UtilityKind::GradientTo => {
+            let (color_key, opacity) = split_color_opacity(analysis.payload()?);
+            let stop = match &analysis.utility {
+                UtilityKind::GradientFrom => "from",
+                UtilityKind::GradientVia => "via",
+                UtilityKind::GradientTo => "to",
+                _ => unreachable!(),
+            };
+            let mut diagnostics = Vec::new();
+            let resolution = resolve_color_value(
+                config,
+                &mut diagnostics,
+                GRADIENT_COLOR_FAMILY,
+                color_key,
+                token,
+            )?;
+            let fade = match opacity_modifier_transparency(opacity) {
+                Some(transparency) => {
+                    format!(" Sets its `UIGradient.Transparency` keypoint to `{transparency}`.")
+                }
+                None => String::new(),
+            };
+            let documentation = match resolution {
+                ColorResolution::Expression(value) => format!(
+                    "{variant_prefix}Adds a `{stop}` color stop `{value}` to the parent's UIGradient.{fade}"
+                ),
+                ColorResolution::Transparent => format!(
+                    "{variant_prefix}`transparent` gradient stops are not lowered to UIGradient yet."
+                ),
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGradient.Color"),
+                documentation,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// The stroke and corner families, which share one UIStroke and one UICorner.
+fn describe_border_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
         UtilityKind::Border => {
             describe_border_token(token, analysis.payload(), config, variant_prefix)
         }
@@ -145,15 +377,69 @@ fn describe_token(
                 ),
             })
         }
-        UtilityKind::ZIndex => {
-            let z_key = analysis.payload()?;
-            let mut diagnostics = Vec::new();
-            let value = resolve_z_index_value(z_key, token, &mut diagnostics)?;
+        UtilityKind::Ring | UtilityKind::Outline => {
+            let family = match &analysis.utility {
+                UtilityKind::Ring => "ring",
+                _ => "outline",
+            };
+            let documentation = match analysis.payload() {
+                None => {
+                    let thickness = if family == "ring" { "3" } else { "2" };
+                    format!(
+                        "{variant_prefix}Sets `UIStroke.Thickness` to {} with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`.",
+                        offset_value_text(config, thickness)
+                    )
+                }
+                Some(payload) => match classify_stroke_payload(&analysis.utility, payload) {
+                    StrokePayload::Thickness(thickness) => format!(
+                        "{variant_prefix}Sets `UIStroke.Thickness` to {} with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`.",
+                        offset_value_text(config, &thickness.offset(config))
+                    ),
+                    StrokePayload::Unsupported => return None,
+                    StrokePayload::Color => {
+                        let mut diagnostics = Vec::new();
+                        let resolution = resolve_color_value(
+                            config,
+                            &mut diagnostics,
+                            if family == "ring" {
+                                RING_COLOR_FAMILY
+                            } else {
+                                OUTLINE_COLOR_FAMILY
+                            },
+                            payload,
+                            token,
+                        )?;
+                        match resolution {
+                            ColorResolution::Expression(value) => format!(
+                                "{variant_prefix}Sets `UIStroke.Color` to `{value}`. Shares the same UIStroke as `border-*`."
+                            ),
+                            ColorResolution::Transparent => {
+                                format!("{variant_prefix}Sets `UIStroke.Transparency` to `1`.")
+                            }
+                        }
+                    }
+                },
+            };
             Some(HoverContent {
-                display: format!("`{token}` -> ZIndex"),
-                documentation: format!("{variant_prefix}Sets `ZIndex` to `{value}`."),
+                display: format!("`{token}` -> UIStroke"),
+                documentation,
             })
         }
+        _ => None,
+    }
+}
+
+/// What puts space around or between elements.
+fn describe_spacing_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
         UtilityKind::Padding(axis) => {
             let spacing_key = analysis.payload()?;
             let target = padding_target(axis);
@@ -177,21 +463,79 @@ fn describe_token(
                 ),
             })
         }
-        UtilityKind::GridAutoRows | UtilityKind::GridAutoColumns => {
+        UtilityKind::Margin(axis) => {
             let spacing_key = analysis.payload()?;
             let value = resolve_spacing_value(config, spacing_key)?;
-            let axis = match &analysis.utility {
-                UtilityKind::GridAutoRows => "Y",
-                _ => "X",
+            let negative = analysis.parsed.utility.raw.starts_with("-m");
+            let sides = match axis {
+                PaddingKind::All => "all sides",
+                PaddingKind::X => "the left and right",
+                PaddingKind::Y => "the top and bottom",
+                PaddingKind::Top => "the top",
+                PaddingKind::Right => "the right",
+                PaddingKind::Bottom => "the bottom",
+                PaddingKind::Left => "the left",
             };
             Some(HoverContent {
-                display: format!("`{token}` -> UIGridLayout.CellSize.{axis}"),
+                display: format!("`{token}` -> margin box"),
+                documentation: if negative {
+                    let shift = spacing_value_to_offset(&value)
+                        .and_then(|offset| offset.parse::<f64>().ok())
+                        .and_then(|px| crate::editor::rem_offset_label(config, -px))
+                        .unwrap_or_else(|| format!("`-{value}`"));
+                    format!(
+                        "{variant_prefix}Shifts `Position` by {shift} (negative margins pull from the top/left edge)."
+                    )
+                } else {
+                    format!(
+                        "{variant_prefix}Wraps the element in a transparent margin box padded by {} on {sides}.",
+                        udim_value_text(config, &value)
+                    )
+                },
+            })
+        }
+        UtilityKind::SpaceX | UtilityKind::SpaceY => {
+            let spacing_key = analysis.payload()?;
+            let value = resolve_spacing_value(config, spacing_key)?;
+            let direction = match &analysis.utility {
+                UtilityKind::SpaceX => "Horizontal",
+                _ => "Vertical",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.Padding"),
                 documentation: format!(
-                    "{variant_prefix}Sets the cross axis of `UIGridLayout.CellSize` to {}. `grid-cols-*`/`grid-rows-*` size the axis they fill; this names the other one.",
+                    "{variant_prefix}Sets `UIListLayout.Padding` to {} with `FillDirection = Enum.FillDirection.{direction}`.",
                     udim_value_text(config, &value)
                 ),
             })
         }
+        UtilityKind::CenterX | UtilityKind::CenterY => {
+            let axis = match &analysis.utility {
+                UtilityKind::CenterX => "X",
+                _ => "Y",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> AnchorPoint + Position"),
+                documentation: format!(
+                    "{variant_prefix}Centers the element on the {axis} axis with `AnchorPoint.{axis} = 0.5` and `Position.{axis} = UDim(0.5, 0)`."
+                ),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// The size axes and the constraints that bound them.
+fn describe_size_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
         UtilityKind::Width | UtilityKind::Height | UtilityKind::Size => {
             let size_key = analysis.payload()?;
             let target = match &analysis.utility {
@@ -230,6 +574,89 @@ fn describe_token(
                 documentation: format!("{variant_prefix}Sets `{target}` using {resolved}."),
             })
         }
+        UtilityKind::AspectRatio => {
+            let ratio_key = analysis.payload()?;
+            let value = resolve_aspect_ratio_value(ratio_key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIAspectRatioConstraint.AspectRatio"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIAspectRatioConstraint.AspectRatio` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::Basis => {
+            let size_key = analysis.payload()?;
+            if is_automatic_size_key(size_key) {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> AutomaticSize"),
+                    documentation: format!(
+                        "{variant_prefix}Enables `AutomaticSize` on the X axis."
+                    ),
+                });
+            }
+
+            let mut diagnostics = Vec::new();
+            let value =
+                resolve_size_axis_value(config, &mut diagnostics, size_key, &analysis.parsed.raw)?;
+            let resolved = describe_size_axis_value(config, &value);
+            Some(HoverContent {
+                display: format!("`{token}` -> Roblox Size.X"),
+                documentation: format!(
+                    "{variant_prefix}Sets the main-axis (row) size `Size.X` using {resolved}."
+                ),
+            })
+        }
+        UtilityKind::MinWidth
+        | UtilityKind::MaxWidth
+        | UtilityKind::MinHeight
+        | UtilityKind::MaxHeight => {
+            let size_key = analysis.payload()?;
+            let target = match &analysis.utility {
+                UtilityKind::MinWidth => "UISizeConstraint.MinSize.X",
+                UtilityKind::MaxWidth => "UISizeConstraint.MaxSize.X",
+                UtilityKind::MinHeight => "UISizeConstraint.MinSize.Y",
+                UtilityKind::MaxHeight => "UISizeConstraint.MaxSize.Y",
+                _ => unreachable!(),
+            };
+            let mut diagnostics = Vec::new();
+            let value = resolve_size_spacing_offset(
+                config,
+                &mut diagnostics,
+                size_key,
+                &analysis.parsed.utility.raw,
+            )?;
+            Some(HoverContent {
+                display: format!("`{token}` -> {target}"),
+                documentation: format!(
+                    "{variant_prefix}Sets `{target}` to {}.",
+                    offset_value_text(config, &value)
+                ),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Where an element sits and how it is transformed about that point.
+fn describe_position_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
+        UtilityKind::ZIndex => {
+            let z_key = analysis.payload()?;
+            let mut diagnostics = Vec::new();
+            let value = resolve_z_index_value(z_key, token, &mut diagnostics)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ZIndex"),
+                documentation: format!("{variant_prefix}Sets `ZIndex` to `{value}`."),
+            })
+        }
         UtilityKind::Rotation => {
             let degrees = analysis.payload()?;
             let negative = analysis.parsed.utility.raw.starts_with("-rotate-");
@@ -245,82 +672,6 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> UIScale.Scale"),
                 documentation: format!("{variant_prefix}Sets `UIScale.Scale` to `{value}`."),
-            })
-        }
-        UtilityKind::Opacity => {
-            let percent = analysis.payload()?;
-            let value = resolve_opacity_value(percent)?;
-            // A component element names no instance, so there is no channel to
-            // report: the fade crosses to whatever it renders and lowers there.
-            let Some(tag) = element_tag else {
-                return Some(HoverContent {
-                    display: format!("`{token}` -> the component's subtree"),
-                    documentation: format!(
-                        "{variant_prefix}Fades everything this component renders to `{value}` transparency, multiplied with any fade it is already nested in."
-                    ),
-                });
-            };
-            let props = opacity_transparency_props(Some(tag)).join(", ");
-            Some(HoverContent {
-                display: format!("`{token}` -> {props}"),
-                documentation: format!(
-                    "{variant_prefix}Fades this element to `{value}` transparency, and composes into the subtree under it."
-                ),
-            })
-        }
-        UtilityKind::AspectRatio => {
-            let ratio_key = analysis.payload()?;
-            let value = resolve_aspect_ratio_value(ratio_key)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> UIAspectRatioConstraint.AspectRatio"),
-                documentation: format!(
-                    "{variant_prefix}Sets `UIAspectRatioConstraint.AspectRatio` to `{value}`."
-                ),
-            })
-        }
-        UtilityKind::FlexDirection => {
-            let value = resolve_flex_direction_value(analysis.payload())?;
-            Some(HoverContent {
-                display: format!("`{token}` -> UIListLayout.FillDirection"),
-                documentation: format!(
-                    "{variant_prefix}Sets `UIListLayout.FillDirection` to `{value}`."
-                ),
-            })
-        }
-        UtilityKind::JustifyContent => {
-            let key = analysis.payload()?;
-            if let Some(flex) = resolve_justify_flex_value(key) {
-                return Some(HoverContent {
-                    display: format!("`{token}` -> UIListLayout.HorizontalFlex"),
-                    documentation: format!(
-                        "{variant_prefix}Sets `UIListLayout.HorizontalFlex` to `Enum.UIFlexAlignment.{flex}`."
-                    ),
-                });
-            }
-            let value = resolve_justify_value(key)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> UIListLayout.HorizontalAlignment"),
-                documentation: format!(
-                    "{variant_prefix}Sets `UIListLayout.HorizontalAlignment` to `{value}`."
-                ),
-            })
-        }
-        UtilityKind::AlignItems => {
-            let key = analysis.payload()?;
-            if let Some(flex) = resolve_items_flex_value(key) {
-                return Some(HoverContent {
-                    display: format!("`{token}` -> UIListLayout.VerticalFlex"),
-                    documentation: format!(
-                        "{variant_prefix}Sets `UIListLayout.VerticalFlex` to `Enum.UIFlexAlignment.{flex}`."
-                    ),
-                });
-            }
-            let value = resolve_align_items_value(key)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> UIListLayout.VerticalAlignment"),
-                documentation: format!(
-                    "{variant_prefix}Sets `UIListLayout.VerticalAlignment` to `{value}`."
-                ),
             })
         }
         UtilityKind::PositionX | UtilityKind::PositionY | UtilityKind::Inset => {
@@ -397,398 +748,6 @@ fn describe_token(
                 documentation: format!("{variant_prefix}Sets `AnchorPoint` to `{value}`."),
             })
         }
-        UtilityKind::AlignContent => {
-            let alignment_key = analysis.payload()?;
-            if let Some(flex) = resolve_align_content_flex_value(alignment_key) {
-                Some(HoverContent {
-                    display: format!("`{token}` -> UIListLayout.VerticalFlex"),
-                    documentation: format!(
-                        "{variant_prefix}Sets `UIListLayout.VerticalFlex` to `Enum.UIFlexAlignment.{flex}`."
-                    ),
-                })
-            } else {
-                let value = resolve_align_items_value(alignment_key)?;
-                Some(HoverContent {
-                    display: format!("`{token}` -> UIListLayout.VerticalAlignment"),
-                    documentation: format!(
-                        "{variant_prefix}Sets `UIListLayout.VerticalAlignment` to `{value}`."
-                    ),
-                })
-            }
-        }
-        UtilityKind::AlignSelf => {
-            let alignment = resolve_align_self_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> UIFlexItem.ItemLineAlignment"),
-                documentation: format!(
-                    "{variant_prefix}Adds a Roblox UIFlexItem with `ItemLineAlignment = Enum.ItemLineAlignment.{alignment}`."
-                ),
-            })
-        }
-        UtilityKind::LayoutOrder => {
-            let order_key = analysis.payload()?;
-            let negative = analysis.parsed.utility.raw.starts_with("-order-");
-            let value = resolve_layout_order_value(order_key, negative)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> LayoutOrder"),
-                documentation: format!("{variant_prefix}Sets `LayoutOrder` to `{value}`."),
-            })
-        }
-        UtilityKind::LineHeight => {
-            let value = resolve_line_height_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> LineHeight"),
-                documentation: format!("{variant_prefix}Sets `LineHeight` to `{value}`."),
-            })
-        }
-        UtilityKind::Transition => {
-            let (enabled, property) = resolve_transition_toggle(analysis.payload())?;
-            Some(HoverContent {
-                display: format!("`{token}` -> TweenService"),
-                documentation: if enabled {
-                    let scope = if property == "all" {
-                        "every tweenable prop".to_owned()
-                    } else {
-                        format!("the `{property}` props only")
-                    };
-                    format!(
-                        "{variant_prefix}Tweens runtime style changes with TweenService ({DEFAULT_TRANSITION_TIME}s by default), covering {scope}. Combine with `duration-*`, `ease-*`, and `delay-*`."
-                    )
-                } else {
-                    format!(
-                        "{variant_prefix}Disables the transition; runtime style changes apply instantly."
-                    )
-                },
-            })
-        }
-        UtilityKind::TransitionDuration | UtilityKind::TransitionDelay => {
-            let seconds = resolve_duration_seconds(analysis.payload()?)?;
-            let field = match &analysis.utility {
-                UtilityKind::TransitionDuration => "duration",
-                _ => "delay",
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> TweenInfo"),
-                documentation: format!(
-                    "{variant_prefix}Sets the transition {field} to `{seconds}s`."
-                ),
-            })
-        }
-        UtilityKind::TransitionEase => {
-            let (style, direction) = resolve_ease_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> TweenInfo"),
-                documentation: format!(
-                    "{variant_prefix}Sets the transition easing to `Enum.EasingStyle.{style}` / `Enum.EasingDirection.{direction}`."
-                ),
-            })
-        }
-        UtilityKind::DivideX | UtilityKind::DivideY => {
-            let axis = match &analysis.utility {
-                UtilityKind::DivideX => "vertical",
-                _ => "horizontal",
-            };
-            let thickness = px_length_text(config, analysis.payload().unwrap_or("1"));
-            Some(HoverContent {
-                display: format!("`{token}` -> child separators"),
-                documentation: format!(
-                    "{variant_prefix}Inserts a {thickness} {axis} separator frame between the element's children. Not compatible with children that set an explicit `LayoutOrder`."
-                ),
-            })
-        }
-        UtilityKind::DivideColor => {
-            let (color_key, opacity) = split_color_opacity(analysis.payload()?);
-            let mut diagnostics = Vec::new();
-            let resolution = resolve_color_value(
-                config,
-                &mut diagnostics,
-                DIVIDE_COLOR_FAMILY,
-                color_key,
-                token,
-            )?;
-            let ColorResolution::Expression(value) = resolution else {
-                return None;
-            };
-            let fade = match opacity_modifier_transparency(opacity) {
-                Some(transparency) => {
-                    format!(" Sets each separator's `BackgroundTransparency` to `{transparency}`.")
-                }
-                None => String::new(),
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> separator color"),
-                documentation: format!(
-                    "{variant_prefix}Paints the `divide-x`/`divide-y` separators with `{value}`.{fade}"
-                ),
-            })
-        }
-        UtilityKind::Margin(axis) => {
-            let spacing_key = analysis.payload()?;
-            let value = resolve_spacing_value(config, spacing_key)?;
-            let negative = analysis.parsed.utility.raw.starts_with("-m");
-            let sides = match axis {
-                PaddingKind::All => "all sides",
-                PaddingKind::X => "the left and right",
-                PaddingKind::Y => "the top and bottom",
-                PaddingKind::Top => "the top",
-                PaddingKind::Right => "the right",
-                PaddingKind::Bottom => "the bottom",
-                PaddingKind::Left => "the left",
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> margin box"),
-                documentation: if negative {
-                    let shift = spacing_value_to_offset(&value)
-                        .and_then(|offset| offset.parse::<f64>().ok())
-                        .and_then(|px| crate::editor::rem_offset_label(config, -px))
-                        .unwrap_or_else(|| format!("`-{value}`"));
-                    format!(
-                        "{variant_prefix}Shifts `Position` by {shift} (negative margins pull from the top/left edge)."
-                    )
-                } else {
-                    format!(
-                        "{variant_prefix}Wraps the element in a transparent margin box padded by {} on {sides}.",
-                        udim_value_text(config, &value)
-                    )
-                },
-            })
-        }
-        UtilityKind::TextTransform => {
-            let value = resolve_text_transform_value(analysis.payload()?)?;
-            let documentation = match value {
-                "upper" => "Uppercases the element's `Text` (ASCII letters only).",
-                "lower" => "Lowercases the element's `Text` (ASCII letters only).",
-                "capitalize" => {
-                    "Uppercases the first ASCII letter of each word in the element's `Text`."
-                }
-                _ => "Removes the text transform.",
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> Text"),
-                documentation: format!("{variant_prefix}{documentation}"),
-            })
-        }
-        UtilityKind::TextDecoration => {
-            let value = resolve_text_decoration_value(analysis.payload()?)?;
-            let documentation = match value {
-                "underline" => "Enables `RichText` and wraps the escaped `Text` in `<u>...</u>`.",
-                "strike" => "Enables `RichText` and wraps the escaped `Text` in `<s>...</s>`.",
-                _ => "Removes the text decoration.",
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> Text"),
-                documentation: format!("{variant_prefix}{documentation}"),
-            })
-        }
-        UtilityKind::Animation => {
-            let animation_key = analysis.payload()?;
-            let (_, description) = ANIMATION_VALUES
-                .iter()
-                .find(|(name, _)| *name == animation_key)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> TweenService loop"),
-                documentation: format!("{variant_prefix}{description}"),
-            })
-        }
-        UtilityKind::ObjectFit => {
-            let scale_type = resolve_object_fit_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> ScaleType"),
-                documentation: format!(
-                    "{variant_prefix}Sets `ScaleType` to `Enum.ScaleType.{scale_type}`."
-                ),
-            })
-        }
-        UtilityKind::PointerEvents => {
-            let value = resolve_pointer_events_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> Interactable"),
-                documentation: format!("{variant_prefix}Sets `Interactable` to `{value}`."),
-            })
-        }
-        UtilityKind::SpaceX | UtilityKind::SpaceY => {
-            let spacing_key = analysis.payload()?;
-            let value = resolve_spacing_value(config, spacing_key)?;
-            let direction = match &analysis.utility {
-                UtilityKind::SpaceX => "Horizontal",
-                _ => "Vertical",
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> UIListLayout.Padding"),
-                documentation: format!(
-                    "{variant_prefix}Sets `UIListLayout.Padding` to {} with `FillDirection = Enum.FillDirection.{direction}`.",
-                    udim_value_text(config, &value)
-                ),
-            })
-        }
-        UtilityKind::Whitespace => {
-            let value = resolve_whitespace_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> TextWrapped"),
-                documentation: format!("{variant_prefix}Sets `TextWrapped` to `{value}`."),
-            })
-        }
-        UtilityKind::Overscroll => {
-            let behavior = resolve_overscroll_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> ElasticBehavior"),
-                documentation: format!(
-                    "{variant_prefix}Sets `ElasticBehavior` to `Enum.ElasticBehavior.{behavior}`."
-                ),
-            })
-        }
-        UtilityKind::ScrollDirection => {
-            let payload = analysis.payload()?;
-            if payload == "none" {
-                return Some(HoverContent {
-                    display: format!("`{token}` -> ScrollingEnabled"),
-                    documentation: format!("{variant_prefix}Sets `ScrollingEnabled` to `false`."),
-                });
-            }
-
-            let direction = resolve_scroll_direction_value(payload)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> ScrollingDirection"),
-                documentation: format!(
-                    "{variant_prefix}Sets `ScrollingDirection` to `Enum.ScrollingDirection.{direction}`."
-                ),
-            })
-        }
-        UtilityKind::ScrollbarThickness => {
-            let payload = analysis.payload()?;
-            let thickness = if payload == "none" {
-                "0".to_owned()
-            } else {
-                resolve_spacing_value(config, payload)
-                    .as_deref()
-                    .and_then(spacing_value_to_offset)?
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> ScrollBarThickness"),
-                documentation: format!(
-                    "{variant_prefix}Sets `ScrollBarThickness` to {}.",
-                    offset_value_text(config, &thickness)
-                ),
-            })
-        }
-        UtilityKind::ScrollbarColor => describe_color_token(
-            token,
-            analysis.payload()?,
-            config,
-            SCROLLBAR_COLOR_FAMILY,
-            "ScrollBarImageColor3",
-            variant_prefix,
-        ),
-        UtilityKind::CanvasSize => {
-            let axis = resolve_canvas_size_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> AutomaticCanvasSize"),
-                documentation: format!(
-                    "{variant_prefix}Sets `AutomaticCanvasSize` to `Enum.AutomaticSize.{axis}`."
-                ),
-            })
-        }
-        UtilityKind::Ring | UtilityKind::Outline => {
-            let family = match &analysis.utility {
-                UtilityKind::Ring => "ring",
-                _ => "outline",
-            };
-            let documentation = match analysis.payload() {
-                None => {
-                    let thickness = if family == "ring" { "3" } else { "2" };
-                    format!(
-                        "{variant_prefix}Sets `UIStroke.Thickness` to {} with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`.",
-                        offset_value_text(config, thickness)
-                    )
-                }
-                Some(payload) => match classify_stroke_payload(&analysis.utility, payload) {
-                    StrokePayload::Thickness(thickness) => format!(
-                        "{variant_prefix}Sets `UIStroke.Thickness` to {} with `ApplyStrokeMode = Border`. Shares the same UIStroke as `border-*`.",
-                        offset_value_text(config, &thickness.offset(config))
-                    ),
-                    StrokePayload::Unsupported => return None,
-                    StrokePayload::Color => {
-                        let mut diagnostics = Vec::new();
-                        let resolution = resolve_color_value(
-                            config,
-                            &mut diagnostics,
-                            if family == "ring" {
-                                RING_COLOR_FAMILY
-                            } else {
-                                OUTLINE_COLOR_FAMILY
-                            },
-                            payload,
-                            token,
-                        )?;
-                        match resolution {
-                            ColorResolution::Expression(value) => format!(
-                                "{variant_prefix}Sets `UIStroke.Color` to `{value}`. Shares the same UIStroke as `border-*`."
-                            ),
-                            ColorResolution::Transparent => {
-                                format!("{variant_prefix}Sets `UIStroke.Transparency` to `1`.")
-                            }
-                        }
-                    }
-                },
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> UIStroke"),
-                documentation,
-            })
-        }
-        UtilityKind::CenterX | UtilityKind::CenterY => {
-            let axis = match &analysis.utility {
-                UtilityKind::CenterX => "X",
-                _ => "Y",
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> AnchorPoint + Position"),
-                documentation: format!(
-                    "{variant_prefix}Centers the element on the {axis} axis with `AnchorPoint.{axis} = 0.5` and `Position.{axis} = UDim(0.5, 0)`."
-                ),
-            })
-        }
-        UtilityKind::Grid => Some(HoverContent {
-            display: format!("`{token}` -> UIGridLayout"),
-            documentation: format!(
-                "{variant_prefix}Adds a Roblox UIGridLayout with `SortOrder = Enum.SortOrder.LayoutOrder`. Combine with `grid-cols-*`, `grid-rows-*`, and `gap-*`."
-            ),
-        }),
-        UtilityKind::GridColumns | UtilityKind::GridRows => {
-            let count = resolve_grid_cell_count(analysis.payload()?)?;
-            let direction = match &analysis.utility {
-                UtilityKind::GridColumns => "Horizontal",
-                _ => "Vertical",
-            };
-            Some(HoverContent {
-                display: format!("`{token}` -> UIGridLayout.FillDirectionMaxCells"),
-                documentation: format!(
-                    "{variant_prefix}Adds a Roblox UIGridLayout with `FillDirection = Enum.FillDirection.{direction}` and `FillDirectionMaxCells = {count}`."
-                ),
-            })
-        }
-        UtilityKind::Basis => {
-            let size_key = analysis.payload()?;
-            if is_automatic_size_key(size_key) {
-                return Some(HoverContent {
-                    display: format!("`{token}` -> AutomaticSize"),
-                    documentation: format!(
-                        "{variant_prefix}Enables `AutomaticSize` on the X axis."
-                    ),
-                });
-            }
-
-            let mut diagnostics = Vec::new();
-            let value =
-                resolve_size_axis_value(config, &mut diagnostics, size_key, &analysis.parsed.raw)?;
-            let resolved = describe_size_axis_value(config, &value);
-            Some(HoverContent {
-                display: format!("`{token}` -> Roblox Size.X"),
-                documentation: format!(
-                    "{variant_prefix}Sets the main-axis (row) size `Size.X` using {resolved}."
-                ),
-            })
-        }
         UtilityKind::TranslateX | UtilityKind::TranslateY => {
             let translate_key = analysis.payload()?;
             let (negative, axis) = match &analysis.utility {
@@ -834,6 +793,223 @@ fn describe_token(
             Some(HoverContent {
                 display: format!("`{token}` -> Roblox transform"),
                 documentation,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// How a container arranges its children, and where a child sits in that.
+fn describe_layout_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
+        UtilityKind::GridAutoRows | UtilityKind::GridAutoColumns => {
+            let spacing_key = analysis.payload()?;
+            let value = resolve_spacing_value(config, spacing_key)?;
+            let axis = match &analysis.utility {
+                UtilityKind::GridAutoRows => "Y",
+                _ => "X",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGridLayout.CellSize.{axis}"),
+                documentation: format!(
+                    "{variant_prefix}Sets the cross axis of `UIGridLayout.CellSize` to {}. `grid-cols-*`/`grid-rows-*` size the axis they fill; this names the other one.",
+                    udim_value_text(config, &value)
+                ),
+            })
+        }
+        UtilityKind::FlexDirection => {
+            let value = resolve_flex_direction_value(analysis.payload())?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.FillDirection"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.FillDirection` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::JustifyContent => {
+            let key = analysis.payload()?;
+            if let Some(flex) = resolve_justify_flex_value(key) {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.HorizontalFlex"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.HorizontalFlex` to `Enum.UIFlexAlignment.{flex}`."
+                    ),
+                });
+            }
+            let value = resolve_justify_value(key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.HorizontalAlignment"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.HorizontalAlignment` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::AlignItems => {
+            let key = analysis.payload()?;
+            if let Some(flex) = resolve_items_flex_value(key) {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.VerticalFlex"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.VerticalFlex` to `Enum.UIFlexAlignment.{flex}`."
+                    ),
+                });
+            }
+            let value = resolve_align_items_value(key)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.VerticalAlignment"),
+                documentation: format!(
+                    "{variant_prefix}Sets `UIListLayout.VerticalAlignment` to `{value}`."
+                ),
+            })
+        }
+        UtilityKind::AlignContent => {
+            let alignment_key = analysis.payload()?;
+            if let Some(flex) = resolve_align_content_flex_value(alignment_key) {
+                Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.VerticalFlex"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.VerticalFlex` to `Enum.UIFlexAlignment.{flex}`."
+                    ),
+                })
+            } else {
+                let value = resolve_align_items_value(alignment_key)?;
+                Some(HoverContent {
+                    display: format!("`{token}` -> UIListLayout.VerticalAlignment"),
+                    documentation: format!(
+                        "{variant_prefix}Sets `UIListLayout.VerticalAlignment` to `{value}`."
+                    ),
+                })
+            }
+        }
+        UtilityKind::AlignSelf => {
+            let alignment = resolve_align_self_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIFlexItem.ItemLineAlignment"),
+                documentation: format!(
+                    "{variant_prefix}Adds a Roblox UIFlexItem with `ItemLineAlignment = Enum.ItemLineAlignment.{alignment}`."
+                ),
+            })
+        }
+        UtilityKind::LayoutOrder => {
+            let order_key = analysis.payload()?;
+            let negative = analysis.parsed.utility.raw.starts_with("-order-");
+            let value = resolve_layout_order_value(order_key, negative)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> LayoutOrder"),
+                documentation: format!("{variant_prefix}Sets `LayoutOrder` to `{value}`."),
+            })
+        }
+        UtilityKind::Grid => Some(HoverContent {
+            display: format!("`{token}` -> UIGridLayout"),
+            documentation: format!(
+                "{variant_prefix}Adds a Roblox UIGridLayout with `SortOrder = Enum.SortOrder.LayoutOrder`. Combine with `grid-cols-*`, `grid-rows-*`, and `gap-*`."
+            ),
+        }),
+        UtilityKind::GridColumns | UtilityKind::GridRows => {
+            let count = resolve_grid_cell_count(analysis.payload()?)?;
+            let direction = match &analysis.utility {
+                UtilityKind::GridColumns => "Horizontal",
+                _ => "Vertical",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> UIGridLayout.FillDirectionMaxCells"),
+                documentation: format!(
+                    "{variant_prefix}Adds a Roblox UIGridLayout with `FillDirection = Enum.FillDirection.{direction}` and `FillDirectionMaxCells = {count}`."
+                ),
+            })
+        }
+        UtilityKind::Visibility => {
+            let value = resolve_visibility_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> Visible"),
+                documentation: format!("{variant_prefix}Sets `Visible` to `{value}`."),
+            })
+        }
+        UtilityKind::Overflow => {
+            let value = resolve_overflow_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ClipsDescendants"),
+                documentation: format!("{variant_prefix}Sets `ClipsDescendants` to `{value}`."),
+            })
+        }
+        UtilityKind::FlexWrap => {
+            let value = resolve_flex_wrap_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIListLayout.Wraps"),
+                documentation: format!("{variant_prefix}Sets `UIListLayout.Wraps` to `{value}`."),
+            })
+        }
+        UtilityKind::FlexItem => {
+            let mode = resolve_flex_item_mode(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> UIFlexItem.FlexMode"),
+                documentation: format!(
+                    "{variant_prefix}Adds a Roblox UIFlexItem with `FlexMode = Enum.UIFlexMode.{mode}`."
+                ),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Typography, including the families that compose into one FontFace.
+fn describe_text_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
+        UtilityKind::LineHeight => {
+            let value = resolve_line_height_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> LineHeight"),
+                documentation: format!("{variant_prefix}Sets `LineHeight` to `{value}`."),
+            })
+        }
+        UtilityKind::TextTransform => {
+            let value = resolve_text_transform_value(analysis.payload()?)?;
+            let documentation = match value {
+                "upper" => "Uppercases the element's `Text` (ASCII letters only).",
+                "lower" => "Lowercases the element's `Text` (ASCII letters only).",
+                "capitalize" => {
+                    "Uppercases the first ASCII letter of each word in the element's `Text`."
+                }
+                _ => "Removes the text transform.",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> Text"),
+                documentation: format!("{variant_prefix}{documentation}"),
+            })
+        }
+        UtilityKind::TextDecoration => {
+            let value = resolve_text_decoration_value(analysis.payload()?)?;
+            let documentation = match value {
+                "underline" => "Enables `RichText` and wraps the escaped `Text` in `<u>...</u>`.",
+                "strike" => "Enables `RichText` and wraps the escaped `Text` in `<s>...</s>`.",
+                _ => "Removes the text decoration.",
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> Text"),
+                documentation: format!("{variant_prefix}{documentation}"),
+            })
+        }
+        UtilityKind::Whitespace => {
+            let value = resolve_whitespace_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> TextWrapped"),
+                documentation: format!("{variant_prefix}Sets `TextWrapped` to `{value}`."),
             })
         }
         UtilityKind::FontStyle => {
@@ -901,51 +1077,135 @@ fn describe_token(
                 "{variant_prefix}Sets `TextTruncate` to `Enum.TextTruncate.AtEnd`."
             ),
         }),
-        UtilityKind::Visibility => {
-            let value = resolve_visibility_value(analysis.payload()?)?;
+        _ => None,
+    }
+}
+
+/// Families only some hosts carry: scrolling frames, images and input.
+fn describe_host_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
+        UtilityKind::ObjectFit => {
+            let scale_type = resolve_object_fit_value(analysis.payload()?)?;
             Some(HoverContent {
-                display: format!("`{token}` -> Visible"),
-                documentation: format!("{variant_prefix}Sets `Visible` to `{value}`."),
-            })
-        }
-        UtilityKind::Overflow => {
-            let value = resolve_overflow_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> ClipsDescendants"),
-                documentation: format!("{variant_prefix}Sets `ClipsDescendants` to `{value}`."),
-            })
-        }
-        UtilityKind::FlexWrap => {
-            let value = resolve_flex_wrap_value(analysis.payload()?)?;
-            Some(HoverContent {
-                display: format!("`{token}` -> UIListLayout.Wraps"),
-                documentation: format!("{variant_prefix}Sets `UIListLayout.Wraps` to `{value}`."),
-            })
-        }
-        UtilityKind::MinWidth
-        | UtilityKind::MaxWidth
-        | UtilityKind::MinHeight
-        | UtilityKind::MaxHeight => {
-            let size_key = analysis.payload()?;
-            let target = match &analysis.utility {
-                UtilityKind::MinWidth => "UISizeConstraint.MinSize.X",
-                UtilityKind::MaxWidth => "UISizeConstraint.MaxSize.X",
-                UtilityKind::MinHeight => "UISizeConstraint.MinSize.Y",
-                UtilityKind::MaxHeight => "UISizeConstraint.MaxSize.Y",
-                _ => unreachable!(),
-            };
-            let mut diagnostics = Vec::new();
-            let value = resolve_size_spacing_offset(
-                config,
-                &mut diagnostics,
-                size_key,
-                &analysis.parsed.utility.raw,
-            )?;
-            Some(HoverContent {
-                display: format!("`{token}` -> {target}"),
+                display: format!("`{token}` -> ScaleType"),
                 documentation: format!(
-                    "{variant_prefix}Sets `{target}` to {}.",
-                    offset_value_text(config, &value)
+                    "{variant_prefix}Sets `ScaleType` to `Enum.ScaleType.{scale_type}`."
+                ),
+            })
+        }
+        UtilityKind::PointerEvents => {
+            let value = resolve_pointer_events_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> Interactable"),
+                documentation: format!("{variant_prefix}Sets `Interactable` to `{value}`."),
+            })
+        }
+        UtilityKind::Overscroll => {
+            let behavior = resolve_overscroll_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ElasticBehavior"),
+                documentation: format!(
+                    "{variant_prefix}Sets `ElasticBehavior` to `Enum.ElasticBehavior.{behavior}`."
+                ),
+            })
+        }
+        UtilityKind::ScrollDirection => {
+            let payload = analysis.payload()?;
+            if payload == "none" {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> ScrollingEnabled"),
+                    documentation: format!("{variant_prefix}Sets `ScrollingEnabled` to `false`."),
+                });
+            }
+
+            let direction = resolve_scroll_direction_value(payload)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> ScrollingDirection"),
+                documentation: format!(
+                    "{variant_prefix}Sets `ScrollingDirection` to `Enum.ScrollingDirection.{direction}`."
+                ),
+            })
+        }
+        UtilityKind::ScrollbarThickness => {
+            let payload = analysis.payload()?;
+            let thickness = if payload == "none" {
+                "0".to_owned()
+            } else {
+                resolve_spacing_value(config, payload)
+                    .as_deref()
+                    .and_then(spacing_value_to_offset)?
+            };
+            Some(HoverContent {
+                display: format!("`{token}` -> ScrollBarThickness"),
+                documentation: format!(
+                    "{variant_prefix}Sets `ScrollBarThickness` to {}.",
+                    offset_value_text(config, &thickness)
+                ),
+            })
+        }
+        UtilityKind::CanvasSize => {
+            let axis = resolve_canvas_size_value(analysis.payload()?)?;
+            Some(HoverContent {
+                display: format!("`{token}` -> AutomaticCanvasSize"),
+                documentation: format!(
+                    "{variant_prefix}Sets `AutomaticCanvasSize` to `Enum.AutomaticSize.{axis}`."
+                ),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// What paints over or beside an element rather than laying it out.
+fn describe_effects_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    config: &crate::config::model::TailwindConfig,
+    element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
+        UtilityKind::Opacity => {
+            let percent = analysis.payload()?;
+            let value = resolve_opacity_value(percent)?;
+            // A component element names no instance, so there is no channel to
+            // report: the fade crosses to whatever it renders and lowers there.
+            let Some(tag) = element_tag else {
+                return Some(HoverContent {
+                    display: format!("`{token}` -> the component's subtree"),
+                    documentation: format!(
+                        "{variant_prefix}Fades everything this component renders to `{value}` transparency, multiplied with any fade it is already nested in."
+                    ),
+                });
+            };
+            let props = opacity_transparency_props(Some(tag)).join(", ");
+            Some(HoverContent {
+                display: format!("`{token}` -> {props}"),
+                documentation: format!(
+                    "{variant_prefix}Fades this element to `{value}` transparency, and composes into the subtree under it."
+                ),
+            })
+        }
+        UtilityKind::DivideX | UtilityKind::DivideY => {
+            let axis = match &analysis.utility {
+                UtilityKind::DivideX => "vertical",
+                _ => "horizontal",
+            };
+            let thickness = px_length_text(config, analysis.payload().unwrap_or("1"));
+            Some(HoverContent {
+                display: format!("`{token}` -> child separators"),
+                documentation: format!(
+                    "{variant_prefix}Inserts a {thickness} {axis} separator frame between the element's children. Not compatible with children that set an explicit `LayoutOrder`."
                 ),
             })
         }
@@ -979,83 +1239,74 @@ fn describe_token(
                 }
             }
         }
-        UtilityKind::ShadowColor => {
-            let color_key = analysis.payload()?;
-            let mut diagnostics = Vec::new();
-            let resolution = resolve_color_value(
-                config,
-                &mut diagnostics,
-                SHADOW_COLOR_FAMILY,
-                color_key,
-                token,
-            )?;
-            let documentation = match resolution {
-                ColorResolution::Expression(value) => {
-                    format!("{variant_prefix}Sets `UIShadow.Color` to `{value}`.")
-                }
-                ColorResolution::Transparent => {
-                    format!("{variant_prefix}Sets `UIShadow.Transparency` to `1`.")
-                }
-            };
+        _ => None,
+    }
+}
+
+/// The transition and animation specs the runtime host tweens with.
+fn describe_motion_family(
+    analysis: &crate::semantic::result::AnalyzedClassToken,
+    token: &str,
+    _config: &crate::config::model::TailwindConfig,
+    _element_tag: Option<&str>,
+    variant_prefix: &str,
+) -> Option<HoverContent> {
+    let variant_prefix = variant_prefix.to_owned();
+
+    match &analysis.utility {
+        UtilityKind::Transition => {
+            let (enabled, property) = resolve_transition_toggle(analysis.payload())?;
             Some(HoverContent {
-                display: format!("`{token}` -> UIShadow.Color"),
-                documentation,
+                display: format!("`{token}` -> TweenService"),
+                documentation: if enabled {
+                    let scope = if property == "all" {
+                        "every tweenable prop".to_owned()
+                    } else {
+                        format!("the `{property}` props only")
+                    };
+                    format!(
+                        "{variant_prefix}Tweens runtime style changes with TweenService ({DEFAULT_TRANSITION_TIME}s by default), covering {scope}. Combine with `duration-*`, `ease-*`, and `delay-*`."
+                    )
+                } else {
+                    format!(
+                        "{variant_prefix}Disables the transition; runtime style changes apply instantly."
+                    )
+                },
             })
         }
-        UtilityKind::FlexItem => {
-            let mode = resolve_flex_item_mode(analysis.payload()?)?;
+        UtilityKind::TransitionDuration | UtilityKind::TransitionDelay => {
+            let seconds = resolve_duration_seconds(analysis.payload()?)?;
+            let field = match &analysis.utility {
+                UtilityKind::TransitionDuration => "duration",
+                _ => "delay",
+            };
             Some(HoverContent {
-                display: format!("`{token}` -> UIFlexItem.FlexMode"),
+                display: format!("`{token}` -> TweenInfo"),
                 documentation: format!(
-                    "{variant_prefix}Adds a Roblox UIFlexItem with `FlexMode = Enum.UIFlexMode.{mode}`."
+                    "{variant_prefix}Sets the transition {field} to `{seconds}s`."
                 ),
             })
         }
-        UtilityKind::GradientDirection => {
-            let rotation = resolve_gradient_rotation(analysis.payload()?)?;
+        UtilityKind::TransitionEase => {
+            let (style, direction) = resolve_ease_value(analysis.payload()?)?;
             Some(HoverContent {
-                display: format!("`{token}` -> UIGradient.Rotation"),
+                display: format!("`{token}` -> TweenInfo"),
                 documentation: format!(
-                    "{variant_prefix}Creates a Roblox UIGradient with `Rotation = {rotation}`. Combine with `from-*`, `via-*`, and `to-*` color stops."
+                    "{variant_prefix}Sets the transition easing to `Enum.EasingStyle.{style}` / `Enum.EasingDirection.{direction}`."
                 ),
             })
         }
-        UtilityKind::GradientFrom | UtilityKind::GradientVia | UtilityKind::GradientTo => {
-            let (color_key, opacity) = split_color_opacity(analysis.payload()?);
-            let stop = match &analysis.utility {
-                UtilityKind::GradientFrom => "from",
-                UtilityKind::GradientVia => "via",
-                UtilityKind::GradientTo => "to",
-                _ => unreachable!(),
-            };
-            let mut diagnostics = Vec::new();
-            let resolution = resolve_color_value(
-                config,
-                &mut diagnostics,
-                GRADIENT_COLOR_FAMILY,
-                color_key,
-                token,
-            )?;
-            let fade = match opacity_modifier_transparency(opacity) {
-                Some(transparency) => {
-                    format!(" Sets its `UIGradient.Transparency` keypoint to `{transparency}`.")
-                }
-                None => String::new(),
-            };
-            let documentation = match resolution {
-                ColorResolution::Expression(value) => format!(
-                    "{variant_prefix}Adds a `{stop}` color stop `{value}` to the parent's UIGradient.{fade}"
-                ),
-                ColorResolution::Transparent => format!(
-                    "{variant_prefix}`transparent` gradient stops are not lowered to UIGradient yet."
-                ),
-            };
+        UtilityKind::Animation => {
+            let animation_key = analysis.payload()?;
+            let (_, description) = ANIMATION_VALUES
+                .iter()
+                .find(|(name, _)| *name == animation_key)?;
             Some(HoverContent {
-                display: format!("`{token}` -> UIGradient.Color"),
-                documentation,
+                display: format!("`{token}` -> TweenService loop"),
+                documentation: format!("{variant_prefix}{description}"),
             })
         }
-        UtilityKind::Unknown => None,
+        _ => None,
     }
 }
 
