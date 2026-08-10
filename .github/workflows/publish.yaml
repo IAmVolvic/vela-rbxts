@@ -170,6 +170,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # The runtimes compile against the core's emitted declarations, which they
+      # copy out of its `out/`. Left to the typecheck graph alone that copy can
+      # read a build that is still being written, so the build is its own step.
+      - name: Build
+        run: pnpm build
+
       - name: Typecheck
         run: pnpm typecheck
 
