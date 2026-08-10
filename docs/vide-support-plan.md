@@ -134,7 +134,7 @@ takes a thunk for children, so the emitted element shape differs. `cloneElement`
 
 **Conditional helper children.** A `uistroke` that only exists under `hover:` cannot be
 re-rendered into place; the Vide host creates and destroys it imperatively under
-`cleanup()`.
+`cleanup()`. Landed differently — see §8.
 
 ## 5. Phases
 
@@ -143,8 +143,8 @@ re-rendered into place; the Vide host creates and destroys it imperatively under
 | 0. Spike | minimal `apps/vide-harness`; verify hand-written lowering output runs in Studio | **done** |
 | 1. `EmitTarget` seam | introduce the trait with `ReactTarget`; zero behavior change | **done** |
 | 2. Runtime split | extract `-core`, rebuild the React host on it; zero behavior change | medium — touches release plumbing |
-| 3. Vide host (MVP) | static lowering, runtime `className` resolution, rem. No variants | medium |
-| 4. Reactive boundary | arrow unwrap, thunked tests, hover/pressed/focused, opacity context, margin/divide | **high — the core of the work** |
+| 3. Vide host (MVP) | static lowering, runtime `className` resolution, rem. No variants | **done** |
+| 4. Reactive boundary | arrow unwrap, thunked tests, hover/pressed/focused, opacity context, margin/divide | **done** |
 
 Deferred past v1: motion (`transition-*`, `animate-*`) on a Vide `spring()` driver;
 static analysis of `className` inside `<Show>`/`<For>`/`<Index>`/`<Switch>`; the
@@ -195,3 +195,82 @@ and ported to Vide, against a prototype of the Vide runtime in
   directory holds every scope package any workspace member pulled. `apps/vide-harness`
   copies only its own transitive `@rbxts` dependencies for this reason; consumer-facing
   docs will need the same warning.
+
+## 7. Phase 1–2 results
+
+The seam and the split both landed as designed, and both were proven to be no-ops
+before anything Vide-specific was built on them.
+
+- `EmitTarget` (`transform/target/`) carries seven methods. `rem_binding` is gone, as
+  phase 0 predicted; `class_value_is_deferred` is new, because the arrow unwrap turned
+  out to belong to the target rather than to `class_value/`.
+- The React path was proven unchanged **byte for byte**: ten transform cases compared
+  against the pre-refactor output.
+- The runtime split is `@rbxts/vela-runtime-core` (neutral) with `@rbxts/vela-runtime`
+  and `@rbxts/vela-runtime-vide` on top. 678 declarations were checked for a home; the
+  React host came out at 827 lines from 5797.
+
+**Found, not in the original design.** "45 React call sites" was the wrong measure of
+coupling. Three pieces called no React API and were still React-shaped:
+
+- `composeEvent` nests handlers under an `Event` table, which is `@rbxts/react`'s
+  spelling. A Vide binding connects to the signal directly. Core grew neutral
+  `hoverTracking` / `activeTracking` / `focusTracking` binding lists instead.
+- `@rbxts/react` prepends the instance to handler arguments, so the active tracker read
+  its `InputObject` from `args[1]`. Connected straight to the signal it arrives at
+  `args[0]`. `hover:` hid this by ignoring its arguments entirely.
+- `prepareMarginWrapper` hands the layout props over by mutating a description React
+  creates from later. Vide applies props as it builds, so the handover has to happen
+  before the instance exists or both carry them.
+
+Anything moved to core is now worth re-reading for the same shape rather than for an
+import.
+
+## 8. Phase 3–4 results
+
+Everything below was measured running in Studio, against the emit the transformer
+produces for `framework: "vide"` — not a hand-port.
+
+**Confirmed.** Static lowering, derivable class values (ternary, template remainder,
+dictionary), rem on both the static and the host path, `hover:`, `active:`, `focus:`,
+`md:`, `dark:`, inherited opacity across a component boundary, `m-*` wrappers,
+`divide-*` separators, and helpers a rule brings into existence.
+
+**Found, not in the original design**
+
+- **Helpers cannot be built lazily.** The plan said the host would create and destroy a
+  conditional helper imperatively. Vide's `assert_stable_scope` refuses to open a
+  reactive scope inside another, and an instance with a thunked prop opens one — so a
+  helper built inside the children effect throws. Every tag any rule could ask for is
+  built up front instead, and the children thunk returns the subset the resolution
+  currently names. Vide unparents the rest. `hover:rounded-lg` costs one UICorner that
+  spends most of its life detached.
+- **A helper's props follow the resolution, not the snapshot.** Built once from the
+  untracked snapshot they freeze — and at creation the viewport is still 1×1, so rem
+  freezes at a ratio of 1. This is invisible under a variant probe, because the variant
+  reads the same environment under test; it took a derivable class value to surface.
+- **A composer needs the element's own props.** `applyComposedResolution` fills the axis
+  a rule left out from `hostProps.Size`. The React host seeds that table with the
+  element's statics; the Vide host started from an empty one, so `md:w-1/2` beside a
+  static `h-6` resolved to a height of zero. Position and AnchorPoint compose the same
+  way.
+- **Rule effects can name a prop no instance has.** `md:w-1/2` writes `SizeX`, which the
+  composers fold into `Size`. Bound straight through it reaches the instance and
+  `SizeX is not a valid member of Frame` takes the tree down.
+- **`__velaMargin` and `__velaDivide` are the host's own props.** Left in the static
+  passthrough they land on the instance and throw.
+- Vide hands a component its children as the node itself, or as a plain array when
+  there is more than one. Divide has to open those arrays — but only the plain ones, as
+  an action is a table too and it is the metatable that tells them apart.
+
+**Verification note.** `apps/*/node_modules/@rbxts/vela-runtime-*` is a copy the
+materialize script makes, not a symlink. Rebuilding a runtime package and then running
+`rbxtsc` alone leaves that copy stale, and Studio keeps serving the old runtime through
+a reconnect. The order is: build the runtime, materialize, `rbxtsc`, restart `rojo`.
+
+**Still open**
+
+- Motion (`transition-*`, `animate-*`) on a Vide `spring()` driver — deferred past v1.
+- `className` inside `<Show>` / `<For>` / `<Index>` / `<Switch>` is not analyzed.
+- `@rbxts/vela-runtime-core` and `@rbxts/vela-runtime-vide` are new npm packages and
+  need their own OIDC trusted publishers configured before the next release.
