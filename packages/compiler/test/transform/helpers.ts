@@ -1,17 +1,22 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+
 import { defineConfig, plugin } from "../../../config/src/index";
 
 // The runtime host ships as its own package, so what it resolves is asserted
 // against its source rather than against a copy inlined into the emit. Most of
 // what resolves a class value lives in the framework-neutral core the host is
 // built on, and which of the two holds a given branch is not what these
-// assertions are about.
+// assertions are about — so the core is read whole, module by module.
+const coreDirectory = new URL("../../../runtime-core/src/", import.meta.url);
 export const runtimeSource = [
-	new URL("../../../runtime/src/index.ts", import.meta.url),
-	new URL("../../../runtime-core/src/index.ts", import.meta.url),
-]
-	.map((url) => readFileSync(url, "utf8"))
-	.join("\n");
+	readFileSync(
+		new URL("../../../runtime/src/index.ts", import.meta.url),
+		"utf8",
+	),
+	...readdirSync(coreDirectory)
+		.filter((entry) => entry.endsWith(".ts"))
+		.map((entry) => readFileSync(new URL(entry, coreDirectory), "utf8")),
+].join("\n");
 
 // Preflight would put its own background props on every element, which hides
 // what a token-resolution test is actually asserting.

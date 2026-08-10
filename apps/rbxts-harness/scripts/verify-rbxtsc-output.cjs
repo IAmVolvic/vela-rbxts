@@ -51,22 +51,32 @@ const runtimeSource = fs.readFileSync(runtimeLuauPath, "utf8");
 // The React host and the framework-neutral core it is built on. Which of the
 // two a given behavior lands in is an implementation detail, so what the
 // runtime must do is asserted against the pair; what it must not do, and the
-// register budget, are asserted against each.
-const runtimeCoreLuauPath = path.join(
+// register budget, are asserted against each. The core is a folder of modules,
+// and each of those is its own script with its own register file.
+const runtimeCoreOut = path.join(
 	projectRoot,
 	"node_modules",
 	"@rbxts",
 	"vela-runtime-core",
 	"out",
-	"init.luau",
 );
-const runtimeCoreSource = fs.readFileSync(runtimeCoreLuauPath, "utf8");
-const runtimeModules = `${runtimeSource}\n${runtimeCoreSource}`;
+const runtimeCoreModules = fs
+	.readdirSync(runtimeCoreOut)
+	.filter((entry) => entry.endsWith(".luau"))
+	.sort()
+	.map((entry) => [
+		`the runtime core's ${entry}`,
+		fs.readFileSync(path.join(runtimeCoreOut, entry), "utf8"),
+	]);
+const runtimeModules = [
+	runtimeSource,
+	...runtimeCoreModules.map(([, text]) => text),
+].join("\n");
 
 // The default theme rides along with the core as its own module, so no
 // emitted file has to carry a palette it did not change.
 const runtimeDefaults = fs.readFileSync(
-	path.join(path.dirname(runtimeCoreLuauPath), "config-defaults.json"),
+	path.join(runtimeCoreOut, "config-defaults.json"),
 	"utf8",
 );
 
@@ -393,7 +403,7 @@ for (const check of requiredRuntimePatterns) {
 for (const [label, text] of [
 	["emitted Luau", source],
 	["the runtime module", runtimeSource],
-	["the runtime core module", runtimeCoreSource],
+	...runtimeCoreModules,
 ]) {
 	for (const check of forbiddenLoweringPatterns) {
 		if (check.pattern.test(text)) {
@@ -410,7 +420,7 @@ const REGISTER_BUDGET = 120;
 for (const [label, text] of [
 	["emitted Luau", source],
 	["the runtime module", runtimeSource],
-	["the runtime core module", runtimeCoreSource],
+	...runtimeCoreModules,
 ]) {
 	const peak = peakLocalRegisters(text);
 

@@ -207,7 +207,27 @@ mod tests {
     /// The host package is what the preamble names; everything the emit is
     /// resolved against lives in the core both host runtimes are built on.
     const RUNTIME_SOURCE: &str = include_str!("../../../runtime/src/index.ts");
-    const RUNTIME_CORE_SOURCE: &str = include_str!("../../../runtime-core/src/index.ts");
+
+    /// The core ships as a folder of modules, so the guard reads the whole of
+    /// it. Naming the files instead would cover a family until the day one
+    /// moves to a module this list never learned about.
+    fn runtime_core_source() -> String {
+        let directory =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime-core/src");
+        let mut modules = std::fs::read_dir(directory)
+            .expect("the runtime core's sources must be readable")
+            .map(|entry| {
+                entry
+                    .expect("each runtime core source must be readable")
+                    .path()
+            })
+            .filter(|path| path.extension().is_some_and(|extension| extension == "ts"))
+            .map(|path| std::fs::read_to_string(path).expect("a runtime core module must read"))
+            .collect::<Vec<_>>();
+
+        modules.sort();
+        modules.join("\n")
+    }
 
     /// forwardRef alone pins one ref type for every tag, which types every
     /// consumer ref as `unknown`; the generic restatement is what keeps `ref`
@@ -249,8 +269,10 @@ mod tests {
     /// wrong color rather than as a build failure.
     #[test]
     fn the_runtime_reads_the_defaults_this_crate_diffs_against() {
+        let runtime_core_source = runtime_core_source();
+
         assert!(
-            RUNTIME_CORE_SOURCE.contains("from \"./config-defaults.json\""),
+            runtime_core_source.contains("from \"./config-defaults.json\""),
             "the runtime core must read the shared defaults, not a copy of its own"
         );
 
@@ -269,6 +291,7 @@ mod tests {
     /// tree dies rather than the one prop.
     #[test]
     fn the_runtime_parses_every_value_constructor_the_emit_can_write() {
+        let runtime_core_source = runtime_core_source();
         const CONSTRUCTORS: [&str; 11] = [
             "new UDim(",
             "new UDim2(",
@@ -285,7 +308,7 @@ mod tests {
 
         for constructor in CONSTRUCTORS {
             assert!(
-                RUNTIME_CORE_SOURCE.contains(&format!("\"{constructor}\"")),
+                runtime_core_source.contains(&format!("\"{constructor}\"")),
                 "runtime core never parses a `{constructor}` prop value"
             );
         }
@@ -295,9 +318,11 @@ mod tests {
     /// silent: a `className` that arrives as a value simply renders without it.
     #[test]
     fn the_runtime_host_matches_every_static_utility_prefix() {
+        let runtime_core_source = runtime_core_source();
+
         for (prefix, _) in UTILITY_PREFIXES {
             assert!(
-                RUNTIME_CORE_SOURCE.contains(&format!("\"{prefix}\"")),
+                runtime_core_source.contains(&format!("\"{prefix}\"")),
                 "runtime core never matches the \"{prefix}\" family"
             );
         }
