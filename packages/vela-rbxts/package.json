@@ -73,8 +73,8 @@
   },
   "peerDependencies": {
     "@rbxts/react": "^17.3.7-ts.1",
-    "@rbxts/vela-runtime": "workspace:*",
-    "@rbxts/vela-runtime-vide": "workspace:*",
+    "@rbxts/vela-runtime": ">=0.11.1",
+    "@rbxts/vela-runtime-vide": ">=0.11.1",
     "@rbxts/vide": "^0.6.1"
   },
   "peerDependenciesMeta": {
