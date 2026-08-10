@@ -1,5 +1,250 @@
 # @vela-rbxts/compiler
 
+## 0.12.0
+
+### Minor Changes
+
+- 7a9fde7: Ship the runtime as `@rbxts/vela-runtime` instead of copying it into every file.
+
+  The runtime resolver used to be inlined whole into every module that needed it. A
+  place with ten components that use a variant carried ten copies of the same 5,500
+  lines, and each copy ran its own camera subscription, its own rem binding and its
+  own React context. In the reference app one `App.luau` was 190,260 bytes, of which
+  about 167,000 was the runtime.
+
+  It is now one ModuleScript the whole place shares, and a transformed module gets
+  an import and the config it hands the host:
+
+  ```ts
+  import { createVelaRuntimeHost } from "@rbxts/vela-runtime";
+  const VelaRuntimeHost = createVelaRuntimeHost({
+    /* … */
+  });
+  ```
+
+  That same `App.luau` is 43,187 bytes — 22.7% of what it was — and the runtime is
+  166,682 bytes once, however many files reach it.
+
+  **Setup is unchanged.** The package installs as a dependency of `vela-rbxts`, and
+  it sits under the `@rbxts` scope on purpose: roblox-ts only resolves a package
+  whose scope directory is one of the project's `typeRoots`, and `node_modules/@rbxts`
+  is the one every roblox-ts project already lists and every Rojo template already
+  maps. Nothing to add to `tsconfig.json`, nothing to add to the Rojo project.
+
+  Three things the inlined shape had forced:
+
+  - `__VelaOpacity` kept its React context and provider on `_G`, because a
+    `createContext` per copy made one context per module and the alpha could never
+    cross a component boundary. The context is now simply created once.
+  - `__VelaRem` opened a `CurrentCamera` subscription per module. One now.
+  - The emit numbers rem slots from zero in each file, so the slot table moved out
+    of the namespace and onto a per-module scaler (`createVelaRemScaler`) — a shared
+    table would have handed one module the binding its neighbour built.
+
+  The motion driver still resolves from the transformed module rather than from the
+  package, so a `plugins.motion.module` specifier keeps the rule it always had: a
+  package name or a `baseUrl`-relative path, never a relative one. The specifier no
+  longer travels to the runtime in the config, which never read it.
+
+- 7a9fde7: Resolve a class value's known branches at compile time.
+
+  `active ? "text-lg" : "text-sm"` names every token it can ever apply — only which
+  of them apply is undecided — but the whole class value used to travel to the
+  runtime resolver, which parses a subset of the utility set. `text-lg` is not in
+  that subset, so neither size ever reached the instance.
+
+  Those branches are now resolved by the compiler, through the same call the static
+  path makes, and the element is handed the resolved props alongside the tests that
+  decide them. It still renders through the runtime host, because something has to
+  read the tests, but nothing is parsed in-game:
+
+  - the full utility set applies inside a branch, not the runtime resolver's prefixes
+  - a bad utility written in a branch now reports a diagnostic instead of vanishing
+  - a variant inside a branch answers to both, as `hover:` **and** the branch's test
+  - each test is evaluated exactly once, however many branches hang on it
+
+  It reads ternaries, `&&`, the literal behind `||`, arrays, and object maps, and it
+  resolves a branch among the tokens written around it — so `["w-40", tall && "h-10"]`
+  is one `Size` rather than a branch that overwrites the width.
+
+  A branch naming `m-*`, `divide-*`, `animate-*`, `transition*`, a text transform or
+  `opacity-*` still takes the whole class value down the runtime path unchanged:
+  the runtime host reads those off its own props rather than off the resolution.
+
+  Two fixes that predate branches came with it, both on the rule path:
+
+  - A base helper a variant rule overwrote (`p-4 hover:p-8`) was emitted as a child
+    _and_ resolved by the host, leaving two `UIPadding` under one instance. The base
+    helper now joins the resolution, where the two merge by tag.
+  - A rule carries its prop values as source text and the runtime parses them back,
+    but the parser did not know `Vector2`, `ColorSequence` or `Font` — so
+    `md:min-w-16`, `md:bg-gradient-to-r` and `md:font-bold` assigned a string to a
+    Roblox property, which React rejects by tearing down the whole tree. It now
+    parses every constructor the emit can write.
+
+- 7a9fde7: Add `theme.rem`, so every pixel offset a utility lowers follows the viewport.
+
+  `p-4`, `w-40`, `rounded-lg`, `text-sm`, `border-2` and `top-2` are now rem units
+  rather than raw pixels: one rem is 16px at a 1920×1020 viewport and scales from
+  there, so the same class list reads at the same visual weight on a phone, a
+  laptop and a 4K monitor. The curve follows Littensy's rem provider — the viewport
+  diagonal against `baseResolution`, capped at a 19:9 aspect ratio, with a gentler
+  falloff in portrait — rounded and clamped into `[min, max]`. No provider, hook or
+  wrapper component is involved.
+
+  `base`, `min`, `max` and `baseResolution` are configurable, and `rem` merges
+  field by field rather than replacing the family, so naming only `min` leaves the
+  rest at their defaults.
+
+  This changes rendering on any viewport other than the base resolution. To keep
+  the previous literal-pixel behavior, close the clamp:
+
+  ```ts
+  export default defineConfig({
+    theme: { rem: { min: 16, max: 16 } },
+  });
+  ```
+
+  With the clamp closed on `base` the compiler drops the scaling from the emit
+  entirely — offsets lower to plain `UDim2`/`UDim` literals with no binding and no
+  runtime import. Pinning somewhere other than `base` is still a scale, by a
+  constant ratio, so it keeps the binding. An inverted clamp collapses onto `min`.
+
+  Scale-valued utilities are untouched: `w-full`, `h-1/2` and `translate-x-1/2`
+  stay fractions of the parent.
+
+  `TextSize` stops at 100, which is where Roblox itself stops honoring it. On a
+  large viewport `text-6xl` and up land on that ceiling rather than tweening
+  toward a size the engine never paints.
+
+- 7a9fde7: Lower the `/N` color opacity modifier on every family that has a transparency
+  channel.
+
+  `bg-blue-600/50` already worked; `border-slate-500/25`, `divide-white/10` and the
+  gradient stops did not. `border-*` reported the modifier as a missing theme key,
+  and the rest reported `unsupported-opacity-modifier` — so a class list carried
+  over from Tailwind lost exactly the alpha it was written for.
+
+  Each family now lowers the modifier to the channel Roblox actually gives it:
+
+  - `border-{color}/N` → `UIStroke.Transparency`
+  - `divide-{color}/N` → the separator frames' `BackgroundTransparency`
+  - `from-*/N`, `via-*/N`, `to-*/N` → a `UIGradient.Transparency` sequence whose
+    keypoints line up with the color stops, so one faded stop does not fade the
+    others
+
+  The runtime resolver reads the same modifiers off a dynamic class value, and the
+  prop parser learned `NumberSequence`, which a variant bundle needs to restate a
+  faded gradient.
+
+  `placeholder-*` is the one family left: Roblox has no placeholder transparency,
+  and fading the text itself would take the typed value with it. It still reports
+  `unsupported-opacity-modifier`, now with a message that says why.
+
+  Editor surfaces follow: a `/N` token gets its swatch and hover back instead of
+  being read as a theme key that does not exist.
+
+- 7a9fde7: Send the theme as what a project changed, not as the whole palette.
+
+  A module that hands the runtime host a class value to parse — `className={cn(…)}`,
+  a spread that might carry one, a plugin utility resolved at render time — used to
+  carry the entire theme so the parser could read it. Most of that is the default
+  Tailwind palette, which is the same table in every such module in every project.
+  In the reference app it was 15,950 bytes of a 43,187-byte `App.luau`: 37% of the
+  file, and the runtime re-parsed all of it into `Color3` values once per module.
+
+  `@rbxts/vela-runtime` now carries the defaults itself, copied at build time from
+  the same `packages/config/src/defaults.json` the compiler diffs against, and the
+  emit sends only the entries that differ:
+
+  ```lua
+  theme = { colors = {}, radius = {}, spacing = {}, fontFamily = {}, rem = { … } }
+  ```
+
+  That `App.luau` is now 27,912 bytes, and the emitted config within it went from
+  15,950 to 675.
+
+  What travels scales with what you changed, not with the size of the palette:
+
+  - an untouched scale sends nothing at all
+  - `theme.extend.colors.brand` sends `brand`
+  - overriding one shade sends that whole color family, so the shades around it
+    survive the family-level merge
+  - a top-level `theme.colors`, which **replaces** the scale rather than extending
+    it, sends the table whole and names it in `theme.replaced` — otherwise the
+    runtime would merge the defaults back under it and resurrect colors the
+    project deliberately dropped
+
+  A module that parses no class value still sends empty tables, now marked
+  replaced so the runtime uses them as given instead of falling back on its
+  defaults — the same behaviour as before, and it keeps that module from
+  normalizing a palette it never reads.
+
+### Patch Changes
+
+- 4fbd38d: Hand a branched `opacity-*` back to the runtime host.
+
+  A bare `opacity-*` fades the element's subtree as well as the element, and
+  the subtree wrapper is built from the tokens that always apply — a branch is
+  not among them. Lowered as a rule the branch painted the element's own
+  transparency and the subtree never learned about the alpha.
+
+  A class value with a branch naming an opacity now goes back to the runtime
+  host, which resolves it and hands the subtree one alpha. A CanvasGroup stays
+  on the rule path — `GroupTransparency` composites its subtree by itself — and
+  an opacity written beside a branch stays as static as it ever was.
+
+- 6b06e22: Tell the Vide host a margin is coming.
+
+  A margin box is an instance _above_ the element, and Vide parents an element as
+  soon as it builds one — so a `m-*` the runtime resolved could never be honoured.
+  No rule can carry a margin either, which is exactly why such a class value goes
+  to the runtime whole.
+
+  But the compiler read the token on its way to that decision. It says so now:
+  a class value naming a margin anywhere this pass can see — a static token, a
+  branch's — emits `__velaMarginBox`, and the host builds the box before the
+  element rather than after. `EmitTarget::needs_margin_box_hint` is what asks, and
+  React answers `false`: the render that resolves a margin also renders the
+  wrapper around it, so the hint would only be a prop with no reader.
+
+  What is left is a margin named where nothing can read it — a token arriving out
+  of an opaque call — and the runtime warns there rather than rendering unspaced.
+
+- 7a9fde7: Drop the theme scales from a file the runtime never parses a class against.
+
+  The inlined runtime host carried the whole resolved config — every color scale,
+  every radius, spacing and font-family key, and the plugin utility table. That is
+  about 19KB of the emit, and the host only ever reads it while parsing a class
+  value it was handed at render time.
+
+  Most files hand it none. A variant, a branch, a text transform, a margin, a
+  divide or a preset animation reaches the host through props the compiler already
+  resolved, and the tables sit there unread. Those files now inline the config with
+  its scales emptied, which is roughly 400 bytes instead of 19KB.
+
+  A file that does hand the host a class value — a `className` bound to a value the
+  compiler cannot read — keeps the full tables, and so does one whose host takes a
+  spread, since a spread can carry a `className` this pass never sees. `preflight`,
+  `theme.rem` and the motion driver stay either way; the host reads those whatever
+  it renders.
+
+  Nothing about what a class resolves to changes.
+
+- 5a31e51: Read editor descriptions in rem now that offsets scale with the viewport.
+
+  Hover and completion docs still spoke in the units rem retired: `p-4` showed
+  `new UDim(0, 16)`, `border-2` a bare `2`, `-translate-y-2` "8 pixels". With
+  scaling active none of those numbers is what actually renders — they are only
+  the value at `baseResolution`.
+
+  A viewport-scaled offset now reads as its rem value first — `` `1rem` (16px at
+the base viewport)`` — across padding, gap, margin, sizes, positions, radius,
+  text size, stroke and separator thickness, and scrollbar width, in hovers and
+  completion docs alike. The shadow preset hover names `BlurRadius` as the value
+  that follows the viewport. A config that pins rem (`min = max = base`) keeps
+  the old pixel wording, matching the emit it produces.
+
 ## 0.11.1
 
 ### Patch Changes
