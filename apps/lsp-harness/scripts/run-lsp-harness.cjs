@@ -4,6 +4,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const REQUEST_TIMEOUT_MS = 15000;
+const EXIT_TIMEOUT_MS = 5000;
 const COMPLETION_KIND_COLOR = 16;
 
 const root = path.join(__dirname, "..");
@@ -612,26 +613,36 @@ async function main() {
 	notify("exit");
 }
 
+// The stdin the server reads stays open, so what ends the process has to be the
+// notification rather than the pipe closing behind it.
+function waitForServerExit() {
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => {
+			failures.push("the server should exit on the exit notification");
+			child.kill();
+			resolve();
+		}, EXIT_TIMEOUT_MS);
+		timer.unref();
+		child.on("exit", (code) => {
+			clearTimeout(timer);
+			if (code !== 0) {
+				failures.push(`the server should exit cleanly; got code ${code}`);
+			}
+			resolve();
+		});
+	});
+}
+
 main()
 	.catch((error) => {
 		failures.push(error.message);
 	})
-	.finally(() => {
-		setTimeout(() => {
-			child.kill();
-			if (failures.length > 0) {
-				console.error(failures.join("\n"));
-				process.exit(1);
-			}
-			console.log("lsp-harness: all checks passed");
-			process.exit(0);
-		}, 200).unref();
-		child.on("exit", () => {
-			if (failures.length > 0) {
-				console.error(failures.join("\n"));
-				process.exit(1);
-			}
-			console.log("lsp-harness: all checks passed");
-			process.exit(0);
-		});
+	.finally(async () => {
+		await waitForServerExit();
+		if (failures.length > 0) {
+			console.error(failures.join("\n"));
+			process.exit(1);
+		}
+		console.log("lsp-harness: all checks passed");
+		process.exit(0);
 	});
