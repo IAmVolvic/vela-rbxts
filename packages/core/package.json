@@ -1,6 +1,6 @@
 {
   "name": "@vela-rbxts/core",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "type": "module",
   "description": "Semantic boundary and supported Roblox host element contracts for vela-rbxts.",
   "license": "MIT",

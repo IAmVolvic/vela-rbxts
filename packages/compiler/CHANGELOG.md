@@ -1,5 +1,53 @@
 # @vela-rbxts/compiler
 
+## 0.12.3
+
+### Patch Changes
+
+- 3c2d451: Fix four ways the editor answered for a document it was reading wrong.
+
+  A config pushed by the editor never arrived. `vela-rbxts/setConfigs` is sent as
+  a notification, and it was wired to a request handler, which tower-lsp drops
+  without a word, so a theme key defined in `vela.config.ts` stayed unknown for
+  the whole session. It is a notification handler now.
+
+  A file that opens with a BOM answered off by one. The source file drops the BOM
+  before it hands out spans, while the offsets travel back over a document that
+  still has it, so every diagnostic, hover and color swatch sat one character to
+  the left of the class it was about.
+
+  Completing inside a variant chain deleted the utility behind it. `hover:` typed
+  over in `hover:bg-slate-700` replaced the whole token, so accepting an item left
+  the utility gone. The segment under the cursor is the only part a completion may
+  rewrite now, and the quick fix that offers completions for a diagnostic asks at
+  the utility rather than at the token start.
+
+  Sorting scrambled a class value whose bracket never closes. The pieces either
+  side of an unclosed `[` are not independent classes, and moving them apart
+  rewrote the source into something else; such a value is left alone.
+
+- 3c2d451: Read a class the way it is written rather than the way whitespace splits it.
+
+  Two shapes were reported as broken while being perfectly ordinary. A template
+  interpolation splices into the class beside it, so `` `w-[${width}]` `` reaches
+  the editor as `w-[` and `]`, and both were analyzed as if they were whole
+  classes: one unknown theme key and one unsupported family for a class the
+  compiler defers to the runtime untouched. A token an interpolation cuts into is
+  left alone now; a token that merely sits next to one, with a space between, is
+  checked as before.
+
+  The second shape was not editor-only. Whitespace inside an arbitrary value split
+  it into pieces, so `w-[calc(100% - 4px)]` was read as `w-[calc(100%`, `-` and
+  `4px)]`, and both the editor and the compiler reported three diagnostics about
+  fragments instead of one about the value. Whitespace stops separating classes
+  between a `[` and the `]` that closes it. A bracket that never closes still
+  splits, so the classes written behind a typo go on applying, and sorting moves
+  such a value as the one class it is rather than refusing to touch the value it
+  sits in.
+
+  The runtime splits class strings in Luau rather than in the compiler, so it
+  carries the same rule: a static class and a deferred one tokenize alike.
+
 ## 0.12.2
 
 ### Patch Changes

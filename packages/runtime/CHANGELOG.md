@@ -1,5 +1,12 @@
 # @vela-rbxts/runtime
 
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [3c2d451]
+  - @rbxts/vela-runtime-core@0.12.3
+
 ## 0.12.2
 
 ### Patch Changes
