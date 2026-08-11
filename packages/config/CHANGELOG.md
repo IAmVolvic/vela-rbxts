@@ -1,5 +1,11 @@
 # @vela-rbxts/config
 
+## 0.12.4
+
+### Patch Changes
+
+- @vela-rbxts/types@0.12.4
+
 ## 0.12.3
 
 ### Patch Changes
