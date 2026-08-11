@@ -547,6 +547,33 @@ async function main() {
 		"a BOM should not shift hover ranges",
 	);
 
+	const bracketsFixture = openFixture("Brackets.tsx");
+	const bracketDiagnostics = await waitForDiagnostics(bracketsFixture.uri);
+	check(
+		!bracketDiagnostics.some((entry) =>
+			["w-[", "]"].includes(entry.data?.token),
+		),
+		"an arbitrary value a template interpolation splices into should not be reported",
+	);
+	const bracketActions = await request("textDocument/codeAction", {
+		textDocument: { uri: bracketsFixture.uri },
+		range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+		context: { diagnostics: [], only: ["source.sortVelaClasses"] },
+	});
+	const bracketEdits =
+		(bracketActions ?? []).find((action) => action.kind === "source.sortVelaClasses")
+			?.edit?.changes?.[bracketsFixture.uri] ?? [];
+	check(
+		bracketEdits.some(
+			(edit) => edit.newText === "w-[calc(100% - 4px)] px-4 hover:px-2",
+		),
+		"sorting should move an arbitrary value written with spaces without breaking it",
+	);
+	check(
+		bracketEdits.some((edit) => edit.newText === "w-[120px] px-4 hover:px-2"),
+		"sorting should still reorder a value whose arbitrary values are balanced",
+	);
+
 	// The editor pushes configs as a notification, so the server has to accept it
 	// as one.
 	const configFixture = openFixture("Config.tsx");

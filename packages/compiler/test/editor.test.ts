@@ -346,6 +346,31 @@ test("a class an interpolation splices into is left to the runtime", () => {
 	}
 });
 
+test("reads an arbitrary value across the whitespace inside it", () => {
+	const source = '<frame className="hover:px-2 w-[calc(100% - 4px)] px-4" />';
+	const start = source.indexOf("w-[");
+
+	expect(getDiagnostics({ source }).diagnostics).toEqual([
+		expect.objectContaining({
+			code: "unsupported-arbitrary-value",
+			token: "w-[calc(100% - 4px)]",
+			range: { start, end: start + "w-[calc(100% - 4px)]".length },
+		}),
+	]);
+});
+
+test("a bracket that never closes still separates the classes behind it", () => {
+	const source = '<frame className="w-[calc(100% rotate-17" />';
+
+	expect(getDiagnostics({ source }).diagnostics).toEqual([
+		expect.objectContaining({ token: "w-[calc(100%" }),
+		expect.objectContaining({
+			code: "unsupported-rotation-value",
+			token: "rotate-17",
+		}),
+	]);
+});
+
 test("a token an interpolation only neighbours is still checked", () => {
 	const source = `<frame className={\`rotate-17 \${flag} blorb-2\`} />`;
 
@@ -1649,6 +1674,13 @@ test("sorts a plugin utility ahead of the utilities that override it", () => {
 
 	expect(result.edits[0].text).toBe("btn p-4 bg-slate-700");
 });
+
+test("sorts an arbitrary value written with spaces as the one class it is", () => {
+	const result = sortClassNames({
+		source: '<frame className="hover:px-2 w-[calc(100% - 4px)] px-4" />',
+	});
+
+	expect(result.edits[0].text).toBe("w-[calc(100% - 4px)] px-4 hover:px-2");
 });
 
 test("leaves a class value alone when a bracket never closes", () => {

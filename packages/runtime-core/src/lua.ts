@@ -74,14 +74,49 @@ export namespace __VelaLua {
 		return substring(value, start, stop);
 	}
 
+	/// The index just past the `]` closing the `[` at `open`, when one closes it.
+	/// A bracket left open is not an arbitrary value, so the whitespace behind it
+	/// goes on separating classes.
+	function arbitraryValueEnd(
+		value: string,
+		open: number,
+		length: number,
+	): number | undefined {
+		let depth = 0;
+
+		for (let index = open; index < length; index++) {
+			const character = substring(value, index, index + 1);
+			if (character === "[") {
+				depth += 1;
+			} else if (character === "]") {
+				depth -= 1;
+				if (depth === 0) {
+					return index + 1;
+				}
+			}
+		}
+
+		return undefined;
+	}
+
+	/// Whitespace separates classes, except where it sits inside an arbitrary
+	/// value: `w-[calc(100% - 4px)]` is one class written with spaces.
 	export function splitWhitespace(value: string): string[] {
 		const tokens: string[] = [];
 		let tokenStart: number | undefined;
+		let joinedUntil = 0;
 		const length = stringLength(value);
 
 		for (let index = 0; index < length; index++) {
 			const character = substring(value, index, index + 1);
-			if (isWhitespace(character)) {
+			if (character === "[" && index >= joinedUntil) {
+				const closed = arbitraryValueEnd(value, index, length);
+				if (closed !== undefined) {
+					joinedUntil = closed;
+				}
+			}
+
+			if (isWhitespace(character) && index >= joinedUntil) {
 				if (tokenStart !== undefined) {
 					tokens.push(substring(value, tokenStart, index));
 					tokenStart = undefined;
