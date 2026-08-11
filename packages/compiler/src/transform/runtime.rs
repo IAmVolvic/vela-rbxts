@@ -328,12 +328,12 @@ struct PendingAxes {
     animation: Option<&'static str>,
     text_transform: Option<&'static str>,
     text_decoration: Option<&'static str>,
+    /// Signed, and one slot per side, so the last margin written to a side is
+    /// the one that lands whichever way it points.
     margin_top: Option<f64>,
     margin_right: Option<f64>,
     margin_bottom: Option<f64>,
     margin_left: Option<f64>,
-    margin_shift_x: f64,
-    margin_shift_y: f64,
     divide_axis: Option<&'static str>,
     divide_thickness: Option<f64>,
     divide_color: Option<String>,
@@ -384,8 +384,12 @@ impl PendingAxes {
             );
         }
 
-        let position_x = shift_position_axis(self.position_x, shift_x + self.margin_shift_x);
-        let position_y = shift_position_axis(self.position_y, shift_y + self.margin_shift_y);
+        // UIPadding cannot go negative, so a margin that points the other way
+        // moves the element instead.
+        let position_x =
+            shift_position_axis(self.position_x, shift_x + margin_shift(self.margin_left));
+        let position_y =
+            shift_position_axis(self.position_y, shift_y + margin_shift(self.margin_top));
         if position_x.is_some() || position_y.is_some() {
             style.set_prop("Position", format_udim2_prop(position_x, position_y));
         }
@@ -499,16 +503,16 @@ impl PendingAxes {
             style.animation = Some(animation.to_owned());
         }
 
-        if self.margin_top.is_some()
-            || self.margin_right.is_some()
-            || self.margin_bottom.is_some()
-            || self.margin_left.is_some()
-        {
+        let top = margin_padding(self.margin_top);
+        let right = margin_padding(self.margin_right);
+        let bottom = margin_padding(self.margin_bottom);
+        let left = margin_padding(self.margin_left);
+        if top.is_some() || right.is_some() || bottom.is_some() || left.is_some() {
             style.margin = Some(MarginSpec {
-                top: self.margin_top.unwrap_or(0.0),
-                right: self.margin_right.unwrap_or(0.0),
-                bottom: self.margin_bottom.unwrap_or(0.0),
-                left: self.margin_left.unwrap_or(0.0),
+                top: top.unwrap_or(0.0),
+                right: right.unwrap_or(0.0),
+                bottom: bottom.unwrap_or(0.0),
+                left: left.unwrap_or(0.0),
             });
         }
 
@@ -1048,11 +1052,13 @@ fn apply_spacing_token(
                 };
 
                 if negative {
-                    // UIPadding cannot go negative, and a negative right/bottom
-                    // margin would have to pull the *next* sibling closer.
+                    // A negative right/bottom margin would have to pull the
+                    // *next* sibling closer, which nothing here can reach.
+                    // Subtracted rather than negated so a `-m*-0` lands on `0`
+                    // rather than on `-0`, which is a side pointing nowhere.
                     match axis {
-                        PaddingKind::Top => pending.margin_shift_y -= offset,
-                        PaddingKind::Left => pending.margin_shift_x -= offset,
+                        PaddingKind::Top => pending.margin_top = Some(0.0 - offset),
+                        PaddingKind::Left => pending.margin_left = Some(0.0 - offset),
                         _ => diagnostics
                             .push(unsupported_negative_margin_diagnostic(&analysis.parsed.raw)),
                     }
@@ -2216,6 +2222,17 @@ fn split_translate_axis(value: Option<SizeAxisValue>) -> (Option<String>, f64) {
     let anchor = (scale.abs() >= 1e-9).then(|| format_translate_number(-scale));
     let shift = value.offset.parse::<f64>().unwrap_or(0.0);
     (anchor, shift)
+}
+
+/// The part of a side's margin UIPadding can carry. A side left pointing the
+/// other way contributes nothing here, which is what keeps it from writing a
+/// padding of zero over the position it moved the element to.
+fn margin_padding(side: Option<f64>) -> Option<f64> {
+    side.filter(|offset| *offset >= 0.0)
+}
+
+fn margin_shift(side: Option<f64>) -> f64 {
+    side.filter(|offset| *offset < 0.0).unwrap_or(0.0)
 }
 
 fn shift_position_axis(axis: Option<SizeAxisValue>, shift: f64) -> Option<SizeAxisValue> {

@@ -290,6 +290,41 @@ test("negative top and left margins shift Position instead of wrapping", () => {
 	expect(result.code).not.toContain("__velaMargin");
 });
 
+test("a side takes the last margin written to it, whichever way it points", () => {
+	// Two classes on one side used to land on separate accumulators and both
+	// apply, which made the order they were written in stop mattering.
+	const repeated = transform(
+		`export const A = () => <frame className="-ml-2 -ml-2" />;`,
+		null,
+	);
+	expect(repeated.code).toMatch(/UDim2\.fromOffset\(-8, 0\)/);
+
+	const negativeLast = transform(
+		`export const A = () => <frame className="ml-4 -ml-2" />;`,
+		null,
+	);
+	expect(negativeLast.code).toMatch(/UDim2\.fromOffset\(-8, 0\)/);
+	expect(negativeLast.code).not.toContain("__velaMargin");
+
+	const positiveLast = transform(
+		`export const A = () => <frame className="-ml-2 ml-4" />;`,
+		null,
+	);
+	expect(positiveLast.code).toMatch(/"left": 16\.0/);
+	expect(positiveLast.code).not.toContain("fromOffset");
+});
+
+test("a negative zero margin closes the side rather than vanishing", () => {
+	const result = transform(
+		`export const A = () => <frame className="ml-4 -ml-0" />;`,
+		null,
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/"left": 0\.0/);
+	expect(result.code).not.toContain("-0.0");
+});
+
 test("rejects inexpressible negative margins and margin auto", () => {
 	const negative = transform(
 		`export const A = () => <frame className="-mb-2 -m-4" />;`,
