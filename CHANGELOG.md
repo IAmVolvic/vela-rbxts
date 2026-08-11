@@ -12,6 +12,9 @@ Versions are released in lockstep across every workspace package.
 ### Fixed
 
 - The LSP server did not exit on the `exit` notification, only on the pipe closing behind it. tower-lsp ends its read loop on end of input and handles `exit` without ending it, so a client that sends the notification and holds stdin open, as one waiting for the process to go away does, was left with a server that never went. Editors mostly close the pipe right after and force-kill on a timeout, which is what kept this out of sight. The stdin the server reads reports end of input right behind the notification now, which is the path tower-lsp already unwinds cleanly.
+- A margin side held two slots rather than one, so neither could overwrite the other. A negative top or left margin cannot be UIPadding and moves the element instead, and that move was accumulated beside the padding the side already had: `-ml-2 -ml-2` shifted by 16 rather than 8, `ml-4 -ml-2` applied a 16 padding *and* an 8 shift, `-ml-2 ml-4` emitted exactly the same thing so the order stopped mattering, and `-ml-0` had nothing to subtract and vanished, leaving the `ml-4` in front of it standing. Each side is one signed slot now: the last margin written to it wins, a side that ends up negative moves the element, and one that ends up positive pads it.
+- Sorting rebuilt a class value by joining its tokens with single spaces, so a class list written across several lines came back as one long line. Only the tokens move now; the whitespace between them is carried over as it was written.
+- `placeholder-transparent` was offered by completion on a `textbox` and then reported as unsupported the moment it was accepted, since Roblox has no placeholder transparency for it to lower to. It is no longer offered; every other family that takes the keyword keeps it.
 
 ## [0.12.3] - 2026-08-11
 
