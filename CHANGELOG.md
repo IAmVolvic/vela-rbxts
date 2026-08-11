@@ -9,6 +9,17 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-08-11
+
+### Fixed
+
+- A class an interpolation splices into was reported as broken. `` `w-[${width}]` `` reaches the editor as `w-[` and `]`, because a template is read one quasi at a time, and both halves were analyzed as whole classes: one unknown theme key and one unsupported family for a class the compiler hands the runtime untouched. A token an interpolation cuts into is left alone now, while a token that merely sits beside one, with a space between, is checked as before.
+- Whitespace inside an arbitrary value split it into pieces, so `w-[calc(100% - 4px)]` was read as `w-[calc(100%`, `-` and `4px)]`. The editor and the compiler both reported three diagnostics about fragments where one about the value was owed. Whitespace stops separating classes between a `[` and the `]` that closes it, in the compiler and in the Luau the runtime splits with, so a static class and a deferred one tokenize alike. A bracket that never closes still splits, which keeps the classes written behind a typo applying, and sorting moves such a value as the one class it is.
+- A config pushed by the editor never arrived. `vela-rbxts/setConfigs` is sent as a notification and was wired to a request handler, which tower-lsp drops without a word, so a theme key defined in `vela.config.ts` stayed unknown for the whole session.
+- A file that opens with a BOM answered one character to the left. The source file drops the BOM before it hands out spans, while the offsets travel back over a document that still has it, which shifted every diagnostic, hover and color swatch off the class it was about.
+- Completing inside a variant chain deleted the utility behind it: accepting an item over `hover:` in `hover:bg-slate-700` replaced the whole token. The segment under the cursor is the only part a completion may rewrite now, and the quick fix that offers completions for a diagnostic asks at the utility rather than at the token start.
+- Sorting scrambled a class value whose bracket never closes. The pieces either side of an unclosed `[` are not independent classes, so moving them apart rewrote the source into something else; such a value is left alone.
+
 ## [0.12.2] - 2026-08-11
 
 ### Fixed
@@ -308,7 +319,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.3...HEAD
+[0.12.3]: https://github.com/astra-void/vela-rbxts/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/astra-void/vela-rbxts/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/astra-void/vela-rbxts/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/astra-void/vela-rbxts/compare/v0.11.1...v0.12.0
