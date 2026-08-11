@@ -9,6 +9,10 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Fixed
+
+- The LSP server did not exit on the `exit` notification, only on the pipe closing behind it. tower-lsp ends its read loop on end of input and handles `exit` without ending it, so a client that sends the notification and holds stdin open, as one waiting for the process to go away does, was left with a server that never went. Editors mostly close the pipe right after and force-kill on a timeout, which is what kept this out of sight. The stdin the server reads reports end of input right behind the notification now, which is the path tower-lsp already unwinds cleanly.
+
 ## [0.12.3] - 2026-08-11
 
 ### Fixed
