@@ -1,4 +1,5 @@
 use crate::api::{ClassNameEdit, SortClassNamesRequest, SortClassNamesResponse};
+use crate::class_token::class_token_ranges;
 use crate::editor::{collect_class_name_contexts, tokenize_class_name_with_ranges};
 use crate::semantic::analyze::analyze_class_token;
 use crate::semantic::utility::{PaddingKind, UtilityKind};
@@ -27,21 +28,29 @@ pub(crate) fn sort_class_names_impl(request: SortClassNamesRequest) -> SortClass
             continue;
         }
 
-        let sorted = order
-            .into_iter()
-            .map(|index| tokens[index].text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        // The space either side of a template's `${}` belongs to the class
-        // value: dropping it would run the neighbouring token into whatever the
-        // interpolation resolves to.
+        // The whitespace is the value's, not the sort's: the space either side of
+        // a template's `${}` keeps the neighbouring token off whatever the
+        // interpolation resolves to, and the line breaks a wrapped class list is
+        // written across are the shape its author gave it. Only the tokens move.
         let leading = &context.value[..context.value.len() - context.value.trim_start().len()];
         let trailing = &context.value[context.value.trim_end().len()..];
+        let separators = class_token_ranges(&context.value)
+            .windows(2)
+            .map(|pair| &context.value[pair[0].1..pair[1].0])
+            .collect::<Vec<_>>();
+
+        let mut text = leading.to_owned();
+        for (position, index) in order.into_iter().enumerate() {
+            if position > 0 {
+                text.push_str(separators[position - 1]);
+            }
+            text.push_str(&tokens[index].text);
+        }
+        text.push_str(trailing);
 
         edits.push(ClassNameEdit {
             range: context.value_range.clone(),
-            text: format!("{leading}{sorted}{trailing}"),
+            text,
         });
     }
 

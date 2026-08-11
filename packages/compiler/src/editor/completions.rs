@@ -382,12 +382,16 @@ fn color_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
                 .with_swatch(color_swatch(config, &color_key)),
             );
         }
-        items.push(CompletionSpec::new(
-            format!("{prefix}-transparent"),
-            category,
-            format!("Use the transparent keyword for Roblox {prop}."),
-            utility_kind,
-        ));
+        // Roblox has no placeholder transparency, so the compiler turns this one
+        // down: offering it would only hand back a diagnostic.
+        if !matches!(utility_kind, UtilityKind::PlaceholderColor) {
+            items.push(CompletionSpec::new(
+                format!("{prefix}-transparent"),
+                category,
+                format!("Use the transparent keyword for Roblox {prop}."),
+                utility_kind,
+            ));
+        }
     }
 
     items

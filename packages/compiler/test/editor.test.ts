@@ -1699,6 +1699,30 @@ test("sorts a class value whose arbitrary values are balanced", () => {
 	expect(result.edits[0].text).toBe("w-[120px] px-4 hover:px-2");
 });
 
+test("sorting moves the tokens and leaves the whitespace where it was", () => {
+	const source = '<frame\n\tclassName="bg-slate-700\n\t\tp-4\n\t\tz-10"\n/>';
+
+	expect(sortClassNames({ source }).edits[0].text).toBe(
+		"z-10\n\t\tp-4\n\t\tbg-slate-700",
+	);
+});
+
+test("does not offer a placeholder color the compiler turns down", () => {
+	const source = '<textbox className="placeholder-" />';
+	const labels = getCompletions({
+		source,
+		position: positionAfter(source, "placeholder-"),
+	}).items.map((item: { label: string }) => item.label);
+
+	expect(labels).toContain("placeholder-slate-700");
+	expect(labels).not.toContain("placeholder-transparent");
+	expect(
+		getDiagnostics({
+			source: '<textbox className="placeholder-transparent" />',
+		}).diagnostics,
+	).toHaveLength(1);
+});
+
 test("reads class values behind a byte order mark", () => {
 	const body = '<frame className="bg-slate-700 px-4 blorb-2" />';
 	const source = `﻿${body}`;
