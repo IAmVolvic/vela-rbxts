@@ -335,6 +335,26 @@ test("a file that does not parse still reads only the class text", () => {
 	]);
 });
 
+test("a class an interpolation splices into is left to the runtime", () => {
+	for (const source of [
+		`<frame className={\`bg-slate-800 w-[\${width}] rounded-lg\`} />`,
+		`<frame className={() => \`w-[\${width}]\`} />`,
+		`<frame className={\`bg-\${tone}-500\`} />`,
+		`<frame className={\`w-[\${width}]\`} />\nconst broken = ;`,
+	]) {
+		expect(getDiagnostics({ source }).diagnostics).toEqual([]);
+	}
+});
+
+test("a token an interpolation only neighbours is still checked", () => {
+	const source = `<frame className={\`rotate-17 \${flag} blorb-2\`} />`;
+
+	expect(getDiagnostics({ source }).diagnostics).toEqual([
+		expect.objectContaining({ token: "rotate-17" }),
+		expect.objectContaining({ token: "blorb-2" }),
+	]);
+});
+
 test("sorting keeps the whitespace an interpolation sits between", () => {
 	const source = `<frame className={\`bg-slate-700 p-4 \${flag} rounded-md z-10\`} />`;
 	const result = sortClassNames({ source });

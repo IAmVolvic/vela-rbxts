@@ -20,6 +20,10 @@ pub(crate) fn get_diagnostics_impl(request: DiagnosticsRequest) -> DiagnosticsRe
                 continue;
             }
 
+            if context.splices_into(&token) {
+                continue;
+            }
+
             let analysis = analyze_class_token(&token.text);
 
             // A utility that does not belong on this host is wrong whatever its

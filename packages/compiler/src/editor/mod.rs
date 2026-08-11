@@ -30,6 +30,20 @@ pub(crate) struct ClassNameContext {
     pub(crate) element_tag: Option<String>,
     pub(crate) value: String,
     pub(crate) value_range: EditorRange,
+    /// Set when the value runs into a `${...}` on that side with no space
+    /// between, so the token at that edge is only part of a class.
+    pub(crate) open_start: bool,
+    pub(crate) open_end: bool,
+}
+
+impl ClassNameContext {
+    /// An interpolation splices into the class its neighbouring token starts or
+    /// ends, so what that token really is only settles at runtime: `w-[` out of
+    /// `w-[${width}]` is half a utility, not an unknown one.
+    pub(crate) fn splices_into(&self, token: &ClassToken) -> bool {
+        (self.open_start && token.range.start == self.value_range.start)
+            || (self.open_end && token.range.end == self.value_range.end)
+    }
 }
 
 /// Returns the element's class name context: `Some(Some(tag))` for a supported
@@ -92,7 +106,22 @@ impl ClassNameCollector<'_> {
                 start: byte_to_utf16_position(self.source, start),
                 end: byte_to_utf16_position(self.source, end),
             },
+            open_start: false,
+            open_end: false,
         });
+    }
+
+    fn push_quasi(
+        &mut self,
+        element_tag: &Option<String>,
+        span: swc_core::common::Span,
+        edges: (bool, bool),
+    ) {
+        let pushed = self.contexts.len();
+        self.push_raw(element_tag, span);
+        if let Some(context) = self.contexts.get_mut(pushed) {
+            (context.open_start, context.open_end) = edges;
+        }
     }
 
     /// Walks the shapes `className={...}` takes in practice — template literals,
@@ -111,8 +140,9 @@ impl ClassNameCollector<'_> {
             // order the sort hands its edits back in.
             Expr::Tpl(tpl) => {
                 for (index, quasi) in tpl.quasis.iter().enumerate() {
-                    self.push_raw(element_tag, quasi.span);
-                    if let Some(expr) = tpl.exprs.get(index) {
+                    let following = tpl.exprs.get(index);
+                    self.push_quasi(element_tag, quasi.span, (index > 0, following.is_some()));
+                    if let Some(expr) = following {
                         self.collect_expr(element_tag, expr);
                     }
                 }
@@ -408,6 +438,16 @@ fn push_lexical_context(
     element_tag: &Option<String>,
     content: (usize, usize),
 ) {
+    push_lexical_quasi(contexts, source, element_tag, content, (false, false));
+}
+
+fn push_lexical_quasi(
+    contexts: &mut Vec<ClassNameContext>,
+    source: &str,
+    element_tag: &Option<String>,
+    content: (usize, usize),
+    edges: (bool, bool),
+) {
     let (start, end) = content;
     if source.get(start..end).is_none() {
         return;
@@ -420,6 +460,8 @@ fn push_lexical_context(
             start: byte_to_utf16_position(source, start),
             end: byte_to_utf16_position(source, end),
         },
+        open_start: edges.0,
+        open_end: edges.1,
     });
 }
 
@@ -435,19 +477,23 @@ fn push_template_contexts(
     let bytes = source.as_bytes();
     let mut quasi_start = open + 1;
     let mut index = quasi_start;
+    let mut open_start = false;
 
     while index < bytes.len() {
         match bytes[index] {
             b'\\' => index += 1,
             b'\n' => break,
             b'`' => {
-                push_lexical_context(contexts, source, element_tag, (quasi_start, index));
+                let content = (quasi_start, index);
+                push_lexical_quasi(contexts, source, element_tag, content, (open_start, false));
                 return index + 1;
             }
             b'$' if bytes.get(index + 1) == Some(&b'{') => {
-                push_lexical_context(contexts, source, element_tag, (quasi_start, index));
+                let content = (quasi_start, index);
+                push_lexical_quasi(contexts, source, element_tag, content, (open_start, true));
                 index = push_interpolation_contexts(contexts, source, element_tag, index + 1);
                 quasi_start = index;
+                open_start = true;
                 continue;
             }
             _ => {}
@@ -456,7 +502,8 @@ fn push_template_contexts(
     }
 
     let end = index.min(bytes.len());
-    push_lexical_context(contexts, source, element_tag, (quasi_start.min(end), end));
+    let content = (quasi_start.min(end), end);
+    push_lexical_quasi(contexts, source, element_tag, content, (open_start, false));
     end
 }
 
