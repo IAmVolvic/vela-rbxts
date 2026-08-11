@@ -1,9 +1,9 @@
-use crate::api::{CompletionItem, CompletionRequest, CompletionResponse};
+use crate::api::{CompletionItem, CompletionRequest, CompletionResponse, EditorRange};
 use crate::config::model::{PluginUtility, TailwindConfig};
 use crate::editor::colors::parse_color3_from_rgb;
 use crate::editor::{
-    class_name_context_at_position, current_prefix, current_token_replacement,
-    tokenize_class_name_with_ranges, utf16_len,
+    ClassToken, class_name_context_at_position, token_at_position, tokenize_class_name_with_ranges,
+    utf16_len,
 };
 use crate::semantic::{
     utility::{
@@ -20,7 +20,7 @@ use crate::semantic::{
         font_family_completion_keys, is_utility_allowed_on_host, position_completion_keys,
         radius_completion_keys, resolve_color_value, size_completion_keys, spacing_completion_keys,
     },
-    variant::RUNTIME_VARIANTS,
+    variant::{RUNTIME_VARIANTS, split_variant_prefixes},
 };
 
 struct CompletionSpec {
@@ -71,22 +71,21 @@ pub(crate) fn get_completions_impl(request: CompletionRequest) -> CompletionResp
     };
 
     let tokens = tokenize_class_name_with_ranges(&context.value, context.value_range.start);
-    let mut replacement = current_token_replacement(&tokens, request.position);
-    let typed = current_prefix(&tokens, &replacement, request.position);
+    let target = completion_target(&tokens, request.position);
 
-    // Variants already typed stay put; only the utility after the last `:` is
-    // completed, which keeps labels short and the list free of a variant
-    // cross-product.
-    let (variants, prefix) = split_typed_variants(&typed);
-    replacement.start += utf16_len(variants);
-
-    let items = completion_candidates(&config, context.element_tag.as_deref(), variants, prefix)
-        .into_iter()
-        .map(|mut item| {
-            item.replacement = Some(replacement.clone());
-            item
-        })
-        .collect();
+    let items = completion_candidates(
+        &config,
+        context.element_tag.as_deref(),
+        &target.variants,
+        &target.prefix,
+    )
+    .into_iter()
+    .filter(|item| !target.variants_only || item.label.ends_with(':'))
+    .map(|mut item| {
+        item.replacement = Some(target.replacement.clone());
+        item
+    })
+    .collect();
 
     CompletionResponse {
         is_in_class_name_context: true,
@@ -94,11 +93,81 @@ pub(crate) fn get_completions_impl(request: CompletionRequest) -> CompletionResp
     }
 }
 
-fn split_typed_variants(typed: &str) -> (&str, &str) {
-    match typed.rfind(':') {
-        Some(index) => typed.split_at(index + 1),
-        None => ("", typed),
+struct CompletionTarget {
+    replacement: EditorRange,
+    variants: String,
+    prefix: String,
+    /// A cursor inside the variant chain completes that segment alone: a utility
+    /// inserted there would be glued to the rest of the token.
+    variants_only: bool,
+}
+
+/// Decides what an accepted item replaces. The variants already typed stay put
+/// and only the utility after the last `:` is completed, which keeps labels
+/// short and the list free of a variant cross-product. Editing a variant in the
+/// middle of a token is the mirror image: the segment under the cursor is the
+/// only part that may be rewritten, so the utility behind it survives.
+fn completion_target(tokens: &[ClassToken], position: u32) -> CompletionTarget {
+    let Some(token) = token_at_position(tokens, position) else {
+        return CompletionTarget {
+            replacement: EditorRange {
+                start: position,
+                end: position,
+            },
+            variants: String::new(),
+            prefix: String::new(),
+            variants_only: false,
+        };
+    };
+
+    let cursor = utf16_offset_to_byte(&token.text, position.saturating_sub(token.range.start));
+    let (_, utility) = split_variant_prefixes(&token.text);
+    let variants_end = token.text.len() - utility.len();
+
+    if cursor < variants_end {
+        let segment_start = token.text[..cursor]
+            .rfind(':')
+            .map_or(0, |index| index + ':'.len_utf8());
+        let segment_end = token.text[cursor..variants_end]
+            .find(':')
+            .map_or(variants_end, |index| cursor + index + ':'.len_utf8());
+
+        return CompletionTarget {
+            replacement: EditorRange {
+                start: token.range.start + utf16_len(&token.text[..segment_start]),
+                end: token.range.start + utf16_len(&token.text[..segment_end]),
+            },
+            variants: token.text[..segment_start].to_owned(),
+            prefix: token.text[segment_start..cursor].to_owned(),
+            variants_only: true,
+        };
     }
+
+    CompletionTarget {
+        replacement: EditorRange {
+            start: token.range.start + utf16_len(&token.text[..variants_end]),
+            end: token.range.end,
+        },
+        variants: token.text[..variants_end].to_owned(),
+        prefix: token.text[variants_end..cursor].to_owned(),
+        variants_only: false,
+    }
+}
+
+fn utf16_offset_to_byte(text: &str, offset: u32) -> usize {
+    let mut units = 0u32;
+    let mut byte = 0usize;
+
+    for (index, ch) in text.char_indices() {
+        let next = units + ch.len_utf16() as u32;
+        if next > offset {
+            return index;
+        }
+        units = next;
+        byte = index + ch.len_utf8();
+    }
+
+    byte
 }
 
 fn completion_candidates(

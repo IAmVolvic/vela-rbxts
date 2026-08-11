@@ -132,7 +132,10 @@ impl RbxtsLanguageServer {
         }
     }
 
-    pub(crate) async fn set_configs(&self, params: SetConfigsParams) -> Result<()> {
+    // A notification rather than a request: the editor pushes configs whenever it
+    // notices one change, and tower-lsp drops a notification that lands on a
+    // request handler without a word.
+    pub(crate) async fn set_configs(&self, params: SetConfigsParams) {
         let entries = params
             .configs
             .into_iter()
@@ -143,7 +146,6 @@ impl RbxtsLanguageServer {
             state.set_configs(entries);
         }
         self.refresh_all_diagnostics().await;
-        Ok(())
     }
 }
 
@@ -386,9 +388,14 @@ impl LanguageServer for RbxtsLanguageServer {
                 continue;
             };
 
+            // Asked at the utility rather than at the token start: a position
+            // inside the variant chain completes variants alone, and a
+            // replacement needs the utilities too.
+            let (variant_prefix, _) = split_variant_prefix(&token);
             let completions = get_completions(CompletionRequest {
                 source: document.text.clone(),
-                position: document.position_to_offset(diagnostic.range.start),
+                position: document.position_to_offset(diagnostic.range.start)
+                    + variant_prefix.encode_utf16().count() as u32,
                 options: Some(options.clone()),
             });
             let labels: Vec<String> = completions

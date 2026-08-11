@@ -53,18 +53,26 @@ fn lowered_element_tag(name: &JSXElementName) -> Option<Option<String>> {
 pub(crate) struct ClassNameCollector<'a> {
     source: &'a str,
     source_base: u32,
+    /// The source file drops a leading BOM before it hands out spans, while the
+    /// offsets travel back over a document that still has it.
+    bom: usize,
     contexts: Vec<ClassNameContext>,
 }
 
 impl ClassNameCollector<'_> {
-    fn push_literal(&mut self, element_tag: &Option<String>, span: swc_core::common::Span) {
+    fn span_bytes(&self, span: swc_core::common::Span) -> (usize, usize) {
         let (lo, hi) = span_range(span, self.source_base);
+        (lo + self.bom, hi + self.bom)
+    }
+
+    fn push_literal(&mut self, element_tag: &Option<String>, span: swc_core::common::Span) {
+        let (lo, hi) = self.span_bytes(span);
         let (start, end) = literal_content_bytes(self.source, lo, hi);
         self.push_bytes(element_tag, start, end);
     }
 
     fn push_raw(&mut self, element_tag: &Option<String>, span: swc_core::common::Span) {
-        let (lo, hi) = span_range(span, self.source_base);
+        let (lo, hi) = self.span_bytes(span);
         self.push_bytes(
             element_tag,
             lo.min(self.source.len()),
@@ -315,6 +323,7 @@ pub(crate) fn collect_class_name_contexts(source: &str) -> Vec<ClassNameContext>
     let mut collector = ClassNameCollector {
         source,
         source_base: fm.start_pos.0,
+        bom: bom_len(source),
         contexts: Vec::new(),
     };
     module.visit_with(&mut collector);
@@ -538,6 +547,14 @@ fn skip_spaces(bytes: &[u8], mut index: usize) -> usize {
     index
 }
 
+fn bom_len(source: &str) -> usize {
+    if source.starts_with('\u{feff}') {
+        '\u{feff}'.len_utf8()
+    } else {
+        0
+    }
+}
+
 pub(crate) fn span_range(span: swc_core::common::Span, source_base: u32) -> (usize, usize) {
     let start = span.lo.0.saturating_sub(source_base) as usize;
     let end = span.hi.0.saturating_sub(source_base) as usize;
@@ -575,44 +592,6 @@ pub(crate) fn byte_to_utf16_position(source: &str, byte_index: usize) -> u32 {
         .unwrap_or_default()
         .encode_utf16()
         .count() as u32
-}
-
-pub(crate) fn current_token_replacement(tokens: &[ClassToken], position: u32) -> EditorRange {
-    tokens
-        .iter()
-        .find(|token| position >= token.range.start && position <= token.range.end)
-        .map(|token| token.range.clone())
-        .unwrap_or(EditorRange {
-            start: position,
-            end: position,
-        })
-}
-
-pub(crate) fn current_prefix(
-    tokens: &[ClassToken],
-    replacement: &EditorRange,
-    position: u32,
-) -> String {
-    let Some(token) = tokens
-        .iter()
-        .find(|token| token.range.start == replacement.start && token.range.end == replacement.end)
-    else {
-        return String::new();
-    };
-
-    let wanted_len = position.saturating_sub(token.range.start);
-    let mut current_len = 0;
-    let mut end_index = 0;
-    for (index, ch) in token.text.char_indices() {
-        let next_len = current_len + ch.len_utf16() as u32;
-        if next_len > wanted_len {
-            break;
-        }
-        current_len = next_len;
-        end_index = index + ch.len_utf8();
-    }
-
-    token.text[..end_index].trim_start().to_owned()
 }
 
 pub(crate) fn token_at_position(tokens: &[ClassToken], position: u32) -> Option<ClassToken> {

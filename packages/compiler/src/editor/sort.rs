@@ -14,6 +14,13 @@ pub(crate) fn sort_class_names_impl(request: SortClassNamesRequest) -> SortClass
             continue;
         }
 
+        // A bracket left open runs across the whitespace the tokenizer splits on,
+        // so the pieces either side of it are not independent classes and moving
+        // them apart would scramble the source.
+        if tokens.iter().any(|token| !is_bracket_balanced(&token.text)) {
+            continue;
+        }
+
         let mut order: Vec<usize> = (0..tokens.len()).collect();
         order.sort_by_key(|index| sort_key(&tokens[*index].text, *index, &config));
         if order.iter().enumerate().all(|(to, from)| to == *from) {
@@ -39,6 +46,25 @@ pub(crate) fn sort_class_names_impl(request: SortClassNamesRequest) -> SortClass
     }
 
     SortClassNamesResponse { edits }
+}
+
+fn is_bracket_balanced(token: &str) -> bool {
+    let mut depth = 0i32;
+
+    for ch in token.chars() {
+        match ch {
+            '[' | '(' => depth += 1,
+            ']' | ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    depth == 0
 }
 
 /// Variants first, then the property group, then the token's original position.

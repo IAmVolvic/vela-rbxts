@@ -140,6 +140,41 @@ function waitForDiagnostics(uri) {
 	});
 }
 
+// The publish that follows a given point in the stream, rather than whatever was
+// last published, which is what a config push has to be judged by.
+function waitForNextDiagnostics(uri, mark) {
+	return new Promise((resolve, reject) => {
+		const check = () => {
+			const found = notifications
+				.slice(mark)
+				.filter(
+					(entry) =>
+						entry.method === "textDocument/publishDiagnostics" &&
+						entry.params.uri === uri,
+				)
+				.pop();
+			if (found) {
+				resolve(found.params.diagnostics);
+				return true;
+			}
+			return false;
+		};
+
+		if (check()) {
+			return;
+		}
+		const timer = setTimeout(() => {
+			reject(new Error(`timed out waiting for diagnostics of ${uri}`));
+		}, REQUEST_TIMEOUT_MS);
+		timer.unref();
+		notificationWaiters.push(() => {
+			if (check()) {
+				clearTimeout(timer);
+			}
+		});
+	});
+}
+
 function openFixture(name) {
 	const filePath = path.join(root, "fixtures", name);
 	const text = fs.readFileSync(filePath, "utf8");
@@ -454,12 +489,96 @@ async function main() {
 		}
 	}
 
+	const variantsFixture = openFixture("Variants.tsx");
+	await waitForDiagnostics(variantsFixture.uri);
+	const variantIndex = variantsFixture.text.indexOf("hover:bg-slate-700");
+	const variantCompletion = await request("textDocument/completion", {
+		textDocument: { uri: variantsFixture.uri },
+		position: positionAt(variantsFixture.text, variantIndex + 3),
+		context: { triggerKind: 1 },
+	});
+	const variantItems = variantCompletion?.items ?? [];
+	check(
+		variantItems.length > 0 && variantItems.every((item) => item.label.endsWith(":")),
+		"a cursor inside a variant should complete variants, not utilities",
+	);
+	const variantEdit = variantItems[0]?.textEdit?.range;
+	check(
+		variantEdit && sliceRange(variantsFixture.text, variantEdit) === "hover:",
+		"completing a variant should replace the variant alone so the utility behind it survives",
+	);
+
 	const brokenFixture = openFixture("Broken.tsx");
 	const brokenDiagnostics = await waitForDiagnostics(brokenFixture.uri);
 	const brokenUnknownVariant = diagnosticFor(brokenDiagnostics, "checked:px-4");
 	check(
 		brokenUnknownVariant?.code === "unknown-variant",
 		"a file that fails to parse should still surface diagnostics via the lexical fallback",
+	);
+
+	const bomFixture = openFixture("Bom.tsx");
+	const bomDiagnostics = await waitForDiagnostics(bomFixture.uri);
+	const bomDiagnostic = diagnosticFor(bomDiagnostics, "blorb-2");
+	check(
+		bomDiagnostic?.code === "unsupported-utility-family",
+		"a file behind a BOM should report the same diagnostics as one without",
+	);
+	if (bomDiagnostic) {
+		check(
+			sliceRange(bomFixture.text, bomDiagnostic.range) === "blorb-2",
+			"a BOM should not shift diagnostic ranges",
+		);
+	}
+	const bomColors = await request("textDocument/documentColor", {
+		textDocument: { uri: bomFixture.uri },
+	});
+	check(
+		(bomColors ?? []).some(
+			(entry) => sliceRange(bomFixture.text, entry.range) === "bg-slate-700",
+		),
+		"a BOM should not hide document colors",
+	);
+	const bomHover = await request("textDocument/hover", {
+		textDocument: { uri: bomFixture.uri },
+		position: positionAt(bomFixture.text, bomFixture.text.indexOf("px-4") + 1),
+	});
+	check(
+		bomHover && sliceRange(bomFixture.text, bomHover.range) === "px-4",
+		"a BOM should not shift hover ranges",
+	);
+
+	// The editor pushes configs as a notification, so the server has to accept it
+	// as one.
+	const configFixture = openFixture("Config.tsx");
+	const beforeConfig = await waitForDiagnostics(configFixture.uri);
+	check(
+		diagnosticFor(beforeConfig, "bg-brand")?.code === "unknown-theme-key",
+		"bg-brand should be unknown until a config defines it",
+	);
+	const configMark = notifications.length;
+	notify("vela-rbxts/setConfigs", {
+		configs: [
+			{
+				dir: path.join(root, "fixtures"),
+				json: JSON.stringify({
+					theme: { colors: { brand: "Color3.fromRGB(255, 136, 0)" } },
+				}),
+			},
+		],
+	});
+	const afterConfig = await waitForNextDiagnostics(configFixture.uri, configMark);
+	check(
+		!diagnosticFor(afterConfig, "bg-brand"),
+		"a setConfigs notification should reach the server and resolve the theme key",
+	);
+	const configColors = await request("textDocument/documentColor", {
+		textDocument: { uri: configFixture.uri },
+	});
+	check(
+		(configColors ?? []).some(
+			(entry) => sliceRange(configFixture.text, entry.range) === "bg-brand",
+		),
+		"a config pushed by notification should feed document colors too",
 	);
 
 	await request("shutdown");

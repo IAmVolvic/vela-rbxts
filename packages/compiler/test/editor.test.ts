@@ -1629,3 +1629,70 @@ test("sorts a plugin utility ahead of the utilities that override it", () => {
 
 	expect(result.edits[0].text).toBe("btn p-4 bg-slate-700");
 });
+});
+
+test("leaves a class value alone when a bracket never closes", () => {
+	const result = sortClassNames({
+		source: '<frame className="hover:px-2 w-[calc(100% px-4" />',
+	});
+
+	expect(result.edits).toEqual([]);
+});
+
+test("sorts a class value whose arbitrary values are balanced", () => {
+	const result = sortClassNames({
+		source: '<frame className="hover:px-2 w-[120px] px-4" />',
+	});
+
+	expect(result.edits[0].text).toBe("w-[120px] px-4 hover:px-2");
+});
+
+test("reads class values behind a byte order mark", () => {
+	const body = '<frame className="bg-slate-700 px-4 blorb-2" />';
+	const source = `﻿${body}`;
+
+	const diagnostics = getDiagnostics({ source });
+	expect(diagnostics.diagnostics).toHaveLength(1);
+	expect(diagnostics.diagnostics[0].token).toBe("blorb-2");
+	expect(
+		source.slice(
+			diagnostics.diagnostics[0].range?.start,
+			diagnostics.diagnostics[0].range?.end,
+		),
+	).toBe("blorb-2");
+
+	const colors = getDocumentColors({ source });
+	expect(colors.colors.map((color) => color.token)).toEqual(["bg-slate-700"]);
+	expect(
+		source.slice(colors.colors[0].range.start, colors.colors[0].range.end),
+	).toBe("bg-slate-700");
+});
+
+test("completing a variant mid-token leaves the utility behind it", () => {
+	const source = '<frame className="hover:bg-slate-700" />';
+	const result = getCompletions({
+		source,
+		position: source.indexOf("hover:") + "hov".length,
+	});
+
+	// A utility inserted here would be glued onto `er:bg-slate-700`.
+	expect(result.items.every((item) => item.label.endsWith(":"))).toBe(true);
+	const entry = result.items.find((item) => item.label === "hover:");
+	expect(source.slice(entry?.replacement?.start, entry?.replacement?.end)).toBe(
+		"hover:",
+	);
+});
+
+test("completing the utility replaces it without the variants in front", () => {
+	const source = '<frame className="md:bg-sl" />';
+	const result = getCompletions({
+		source,
+		position: positionAfter(source, "md:bg-sl"),
+	});
+
+	const entry = result.items.find((item) => item.label === "bg-slate-500");
+	expect(source.slice(entry?.replacement?.start, entry?.replacement?.end)).toBe(
+		"bg-sl",
+	);
+	expect(result.items.some((item) => item.label === "md:")).toBe(false);
+});
