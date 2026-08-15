@@ -13,6 +13,7 @@ import {
 	REPO_ROOT,
 	readJsonFile,
 } from "./utils/fs";
+import { runMain } from "./utils/main";
 
 const require = createRequire(import.meta.url);
 const {
@@ -112,7 +113,7 @@ function validateLspArtifactsForTarget(target: string, lspPackageConfig: LspPack
 	};
 }
 
-function validateStagedPublishPackagesForTarget(target: string) {
+async function validateStagedPublishPackagesForTarget(target: string) {
 	const targetConfig = VSCODE_TARGETS[target];
 	const stagedPackageJsonPath = join(
 		REPO_ROOT,
@@ -127,9 +128,10 @@ function validateStagedPublishPackagesForTarget(target: string) {
 		);
 	}
 
-	const stagedManifest = JSON.parse(
-		require("node:fs").readFileSync(stagedPackageJsonPath, "utf8"),
-	) as { name?: string; bin?: string | Record<string, string> };
+	const stagedManifest = await readJsonFile<{
+		name?: string;
+		bin?: string | Record<string, string>;
+	}>(stagedPackageJsonPath);
 
 	if (stagedManifest.name !== targetConfig.packageName) {
 		throw new Error(
@@ -201,7 +203,7 @@ async function main() {
 	});
 
 	for (const target of SUPPORTED_VSCODE_TARGETS) {
-		validateStagedPublishPackagesForTarget(target);
+		await validateStagedPublishPackagesForTarget(target);
 	}
 
 	runCommand("pnpm", ["--filter", "./packages/vscode-extension", "run", "build"], {
@@ -260,8 +262,4 @@ async function main() {
 	}
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:vsix failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:vsix", main);

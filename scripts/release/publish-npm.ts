@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { getFlagValue, parseDryRunFlag, parseReleaseTag } from "./release-config";
 import {
+	assertTarballMatchesArtifact,
 	PACK_MANIFEST_PATH,
 	readTarballPackageManifest,
 	type PackManifest,
@@ -9,6 +10,7 @@ import {
 } from "./utils/artifacts";
 import { runCommand } from "./utils/exec";
 import { exists, readJsonFile } from "./utils/fs";
+import { runMain } from "./utils/main";
 import { packageVersionExistsOnNpm, resolveNpmCommand } from "./utils/npm";
 import { publishArtifactWithRecovery } from "./utils/publish-attempt";
 import {
@@ -47,17 +49,8 @@ async function main() {
 
 	const publishCandidates: ArtifactPublishCandidate[] = [];
 	for (const artifact of packManifest.artifacts) {
-		const tarManifest = await readTarballPackageManifest(artifact.tarballPath);
-		if (tarManifest.name !== artifact.packageName) {
-			throw new Error(
-				`Tarball package name mismatch for ${artifact.tarballFileName}. Expected ${artifact.packageName}, got ${String(tarManifest.name)}.`,
-			);
-		}
-		if (tarManifest.version !== artifact.version) {
-			throw new Error(
-				`Tarball package version mismatch for ${artifact.tarballFileName}. Expected ${artifact.version}, got ${String(tarManifest.version)}.`,
-			);
-		}
+		const tarManifest = readTarballPackageManifest(artifact.tarballPath);
+		assertTarballMatchesArtifact(tarManifest, artifact);
 
 		publishCandidates.push({ artifact, manifest: tarManifest });
 	}
@@ -156,8 +149,4 @@ async function main() {
 	}
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:publish:npm failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:publish:npm", main);

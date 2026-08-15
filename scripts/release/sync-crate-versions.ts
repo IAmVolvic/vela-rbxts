@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { collectReleaseUnits } from "./release-config";
+import { runMain } from "./utils/main";
 
 const CARGO_CRATES = [
 	{ name: "vela-rbxts-compiler", dir: "packages/compiler" },
@@ -74,8 +75,4 @@ async function main() {
 	console.log(`Synced crate and root manifests to ${version}.`);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:sync-crate-versions failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:sync-crate-versions", main);

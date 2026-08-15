@@ -13,6 +13,7 @@ import {
 	readJsonFile,
 	writeJsonFile,
 } from "./utils/fs";
+import { runMain } from "./utils/main";
 import { type PackageJson } from "./utils/package-json";
 import { getHostCompilerTarget } from "./utils/platform";
 
@@ -272,8 +273,4 @@ async function main() {
 	}
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:build failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:build", main);

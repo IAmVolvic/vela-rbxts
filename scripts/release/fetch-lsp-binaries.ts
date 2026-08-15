@@ -15,6 +15,7 @@ import {
 	REPO_ROOT,
 	readJsonFile,
 } from "./utils/fs";
+import { runMain } from "./utils/main";
 import { resolveNpmCommand } from "./utils/npm";
 
 type LspPackageConfig = {
@@ -118,8 +119,4 @@ async function main() {
 	await cleanDir(workDir);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:lsp:fetch failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:lsp:fetch", main);

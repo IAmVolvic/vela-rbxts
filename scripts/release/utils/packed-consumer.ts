@@ -1,10 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { PACK_MANIFEST_PATH, type PackManifest } from "./artifacts";
+import { formatCommand, runCommand } from "./exec";
 import { ensureDir, exists, REPO_ROOT, readJsonFile, writeJsonFile } from "./fs";
 import type { PackageJson } from "./package-json";
 import { getCurrentCompilerBinaryPackageName } from "./platform";
@@ -467,7 +467,7 @@ async function runPackedConsumerCommand(
 		command === "pnpm" && args[0] === "install"
 			? [...args, "--store-dir", join(tmpdir(), "vela-rbxts-pnpm-store")]
 			: args;
-	const result = runCommandCapture(command, effectiveArgs, cwd);
+	const result = captureCommand(command, effectiveArgs, cwd);
 	if (result.status !== 0) {
 		throw new Error(
 			formatCommandFailure(command, effectiveArgs, cwd, result.status, result.stdout, result.stderr),
@@ -475,36 +475,30 @@ async function runPackedConsumerCommand(
 	}
 }
 
-function runCommandCapture(
+function captureCommand(
 	command: string,
 	args: readonly string[],
 	cwd: string,
 ): CommandResult {
-	const result = spawnSync(command, args, {
-		cwd,
-		encoding: "utf8",
-		env: process.env,
-		shell: process.platform === "win32",
-	});
-
-	if (result.error) {
+	let result: ReturnType<typeof runCommand>;
+	try {
+		result = runCommand(command, args, {
+			cwd,
+			stdio: "pipe",
+			allowFailure: true,
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
 		throw new Error(
-			`Failed to execute ${formatCommand(command, args)} in ${cwd}: ${result.error.message}`,
+			`Failed to execute ${formatCommand(command, args)} in ${cwd}: ${message}`,
 		);
 	}
 
 	return {
 		status: result.status,
-		stdout: result.stdout ?? "",
-		stderr: result.stderr ?? "",
+		stdout: result.stdout?.toString("utf8") ?? "",
+		stderr: result.stderr?.toString("utf8") ?? "",
 	};
-}
-
-function formatCommand(
-	command: string,
-	args: readonly string[],
-) {
-	return `${command} ${args.join(" ")}`.trim();
 }
 
 function formatCommandFailure(

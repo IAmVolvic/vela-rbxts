@@ -3,11 +3,12 @@ import { pathToFileURL } from "node:url";
 
 import { collectReleaseUnits } from "./release-config";
 import {
+	assertTarballMatchesArtifact,
 	PACK_MANIFEST_PATH,
 	type PackedArtifact,
 	type PackManifest,
 	listTarEntries,
-	readTarTextFile,
+	readTarballPackageManifest,
 	VERIFY_REPORT_PATH,
 } from "./utils/artifacts";
 import {
@@ -18,6 +19,7 @@ import {
 	readJsonFile,
 	writeJsonFile,
 } from "./utils/fs";
+import { runMain } from "./utils/main";
 import type { PackageJson } from "./utils/package-json";
 import { verifyPackedConsumer } from "./utils/packed-consumer";
 import { detectLinuxRuntimeKind } from "./utils/platform";
@@ -29,11 +31,6 @@ type TarballPackageInfo = {
 };
 
 const FORBIDDEN_PATTERNS = ["/.turbo/", "/node_modules/", "/.cache/", "__fixtures__", "/fixtures/"];
-
-function readTarballPackageJson(tarballPath: string) {
-	const raw = readTarTextFile(tarballPath, "package/package.json");
-	return JSON.parse(raw) as PackageJson;
-}
 
 function hasForbiddenEntry(entries: readonly string[]) {
 	for (const entry of entries) {
@@ -115,17 +112,8 @@ async function main() {
 			throw new Error(`Forbidden packed file detected in ${artifact.tarballFileName}: ${forbiddenEntry}`);
 		}
 
-		const tarManifest = readTarballPackageJson(artifact.tarballPath);
-		if (tarManifest.name !== artifact.packageName) {
-			throw new Error(
-				`Tarball package name mismatch for ${artifact.tarballFileName}. Expected ${artifact.packageName}, got ${String(tarManifest.name)}.`,
-			);
-		}
-		if (tarManifest.version !== artifact.version) {
-			throw new Error(
-				`Tarball package version mismatch for ${artifact.tarballFileName}. Expected ${artifact.version}, got ${String(tarManifest.version)}.`,
-			);
-		}
+		const tarManifest = readTarballPackageManifest(artifact.tarballPath);
+		assertTarballMatchesArtifact(tarManifest, artifact);
 
 		if (artifact.packageName.startsWith("@vela-rbxts/")) {
 			const access = tarManifest.publishConfig?.access;
@@ -295,8 +283,4 @@ async function main() {
 	console.log(`Verification report: ${VERIFY_REPORT_PATH}`);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:verify failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:verify", main);

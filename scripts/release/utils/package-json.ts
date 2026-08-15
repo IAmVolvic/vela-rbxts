@@ -36,7 +36,7 @@ export type WorkspacePackage = {
 };
 
 export async function discoverWorkspacePackages() {
-	const packageRoots = ["packages", "apps"];
+	const packageRoots = ["packages"];
 	const discovered: WorkspacePackage[] = [];
 
 	for (const root of packageRoots) {

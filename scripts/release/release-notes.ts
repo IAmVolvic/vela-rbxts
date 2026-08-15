@@ -1,10 +1,11 @@
-import { appendFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { getFlagValue } from "./release-config";
 import { extractReleaseNotes } from "./utils/changelog";
 import { ARTIFACTS_ROOT, ensureDir, REPO_ROOT, readJsonFile } from "./utils/fs";
+import { writeGithubOutput } from "./utils/github-output";
+import { runMain } from "./utils/main";
 
 async function resolveReleaseTag(rawArgs: readonly string[]) {
 	const explicitTag =
@@ -29,18 +30,6 @@ async function resolveReleaseTag(rawArgs: readonly string[]) {
 	}
 
 	return `v${version}`;
-}
-
-function writeGithubOutput(entries: Record<string, string>) {
-	const githubOutput = process.env.GITHUB_OUTPUT;
-	if (!githubOutput) {
-		return;
-	}
-
-	const payload = Object.entries(entries)
-		.map(([key, value]) => `${key}=${value}\n`)
-		.join("");
-	appendFileSync(githubOutput, payload, "utf8");
 }
 
 async function main() {
@@ -75,8 +64,4 @@ async function main() {
 	console.log(outputPath);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:notes failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:notes", main);

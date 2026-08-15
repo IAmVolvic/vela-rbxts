@@ -1,9 +1,10 @@
-import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
 import { getFlagValue } from "./release-config";
 import { REPO_ROOT, readJsonFile } from "./utils/fs";
+import { writeGithubOutput } from "./utils/github-output";
+import { runMain } from "./utils/main";
 import { fetchPublishedVsixVersions } from "./utils/marketplace";
 
 const require = createRequire(import.meta.url);
@@ -71,16 +72,9 @@ async function main() {
 		);
 	}
 
-	const githubOutput = process.env.GITHUB_OUTPUT;
-	if (githubOutput) {
-		appendFileSync(githubOutput, `vsix_version=${version}\n`, "utf8");
-	}
+	writeGithubOutput({ vsix_version: version });
 
 	console.log(version);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:vsix:version failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:vsix:version", main);

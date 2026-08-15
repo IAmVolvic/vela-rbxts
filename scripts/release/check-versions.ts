@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { collectReleaseUnits } from "./release-config";
+import { runMain } from "./utils/main";
 
 const CARGO_MANIFESTS = [
 	"packages/compiler/Cargo.toml",
@@ -60,8 +61,4 @@ async function main() {
 	console.log(`All ${releaseUnits.length} release units are on ${version}.`);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:check-versions failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:check-versions", main);

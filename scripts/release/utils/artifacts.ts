@@ -1,9 +1,7 @@
 import { join } from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 
 import { runCommandCapture } from "./exec";
-import { ARTIFACTS_ROOT, ARTIFACT_DIRS } from "./fs";
+import { ARTIFACT_DIRS } from "./fs";
 import type { PackageJson } from "./package-json";
 
 export const PACK_MANIFEST_PATH = join(ARTIFACT_DIRS.npm, "pack-manifest.json");
@@ -24,16 +22,6 @@ export type PackManifest = {
 	artifacts: PackedArtifact[];
 };
 
-export function getArtifactSummary() {
-	return {
-		artifactsRoot: ARTIFACTS_ROOT,
-		npmDir: ARTIFACT_DIRS.npm,
-		nativeDir: ARTIFACT_DIRS.native,
-		lspDir: ARTIFACT_DIRS.lsp,
-		vsixDir: ARTIFACT_DIRS.vsix,
-	};
-}
-
 export function listTarEntries(tarballPath: string) {
 	const { stdout } = runCommandCapture("tar", ["-tf", tarballPath]);
 	return stdout
@@ -47,19 +35,24 @@ export function readTarTextFile(tarballPath: string, entryPath: string) {
 	return stdout;
 }
 
-export async function readTarballPackageManifest(tarballPath: string) {
-	const extractionRoot = await mkdtemp(join(tmpdir(), "vela-rbxts-tarball-"));
-	try {
-		runCommandCapture("tar", [
-			"-xf",
-			tarballPath,
-			"-C",
-			extractionRoot,
-			"package/package.json",
-		]);
-		const raw = await readFile(join(extractionRoot, "package", "package.json"), "utf8");
-		return JSON.parse(raw) as PackageJson;
-	} finally {
-		await rm(extractionRoot, { recursive: true, force: true });
+export function readTarballPackageManifest(tarballPath: string) {
+	return JSON.parse(
+		readTarTextFile(tarballPath, "package/package.json"),
+	) as PackageJson;
+}
+
+export function assertTarballMatchesArtifact(
+	manifest: PackageJson,
+	artifact: PackedArtifact,
+) {
+	if (manifest.name !== artifact.packageName) {
+		throw new Error(
+			`Tarball package name mismatch for ${artifact.tarballFileName}. Expected ${artifact.packageName}, got ${String(manifest.name)}.`,
+		);
+	}
+	if (manifest.version !== artifact.version) {
+		throw new Error(
+			`Tarball package version mismatch for ${artifact.tarballFileName}. Expected ${artifact.version}, got ${String(manifest.version)}.`,
+		);
 	}
 }

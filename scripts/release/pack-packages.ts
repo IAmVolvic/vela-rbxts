@@ -24,8 +24,10 @@ import {
 	exists,
 	listFilesRecursive,
 	REPO_ROOT,
+	readJsonFile,
 	writeJsonFile,
 } from "./utils/fs";
+import { runMain } from "./utils/main";
 import { resolveNpmCommand } from "./utils/npm";
 import type { PackageJson } from "./utils/package-json";
 import { computeDependencySafeOrder } from "./utils/package-order";
@@ -136,20 +138,7 @@ async function packWorkspacePackage(
 		);
 		await rm(join(stagingDir, ".turbo"), { force: true, recursive: true });
 
-		const before = await getTgzFiles(ARTIFACT_DIRS.npm);
-		runCommand(
-			npmCommand,
-			[
-				"pack",
-				stagingDir,
-				"--pack-destination",
-				ARTIFACT_DIRS.npm,
-				"--ignore-scripts",
-			],
-			{ cwd: REPO_ROOT },
-		);
-		const after = await getTgzFiles(ARTIFACT_DIRS.npm);
-		const tarballPath = await detectSingleNewTarball(before, after, unit.name);
+		const tarballPath = await packDirectory(stagingDir, unit.name, npmCommand);
 
 		return tarballPath;
 	} finally {
@@ -170,6 +159,27 @@ async function detectSingleNewTarball(
 		);
 	}
 	return newFiles[0];
+}
+
+async function packDirectory(
+	stageDir: string,
+	context: string,
+	npmCommand: string,
+) {
+	const before = await getTgzFiles(ARTIFACT_DIRS.npm);
+	runCommand(
+		npmCommand,
+		[
+			"pack",
+			stageDir,
+			"--pack-destination",
+			ARTIFACT_DIRS.npm,
+			"--ignore-scripts",
+		],
+		{ cwd: REPO_ROOT },
+	);
+	const after = await getTgzFiles(ARTIFACT_DIRS.npm);
+	return detectSingleNewTarball(before, after, context);
 }
 
 async function copyBuildArtifactsIntoPackageRoots() {
@@ -292,25 +302,10 @@ async function main() {
 	const stagedLspTargetsRoot = join(stagedLspRoot, "npm");
 
 	for (const stagedPath of [stagedCompilerRoot, stagedLspRoot]) {
-		const before = await getTgzFiles(ARTIFACT_DIRS.npm);
-		runCommand(
-			npmCommand,
-			[
-				"pack",
-				stagedPath,
-				"--pack-destination",
-				ARTIFACT_DIRS.npm,
-				"--ignore-scripts",
-			],
-			{ cwd: REPO_ROOT },
+		const tarballPath = await packDirectory(stagedPath, stagedPath, npmCommand);
+		const packageJson = await readJsonFile<{ name: string; version: string }>(
+			join(stagedPath, "package.json"),
 		);
-		const after = await getTgzFiles(ARTIFACT_DIRS.npm);
-		const tarballPath = await detectSingleNewTarball(before, after, stagedPath);
-		const packageJson = JSON.parse(
-			await import("node:fs/promises").then((fs) =>
-				fs.readFile(join(stagedPath, "package.json"), "utf8"),
-			),
-		) as { name: string; version: string };
 		packedArtifacts.push({
 			packageName: packageJson.name,
 			version: packageJson.version,
@@ -332,29 +327,14 @@ async function main() {
 			}
 
 			const stageDir = join(root, entry.name);
-			const before = await getTgzFiles(ARTIFACT_DIRS.npm);
-			runCommand(
-				npmCommand,
-				[
-					"pack",
-					stageDir,
-					"--pack-destination",
-					ARTIFACT_DIRS.npm,
-					"--ignore-scripts",
-				],
-				{ cwd: REPO_ROOT },
-			);
-			const after = await getTgzFiles(ARTIFACT_DIRS.npm);
-			const tarballPath = await detectSingleNewTarball(
-				before,
-				after,
+			const tarballPath = await packDirectory(
+				stageDir,
 				`${kind}:${entry.name}`,
+				npmCommand,
 			);
-			const packageJson = JSON.parse(
-				await import("node:fs/promises").then((fs) =>
-					fs.readFile(join(stageDir, "package.json"), "utf8"),
-				),
-			) as { name: string; version: string };
+			const packageJson = await readJsonFile<{ name: string; version: string }>(
+				join(stageDir, "package.json"),
+			);
 			packedArtifacts.push({
 				packageName: packageJson.name,
 				version: packageJson.version,
@@ -385,8 +365,4 @@ async function main() {
 	console.log(`Pack manifest: ${PACK_MANIFEST_PATH}`);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:pack failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:pack", main);

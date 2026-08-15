@@ -4,6 +4,7 @@ import {
 	parseDryRunFlag,
 	parseReleaseTag,
 } from "./release-config";
+import { runMain } from "./utils/main";
 
 function parseArgs(rawArgs: readonly string[]) {
 	const tag = parseReleaseTag(getFlagValue(rawArgs, "--tag"));
@@ -77,8 +78,4 @@ async function main() {
 	);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`release:plan failed: ${message}`);
-	process.exit(1);
-});
+runMain("release:plan", main);
