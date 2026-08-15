@@ -23,7 +23,6 @@ const { createRequire } = require("node:module") as {
 import type {
 	ColorInputMap,
 	ColorPalette,
-	ColorScaleInput,
 	TailwindConfig,
 	TailwindConfigInput,
 	ThemeColors,
@@ -45,19 +44,7 @@ const CONFIG_FILE_NAME = "vela.config.ts";
 const CONFIG_FILE_NAMES = [CONFIG_FILE_NAME, "vela.config.json"];
 
 export function resolveProjectConfig(sourceFileName: string): TailwindConfig {
-	const configFilePath = findProjectConfigFile(sourceFileName);
-
-	if (!configFilePath) {
-		return inferFramework(sourceFileName, defaultConfig, false);
-	}
-
-	const loaded = loadProjectConfig(configFilePath);
-
-	return inferFramework(
-		sourceFileName,
-		loaded.config,
-		loaded.declaresFramework,
-	);
+	return resolveProjectConfigInfo(sourceFileName).config;
 }
 
 export function resolveProjectConfigInfo(sourceFileName: string): {
@@ -640,15 +627,7 @@ function isThemeConfigInput(value: Record<string, unknown>): boolean {
 function isOptionalColorInputMap(
 	value: unknown,
 ): value is ColorInputMap | undefined {
-	if (value === undefined) {
-		return true;
-	}
-
-	return isRecord(value) && Object.values(value).every(isColorScaleInput);
-}
-
-function isColorScaleInput(value: unknown): value is ColorScaleInput {
-	return typeof value === "string" || isColorPalette(value);
+	return value === undefined || isThemeColors(value);
 }
 
 function isOptionalThemeScale(
