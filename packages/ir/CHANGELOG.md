@@ -1,5 +1,7 @@
 # @vela-rbxts/ir
 
+## 0.12.5
+
 ## 0.12.4
 
 ### Patch Changes

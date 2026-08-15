@@ -1,6 +1,6 @@
 {
   "name": "@vela-rbxts/compiler",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "private": false,
   "type": "commonjs",
   "description": "Native compiler that resolves, validates, and lowers vela-rbxts utility classes.",
