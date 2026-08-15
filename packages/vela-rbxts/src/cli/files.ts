@@ -40,10 +40,6 @@ export function toSystemPath(root: string, relativePath: string): string {
 	return path.join(root, ...relativePath.split("/"));
 }
 
-export function toRelativePath(root: string, filePath: string): string {
-	return path.relative(root, filePath).split(path.sep).join("/");
-}
-
 export function isFile(filePath: string): boolean {
 	try {
 		return fs.statSync(filePath).isFile();

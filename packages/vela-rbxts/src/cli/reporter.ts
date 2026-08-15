@@ -6,7 +6,6 @@ import type { CliOptions } from "./options.js";
 export type Reporter = {
 	info(message: string): void;
 	warn(message: string): void;
-	error(message: string): void;
 	header(options: CliOptions): void;
 	summary(stats: BuildStats, prefix?: string): void;
 };
@@ -22,9 +21,6 @@ export function createReporter(quiet: boolean): Reporter {
 		info,
 		warn(message) {
 			process.stderr.write(`vela: warning: ${message}\n`);
-		},
-		error(message) {
-			process.stderr.write(`vela: error: ${message}\n`);
 		},
 		header(options) {
 			const from = path.relative(options.projectRoot, options.srcDir) || ".";
