@@ -66,7 +66,6 @@
     "clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});\""
   },
   "dependencies": {
-    "@rbxts/services": "^1.6.0",
     "@rbxts/vela-runtime": "workspace:*",
     "@rbxts/vela-runtime-vide": "workspace:*",
     "@vela-rbxts/config": "workspace:*",

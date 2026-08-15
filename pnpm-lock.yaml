@@ -180,11 +180,7 @@ importers:
 
   packages/compiler-wasm: {}
 
-  packages/config:
-    dependencies:
-      '@vela-rbxts/types':
-        specifier: workspace:*
-        version: link:../types
+  packages/config: {}
 
   packages/core:
     dependencies:
@@ -195,11 +191,7 @@ importers:
         specifier: workspace:*
         version: link:../ir
 
-  packages/ir:
-    dependencies:
-      '@vela-rbxts/types':
-        specifier: workspace:*
-        version: link:../types
+  packages/ir: {}
 
   packages/lsp: {}
 
@@ -214,9 +206,6 @@ importers:
       '@vela-rbxts/ir':
         specifier: workspace:*
         version: link:../ir
-      '@vela-rbxts/types':
-        specifier: workspace:*
-        version: link:../types
 
   packages/runtime:
     dependencies:
@@ -291,9 +280,6 @@ importers:
 
   packages/vela-rbxts:
     dependencies:
-      '@rbxts/services':
-        specifier: ^1.6.0
-        version: 1.6.0
       '@rbxts/vela-runtime':
         specifier: workspace:*
         version: link:../runtime

@@ -59,7 +59,6 @@
   "dependencies": {
     "@vela-rbxts/compiler": "workspace:*",
     "@vela-rbxts/config": "workspace:*",
-    "@vela-rbxts/ir": "workspace:*",
-    "@vela-rbxts/types": "workspace:*"
+    "@vela-rbxts/ir": "workspace:*"
   }
 }

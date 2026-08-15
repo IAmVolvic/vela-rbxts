@@ -51,8 +51,5 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});\""
-  },
-  "dependencies": {
-    "@vela-rbxts/types": "workspace:*"
   }
 }
