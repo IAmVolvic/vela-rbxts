@@ -237,3 +237,29 @@ test("parses top utilities as position instead of a gradient stop", () => {
 		/Position=\{__VelaRem\.scale\(UDim2\.fromOffset\(0, 16\), \d+\)\}/,
 	);
 });
+
+test("keeps negative positions negative behind a variant prefix", () => {
+	const left = transform(
+		`export const A = () => <frame className="md:-left-4" />;`,
+		null,
+	);
+
+	expect(left.diagnostics).toEqual([]);
+	expect(left.code).toMatch(/UDim2\.fromOffset\(-16, 0\)/);
+
+	const top = transform(
+		`export const B = () => <frame className="md:-top-4" />;`,
+		null,
+	);
+
+	expect(top.diagnostics).toEqual([]);
+	expect(top.code).toMatch(/UDim2\.fromOffset\(0, -16\)/);
+
+	const inset = transform(
+		`export const C = () => <frame className="md:-inset-4" />;`,
+		null,
+	);
+
+	expect(inset.diagnostics).toEqual([]);
+	expect(inset.code).toMatch(/UDim2\.fromOffset\(-16, -16\)/);
+});

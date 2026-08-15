@@ -91,7 +91,6 @@ where
             };
 
             let analysis = analyze_class_token(&token);
-            debug_assert_eq!(analysis.static_only, !analysis.runtime_aware);
             let diagnostics_before = diagnostics.len();
 
             if analysis.runtime_aware {
@@ -657,8 +656,6 @@ fn apply_analyzed_token(
     style: &mut StyleIr,
     pending: &mut PendingAxes,
 ) {
-    let _needs_config_lookup = analysis.needs_config_lookup;
-
     if !analysis.supported
         && let Some(issue) = analysis.issues.first()
     {
@@ -1037,7 +1034,7 @@ fn apply_spacing_token(
         }
         UtilityKind::Margin(axis) => {
             if let Some(spacing_key) = analysis.payload() {
-                let negative = analysis.parsed.utility.raw.starts_with("-m");
+                let negative = analysis.is_negative();
                 let offset = resolve_spacing_value(config, spacing_key)
                     .as_deref()
                     .and_then(spacing_value_to_offset)
@@ -1235,7 +1232,7 @@ fn apply_position_token(
         }
         UtilityKind::PositionX => {
             if let Some(position_key) = analysis.payload() {
-                let negative = analysis.parsed.raw.starts_with("-left-");
+                let negative = analysis.is_negative();
                 pending.position_x = resolve_position_axis_value(
                     config,
                     diagnostics,
@@ -1247,7 +1244,7 @@ fn apply_position_token(
         }
         UtilityKind::PositionY => {
             if let Some(position_key) = analysis.payload() {
-                let negative = analysis.parsed.raw.starts_with("-top-");
+                let negative = analysis.is_negative();
                 pending.position_y = resolve_position_axis_value(
                     config,
                     diagnostics,
@@ -1259,7 +1256,7 @@ fn apply_position_token(
         }
         UtilityKind::PositionRight => {
             if let Some(position_key) = analysis.payload() {
-                let negative = analysis.parsed.utility.raw.starts_with("-right-");
+                let negative = analysis.is_negative();
                 pending.position_x = resolve_position_axis_value(
                     config,
                     diagnostics,
@@ -1272,7 +1269,7 @@ fn apply_position_token(
         }
         UtilityKind::PositionBottom => {
             if let Some(position_key) = analysis.payload() {
-                let negative = analysis.parsed.utility.raw.starts_with("-bottom-");
+                let negative = analysis.is_negative();
                 pending.position_y = resolve_position_axis_value(
                     config,
                     diagnostics,
@@ -1285,7 +1282,7 @@ fn apply_position_token(
         }
         UtilityKind::Inset => {
             if let Some(position_key) = analysis.payload() {
-                let negative = analysis.parsed.raw.starts_with("-inset-");
+                let negative = analysis.is_negative();
                 let value = resolve_position_axis_value(
                     config,
                     diagnostics,
@@ -1311,7 +1308,7 @@ fn apply_position_token(
         }
         UtilityKind::Rotation => {
             if let Some(degrees) = analysis.payload() {
-                let negative = analysis.parsed.utility.raw.starts_with("-rotate-");
+                let negative = analysis.is_negative();
                 if let Some(value) = resolve_rotation_value(degrees, negative) {
                     style.set_prop("Rotation", value);
                 } else {
@@ -1336,7 +1333,7 @@ fn apply_position_token(
         }
         UtilityKind::TranslateX => {
             if let Some(translate_key) = analysis.payload() {
-                let negative = analysis.parsed.utility.raw.starts_with("-translate-x-");
+                let negative = analysis.is_negative();
                 pending.translate_x = resolve_position_axis_value(
                     config,
                     diagnostics,
@@ -1348,7 +1345,7 @@ fn apply_position_token(
         }
         UtilityKind::TranslateY => {
             if let Some(translate_key) = analysis.payload() {
-                let negative = analysis.parsed.utility.raw.starts_with("-translate-y-");
+                let negative = analysis.is_negative();
                 pending.translate_y = resolve_position_axis_value(
                     config,
                     diagnostics,
@@ -1462,7 +1459,7 @@ fn apply_layout_token(
         }
         UtilityKind::LayoutOrder => {
             if let Some(order_key) = analysis.payload() {
-                let negative = analysis.parsed.utility.raw.starts_with("-order-");
+                let negative = analysis.is_negative();
                 if let Some(value) = resolve_layout_order_value(order_key, negative) {
                     style.set_prop("LayoutOrder", value);
                 } else {

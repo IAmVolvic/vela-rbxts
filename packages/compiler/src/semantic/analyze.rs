@@ -1,7 +1,7 @@
 use super::result::{AnalyzedClassToken, SemanticIssue};
 use super::token::parse_class_token;
 use super::utility::{
-    UtilityKind, is_known_unsupported_border_payload, parse_arbitrary_number,
+    UtilityKind, Z_INDEX_VALUES, is_known_unsupported_border_payload, parse_arbitrary_number,
     parse_arbitrary_value, resolve_border_thickness_value,
 };
 
@@ -59,9 +59,7 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
                 }
                 whole
             } else if let Some(value) = parsed.utility.payload.as_deref() {
-                if value.parse::<i32>().is_ok()
-                    && !matches!(value, "0" | "10" | "20" | "30" | "40" | "50")
-                {
+                if value.parse::<i32>().is_ok() && !Z_INDEX_VALUES.contains(&value) {
                     issues.push(SemanticIssue::UnsupportedZIndexValue {
                         value: value.to_owned(),
                     });
@@ -91,7 +89,7 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
                 true
             }
         }
-        _ => utility.is_supported(),
+        _ => true,
     } && unknown_variant.is_none()
         && !issues.iter().any(|issue| {
             matches!(
@@ -101,18 +99,13 @@ pub(crate) fn analyze_class_token(token: &str) -> AnalyzedClassToken {
             )
         });
 
-    let needs_config_lookup = utility.needs_config_lookup();
     let runtime_aware = runtime_condition.is_some();
-    let value = parsed.utility.payload.clone();
 
     AnalyzedClassToken {
         parsed,
         utility,
-        value,
         supported,
-        needs_config_lookup,
         runtime_aware,
-        static_only: !runtime_aware,
         runtime_condition,
         issues,
     }
@@ -301,9 +294,8 @@ mod tests {
         let analysis = analyze_class_token("md:portrait:bg-slate-700");
 
         assert!(analysis.supported);
-        assert!(analysis.needs_config_lookup);
+        assert!(analysis.utility.needs_config_lookup());
         assert!(analysis.runtime_aware);
-        assert!(!analysis.static_only);
         assert!(matches!(analysis.utility, UtilityKind::BackgroundColor));
         assert!(matches!(
             analysis.runtime_condition,
