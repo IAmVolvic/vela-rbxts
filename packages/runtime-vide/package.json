@@ -34,10 +34,10 @@
 		"url": "https://github.com/astra-void/vela-rbxts/issues"
 	},
 	"scripts": {
-		"prebuild": "node ./scripts/materialize-rbxts-modules.cjs",
+		"prebuild": "node ../../scripts/rbxts-modules/materialize.cjs",
 		"build": "rbxtsc -p tsconfig.json",
-		"postbuild": "node ./scripts/clean-rbxts-modules.cjs",
-		"pretypecheck": "node ./scripts/materialize-rbxts-modules.cjs",
+		"postbuild": "node ../../scripts/rbxts-modules/clean.cjs",
+		"pretypecheck": "node ../../scripts/rbxts-modules/materialize.cjs",
 		"typecheck": "tsc --noEmit -p tsconfig.json",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --fix --unsafe",
