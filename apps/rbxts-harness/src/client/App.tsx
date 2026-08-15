@@ -30,6 +30,18 @@ const FadedCard = (props: { active: boolean; children?: React.Element }) => (
 	</frame>
 );
 
+// A SurfaceGui is drawn on a part, at the pixel space that part gives it, so
+// the curve is pinned under one: what is lowered here keeps its literal offsets,
+// and the component below hears about the pin through the scope the emit opens
+// around it.
+export const SurfacePanel = () => (
+	<surfacegui>
+		<frame className="bg-slate-700 size-8 rounded-md p-2">
+			<FadedLabel text="pinned" />
+		</frame>
+	</surfacegui>
+);
+
 export const App = () => {
 	const [active, setActive] = React.useState(false);
 	const [roomy, setRoomy] = React.useState(false);

@@ -63,6 +63,7 @@ test("applies theme.extend while top-level theme scales replace the family", () 
 				min: 8,
 				max: 64,
 				baseResolution: { x: 1920, y: 1020 },
+				pinnedUnder: ["surfacegui", "billboardgui"],
 			},
 		},
 		plugins: { utilities: {} },

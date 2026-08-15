@@ -1,5 +1,7 @@
 use crate::config::model::TailwindConfig;
-use crate::swc::builders::{OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression};
+use crate::swc::builders::{
+    BOUNDARY_NAMESPACE, OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression,
+};
 use crate::transform::runtime_host::{
     REACT_RUNTIME_MODULE, RuntimeNeeds, create_runtime_module_items,
 };
@@ -96,14 +98,34 @@ impl EmitTarget for ReactTarget {
         })
     }
 
-    fn opacity_provider_child(&self, child: JSXElementChild) -> JSXElementChild {
+    fn provider_child(&self, child: JSXElementChild) -> JSXElementChild {
         child
+    }
+
+    fn pin_provider(&self, children: Vec<JSXElementChild>) -> Box<JSXElement> {
+        let name = boundary_member("Pin");
+
+        Box::new(JSXElement {
+            span: DUMMY_SP,
+            opening: JSXOpeningElement {
+                name: name.clone(),
+                span: DUMMY_SP,
+                attrs: Vec::new(),
+                self_closing: false,
+                type_args: None,
+            },
+            children,
+            closing: Some(JSXClosingElement {
+                span: DUMMY_SP,
+                name,
+            }),
+        })
     }
 
     /// A statically lowered instance cannot read a context, so this is what
     /// reads one on its behalf.
-    fn fade_element(&self, child: Expr) -> Box<JSXElement> {
-        let name = opacity_member("Fade");
+    fn boundary_element(&self, child: Expr) -> Box<JSXElement> {
+        let name = boundary_member("Consume");
 
         let child = match child {
             Expr::JSXElement(element) => JSXElementChild::JSXElement(element),
@@ -133,9 +155,17 @@ impl EmitTarget for ReactTarget {
 }
 
 fn opacity_member(prop: &str) -> JSXElementName {
+    namespace_member(OPACITY_NAMESPACE, prop)
+}
+
+fn boundary_member(prop: &str) -> JSXElementName {
+    namespace_member(BOUNDARY_NAMESPACE, prop)
+}
+
+fn namespace_member(namespace: &str, prop: &str) -> JSXElementName {
     JSXElementName::JSXMemberExpr(JSXMemberExpr {
         span: DUMMY_SP,
-        obj: JSXObject::Ident(Ident::new_no_ctxt(OPACITY_NAMESPACE.into(), DUMMY_SP)),
+        obj: JSXObject::Ident(Ident::new_no_ctxt(namespace.into(), DUMMY_SP)),
         prop: IdentName::new(prop.into(), DUMMY_SP),
     })
 }

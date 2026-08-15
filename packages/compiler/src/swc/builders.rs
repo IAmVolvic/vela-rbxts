@@ -59,8 +59,13 @@ fn create_helper_child_with_expr(
 }
 
 /// The namespace both targets' runtimes export their opacity helpers under.
-/// What `Provider` and `Fade` are shaped like is the target's business.
+/// What `Provider` is shaped like is the target's business.
 pub(crate) const OPACITY_NAMESPACE: &str = "__VelaOpacity";
+
+/// The namespace for what crosses a component boundary rather than being
+/// composed into the emit: `Consume` reads it at a component's root, `Pin`
+/// opens it over a container's subtree.
+pub(crate) const BOUNDARY_NAMESPACE: &str = "__VelaBoundary";
 
 /// Vide reads a `Derivable<T>`: a function value on a non-event property becomes
 /// an effect. Wrapping is what keeps an expression re-readable, since nothing

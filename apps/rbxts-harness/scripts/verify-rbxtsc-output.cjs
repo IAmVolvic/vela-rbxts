@@ -175,6 +175,10 @@ const requiredFragments = [
 	"__velaMargin",
 	"__velaDivide",
 	'axis = "y"',
+	// A SurfaceGui draws at the pixel space its part gives it, so the offsets
+	// under one stay literal and the pin travels to the component below.
+	"React.createElement(__VelaBoundary.Pin",
+	"Size = UDim2.fromOffset(32, 32)",
 ];
 
 // The runtime is imported, not copied, so every consumer reaches the same one.
@@ -206,6 +210,11 @@ const requiredRuntimeFragments = [
 	"prepareMarginWrapper",
 	"renderMarginWrapper",
 	"interleaveDivideSeparators",
+	// A component was compiled against the viewport in a file of its own, so
+	// the pin it was rendered under is read at its root and the bindings it
+	// already built are handed back the offsets they were written with.
+	"local function usePinned()",
+	"local function unpin(node)",
 ];
 
 // Intentional regression checks for the deleted runtime package and artifact paths.

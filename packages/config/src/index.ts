@@ -53,12 +53,17 @@ export type RemResolution = {
  * at `baseResolution`; every other viewport scales that value and clamps it into
  * `[min, max]`. Setting all three to the same number pins offsets to pixels and
  * takes the scaling out of the emit entirely.
+ *
+ * `pinnedUnder` names the containers whose subtree keeps its literal pixels: a
+ * `SurfaceGui` gets its pixel space from the part it is on rather than from the
+ * viewport, so following the viewport there is wrong however the curve is tuned.
  */
 export type RemConfig = {
 	base: number;
 	min: number;
 	max: number;
 	baseResolution: RemResolution;
+	pinnedUnder: string[];
 };
 
 export type ThemeConfig = {
@@ -113,6 +118,7 @@ const staticRem: RemConfig = {
 	min: 16,
 	max: 16,
 	baseResolution: { x: 1920, y: 1020 },
+	pinnedUnder: [],
 };
 
 const emptyConfig: TailwindConfig = {
@@ -260,8 +266,10 @@ function mergeColorValues(
 }
 
 /**
- * `rem` is a record of four related numbers rather than a keyed scale, so a
- * partial override merges field by field instead of replacing the family.
+ * `rem` is a record of related fields rather than a keyed scale, so a partial
+ * override merges field by field instead of replacing the family. `pinnedUnder`
+ * is the one list among them, and a list that merged would have no way to say
+ * "none": it replaces.
  */
 export function resolveRemConfig(
 	base: RemConfig,
@@ -272,6 +280,9 @@ export function resolveRemConfig(
 
 	return {
 		...merged,
+		// The JSX tag is what the compiler matches, and roblox-ts spells one in
+		// lowercase; a config naming `SurfaceGui` means the same container.
+		pinnedUnder: merged.pinnedUnder.map((tag) => tag.toLowerCase()),
 		// Luau's `math.clamp` errors when the bounds cross, and this config
 		// reaches the runtime verbatim, so an inverted clamp collapses onto
 		// `min` here rather than at the first viewport read.

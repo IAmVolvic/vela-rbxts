@@ -97,14 +97,14 @@ pub(crate) fn resolve_theme_scale(
     merged
 }
 
-/// `rem` is a record of four related numbers rather than a keyed scale, so a
-/// partial override merges field by field instead of replacing the family.
+/// `rem` is a record of related fields rather than a keyed scale, so a partial
+/// override merges field by field instead of replacing the family.
 pub(crate) fn resolve_rem_config(
     base: &RemConfig,
     extend: Option<&RemConfigInput>,
     override_rem: Option<&RemConfigInput>,
 ) -> RemConfig {
-    let mut merged = *base;
+    let mut merged = base.clone();
 
     for input in [extend, override_rem].into_iter().flatten() {
         merged.base = input.base.unwrap_or(merged.base);
@@ -114,6 +114,11 @@ pub(crate) fn resolve_rem_config(
         if let Some(resolution) = input.base_resolution {
             merged.base_resolution.x = resolution.x.unwrap_or(merged.base_resolution.x);
             merged.base_resolution.y = resolution.y.unwrap_or(merged.base_resolution.y);
+        }
+
+        // A list that merged would have no way to say "none".
+        if let Some(pinned) = input.pinned_under.as_ref() {
+            merged.pinned_under = pinned.iter().map(|tag| tag.to_lowercase()).collect();
         }
     }
 

@@ -57,6 +57,20 @@ namespace __VelaRem {
 		__VelaRemCore.resolve(undefined),
 	);
 
+	/// What each scaled binding was built from. A subtree can turn out to be
+	/// pinned only after the element carrying the binding was created: the
+	/// `SurfaceGui` is in another file, and the curve was multiplied in long
+	/// before the component got there, so the literal it started from is kept
+	/// for the consumer that has to put it back. Weak keys: a binding lives as
+	/// long as the slot table holding it, and neither outlives the other.
+	const literals = setmetatable(new Map<unknown, unknown>(), { __mode: "k" });
+
+	function remember<T>(binding: T, literal: unknown): T {
+		literals.set(binding, literal);
+
+		return binding;
+	}
+
 	/// One binding per call site in the emit. Rebuilt inline it would be a new
 	/// binding on every render, and the reconciler treats a new binding as a
 	/// fresh subscription — so the slot the transformer assigned holds it. The
@@ -89,12 +103,15 @@ namespace __VelaRem {
 		// where `<T>(…) =>` opens a JSX element instead of a type parameter.
 		function scale<T>(value: T, slot: number): __VelaReact.Binding<T> {
 			return cached(slot, () =>
-				remBinding.map(
-					(rem) =>
-						__VelaRemCore.apply(
-							value as never,
-							__VelaRemCore.ratio(rem),
-						) as never,
+				remember(
+					remBinding.map(
+						(rem) =>
+							__VelaRemCore.apply(
+								value as never,
+								__VelaRemCore.ratio(rem),
+							) as never,
+					),
+					value,
 				),
 			) as unknown as __VelaReact.Binding<T>;
 		}
@@ -104,11 +121,14 @@ namespace __VelaRem {
 			slot: number,
 		): __VelaReact.Binding<number> {
 			return cached(slot, () =>
-				remBinding.map((rem) =>
-					math.min(
-						value * __VelaRemCore.ratio(rem),
-						__VelaRemCore.TEXT_SIZE_CEILING,
+				remember(
+					remBinding.map((rem) =>
+						math.min(
+							value * __VelaRemCore.ratio(rem),
+							__VelaRemCore.TEXT_SIZE_CEILING,
+						),
 					),
+					math.min(value, __VelaRemCore.TEXT_SIZE_CEILING),
 				),
 			) as __VelaReact.Binding<number>;
 		}
@@ -145,6 +165,61 @@ namespace __VelaRem {
 			refresh();
 		}
 	});
+
+	/// Hands a subtree back the offsets it was written with. It stops where the
+	/// fade does and for the same reason: a component and a runtime host read
+	/// the pin for themselves, and a nested provider has already read it.
+	export function unpin(node: unknown): unknown {
+		if (node === undefined) {
+			return node;
+		}
+
+		if (__VelaReact.isValidElement(node as object)) {
+			return unpinElement(node as __VelaReact.Element);
+		}
+
+		if (typeOf(node) !== "table") {
+			return node;
+		}
+
+		// Children arrive as an array or as a table keyed by instance name, and
+		// Roblox names the instance after that key, so the keys have to survive.
+		const unpinned = new Map<unknown, unknown>();
+		for (const [key, value] of pairs(node as Record<string, unknown>)) {
+			unpinned.set(key, unpin(value));
+		}
+
+		return unpinned;
+	}
+
+	function unpinElement(element: __VelaReact.Element): unknown {
+		const elementType = element.type as unknown;
+		if (!typeIs(elementType, "string")) {
+			return element;
+		}
+
+		const props = element.props as Record<string, unknown>;
+		const children = props.children;
+		const replaced: Record<string, unknown> = {};
+		let scaled = false;
+		for (const [name, value] of pairs(props)) {
+			const literal = literals.get(value);
+			if (literal !== undefined) {
+				replaced[name as string] = literal;
+				scaled = true;
+			}
+		}
+
+		if (children === undefined) {
+			return scaled
+				? __VelaReact.cloneElement(element as never, replaced as never)
+				: element;
+		}
+
+		replaced.children = unpin(children);
+
+		return __VelaReact.cloneElement(element as never, replaced as never);
+	}
 }
 
 /// What a module gets when it scales an offset without needing the host. The
@@ -197,18 +272,6 @@ export namespace __VelaOpacity {
 			{ value: 1 },
 			children as defined,
 		) as unknown as defined;
-	}
-
-	/// Consumes the inherited alpha on behalf of a component whose root the
-	/// transformer lowered statically. Nothing in that subtree resolves anything
-	/// at runtime, so this is the last place the fade can still reach it.
-	export function Fade(props: { children?: defined }): __VelaReact.Element {
-		const alpha = __VelaReact.useContext(Context);
-		const children = props.children;
-
-		return (
-			alpha < 1 ? applyAlpha(children, alpha) : children
-		) as __VelaReact.Element;
 	}
 
 	/// Composes `alpha` onto the instances the caller could not fade statically.
@@ -281,6 +344,49 @@ export namespace __VelaOpacity {
 		}
 
 		return __VelaReact.cloneElement(element as never, faded as never);
+	}
+}
+
+/// What reaches an element through the tree rather than through its own class
+/// list, and can only be read where the tree is: an enclosing fade, and the pin
+/// a container opened over its whole subtree.
+export namespace __VelaBoundary {
+	const PinContext = __VelaReact.createContext(false);
+
+	/// Whether the offsets of whatever renders here are literal pixels. Read by
+	/// the runtime host, which resolves its own class value and has to scale
+	/// what it resolves the same way the emit around it was scaled.
+	export function usePinned(): boolean {
+		return __VelaReact.useContext(PinContext);
+	}
+
+	/// Pins everything below to the offsets it was written with. A `SurfaceGui`
+	/// gets its pixel space from the part it is drawn on, so the viewport the
+	/// rem curve follows says nothing about what happens under one.
+	export const Pin = (props: { children?: defined }) =>
+		__VelaReact.createElement(
+			PinContext.Provider,
+			{ value: true },
+			// Instances below cannot read a context; a component or a runtime
+			// host reads the pin for itself.
+			__VelaRem.unpin(props.children) as defined,
+		) as __VelaReact.Element;
+
+	/// Reads what crossed the boundary on behalf of a component whose root the
+	/// transformer lowered statically. Nothing in that subtree resolves anything
+	/// at runtime, so this is the last place either of them can still reach it.
+	export function Consume(props: { children?: defined }): __VelaReact.Element {
+		const alpha = __VelaReact.useContext(__VelaOpacity.Context);
+		const pinned = usePinned();
+		let children = props.children;
+
+		if (pinned) {
+			children = __VelaRem.unpin(children) as defined;
+		}
+
+		return (
+			alpha < 1 ? __VelaOpacity.applyAlpha(children, alpha) : children
+		) as __VelaReact.Element;
 	}
 }
 
@@ -456,6 +562,10 @@ type VelaRuntimeHostProps = {
 	/// re-renders on a rem change anyway, and a value beats a binding the
 	/// composition step would have to read back.
 	__velaRem?: readonly string[];
+	/// Whether a container this pass could see pins those offsets to literal
+	/// pixels. What arrives as context says the same thing for a pin that was
+	/// opened in a file this element's own was compiled without.
+	__velaRemPinned?: boolean;
 	__velaTransition?: RuntimeTransition;
 	__velaAnimation?: string;
 	__velaText?: RuntimeTextSpec;
@@ -475,6 +585,7 @@ const HOST_OWN_PROPS = new Set<string>([
 	"__velaRules",
 	"__velaTests",
 	"__velaRem",
+	"__velaRemPinned",
 	"__velaTransition",
 	"__velaAnimation",
 	"__velaText",
@@ -515,12 +626,16 @@ export function createVelaRuntimeHost(
 		(props: VelaRuntimeHostProps, forwardedRef: unknown) => {
 			const globalEnvironment = __VelaEnv.useRuntimeEnvironment();
 			const ambientAlpha = __VelaReact.useContext(__VelaOpacity.Context);
+			const pinned =
+				__VelaBoundary.usePinned() || props.__velaRemPinned === true;
 			const [hovered, setHovered] = __VelaReact.useState(false);
 			const [pressed, setPressed] = __VelaReact.useState(false);
 			const [focused, setFocused] = __VelaReact.useState(false);
 			const environment: RuntimeEnvironment = {
 				width: globalEnvironment.width,
-				rem: globalEnvironment.rem,
+				// A pinned subtree resolves at the base, which is the rem a ratio
+				// of 1 comes out of: the offsets it writes are the literal ones.
+				rem: pinned ? __VelaRemCore.base() : globalEnvironment.rem,
 				orientation: globalEnvironment.orientation,
 				input: globalEnvironment.input,
 				colorScheme: globalEnvironment.colorScheme,

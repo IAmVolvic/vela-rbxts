@@ -1,7 +1,7 @@
+pub(crate) mod boundary;
 pub(crate) mod branch;
 pub(crate) mod context;
 pub(crate) mod emit;
-pub(crate) mod fade;
 pub(crate) mod jsx;
 pub(crate) mod module;
 pub(crate) mod opacity;
@@ -104,9 +104,11 @@ pub(crate) fn transform_impl(source: String, options: Option<TransformOptions>) 
         runtime_host_needed: false,
         resolves_class_values: false,
         opacity_helper_needed: false,
+        boundary_helper_needed: false,
         rem: Default::default(),
         class_value_scopes: crate::class_value::scope::ClassValueScopeStack::default(),
         opacity_alpha: 1.0,
+        rem_pinned: false,
     };
     module.visit_mut_with(&mut transformer);
 

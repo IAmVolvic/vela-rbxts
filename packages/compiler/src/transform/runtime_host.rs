@@ -12,7 +12,8 @@ pub(crate) const VIDE_RUNTIME_MODULE: &str = "@rbxts/vela-runtime-vide";
 
 /// What a transformed module reaches for. A file can need any combination: a
 /// host to resolve class values, a rem scaler for statically lowered offsets,
-/// and the opacity namespace for a fade that left the static path.
+/// the opacity namespace for a fade that left the static path, and the boundary
+/// namespace for what only a component root can read.
 pub(crate) struct RuntimeNeeds<'a> {
     pub(crate) host: bool,
     /// Whether any host in this file is handed a class value to parse, which is
@@ -20,11 +21,12 @@ pub(crate) struct RuntimeNeeds<'a> {
     pub(crate) resolves_class_values: bool,
     pub(crate) rem: Option<&'a RemConfig>,
     pub(crate) opacity: bool,
+    pub(crate) boundary: bool,
 }
 
 impl RuntimeNeeds<'_> {
     fn is_empty(&self) -> bool {
-        !self.host && self.rem.is_none() && !self.opacity
+        !self.host && self.rem.is_none() && !self.opacity && !self.boundary
     }
 }
 
@@ -62,12 +64,17 @@ pub(crate) fn create_runtime_module_items(
         values.push("createVelaRemScaler");
         statements.push_str(&format!(
             "const {REM_NAMESPACE} = createVelaRemScaler({});\n",
-            serde_json::to_string(rem).expect("rem config must serialize to JSON"),
+            serde_json::to_string(&runtime_rem_config(rem))
+                .expect("rem config must serialize to JSON"),
         ));
     }
 
     if needs.opacity {
         values.push(crate::swc::builders::OPACITY_NAMESPACE);
+    }
+
+    if needs.boundary {
+        values.push(crate::swc::builders::BOUNDARY_NAMESPACE);
     }
 
     source.push_str(&format!(
@@ -91,6 +98,15 @@ pub(crate) fn create_runtime_module_items(
     items
 }
 
+/// Where a pin lands is answered at compile time: the emit opens the scope and
+/// tells the runtime it is in one, so the list of containers never travels.
+fn runtime_rem_config(rem: &RemConfig) -> RemConfig {
+    RemConfig {
+        pinned_under: Vec::new(),
+        ..rem.clone()
+    }
+}
+
 /// The theme is only ever read while parsing a class value the host was handed,
 /// and most files hand it none — a variant, a branch or a text transform
 /// reaches the host through props resolved here. Such a file drops the tables
@@ -98,6 +114,7 @@ pub(crate) fn create_runtime_module_items(
 /// either way: the host reads those whatever it renders.
 fn host_config_json(config: &TailwindConfig, resolves_class_values: bool) -> String {
     let mut config = config.clone();
+    config.theme.rem = runtime_rem_config(&config.theme.rem);
 
     // Where the driver is imported from is answered above, at compile time. The
     // runtime is handed the driver itself and never reads the specifier, and
@@ -248,10 +265,15 @@ mod tests {
             "export namespace {}",
             crate::swc::builders::OPACITY_NAMESPACE
         );
+        let boundary = format!(
+            "export namespace {}",
+            crate::swc::builders::BOUNDARY_NAMESPACE
+        );
         let declarations = [
             "export function createVelaRuntimeHost",
             "export function createVelaRemScaler",
             opacity.as_str(),
+            boundary.as_str(),
             "VelaRuntimeHostComponent",
         ];
 

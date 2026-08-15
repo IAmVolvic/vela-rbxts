@@ -1,6 +1,6 @@
 use crate::config::model::TailwindConfig;
 use crate::swc::builders::{
-    OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression, thunk,
+    BOUNDARY_NAMESPACE, OPACITY_NAMESPACE, create_prop_attr_with_expr, parse_expression, thunk,
 };
 use crate::transform::runtime_host::{
     RuntimeNeeds, VIDE_RUNTIME_MODULE, create_runtime_module_items,
@@ -82,7 +82,7 @@ impl EmitTarget for VideTarget {
     /// Vide builds a child eagerly, so by the time the provider runs the
     /// instances that should have read its value already exist. A thunk is what
     /// defers them into the scope that holds it.
-    fn opacity_provider_child(&self, child: JSXElementChild) -> JSXElementChild {
+    fn provider_child(&self, child: JSXElementChild) -> JSXElementChild {
         let body = match child {
             JSXElementChild::JSXElement(element) => Expr::JSXElement(element),
             JSXElementChild::JSXFragment(fragment) => Expr::JSXFragment(fragment),
@@ -99,11 +99,33 @@ impl EmitTarget for VideTarget {
         })
     }
 
+    /// The scale a thunk reads is settled where the thunk is built, which is
+    /// inside this scope, so the pin only has to be open while the children are.
+    fn pin_provider(&self, children: Vec<JSXElementChild>) -> Box<JSXElement> {
+        let name = boundary_member("Pin");
+
+        Box::new(JSXElement {
+            span: DUMMY_SP,
+            opening: JSXOpeningElement {
+                name: name.clone(),
+                span: DUMMY_SP,
+                attrs: Vec::new(),
+                self_closing: false,
+                type_args: None,
+            },
+            children,
+            closing: Some(JSXClosingElement {
+                span: DUMMY_SP,
+                name,
+            }),
+        })
+    }
+
     /// The instance already exists by the time this runs, so the consumer
     /// applies the alpha rather than cloning an element around it. The emitted
     /// shape is the same either way.
-    fn fade_element(&self, child: Expr) -> Box<JSXElement> {
-        let name = opacity_member("Fade");
+    fn boundary_element(&self, child: Expr) -> Box<JSXElement> {
+        let name = boundary_member("Consume");
 
         let child = match child {
             Expr::JSXElement(element) => JSXElementChild::JSXElement(element),
@@ -158,9 +180,17 @@ fn provider_element(
 }
 
 fn opacity_member(prop: &str) -> JSXElementName {
+    namespace_member(OPACITY_NAMESPACE, prop)
+}
+
+fn boundary_member(prop: &str) -> JSXElementName {
+    namespace_member(BOUNDARY_NAMESPACE, prop)
+}
+
+fn namespace_member(namespace: &str, prop: &str) -> JSXElementName {
     JSXElementName::JSXMemberExpr(JSXMemberExpr {
         span: DUMMY_SP,
-        obj: JSXObject::Ident(Ident::new_no_ctxt(OPACITY_NAMESPACE.into(), DUMMY_SP)),
+        obj: JSXObject::Ident(Ident::new_no_ctxt(namespace.into(), DUMMY_SP)),
         prop: IdentName::new(prop.into(), DUMMY_SP),
     })
 }

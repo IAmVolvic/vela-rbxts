@@ -107,6 +107,20 @@ for (const name of ["__velaText", "__velaTransition", "__velaAnimation"]) {
 	);
 }
 
+// A SurfaceGui draws at the pixel space its part gives it. The pin is read
+// where a thunk is built, so the children it holds arrive deferred like a
+// provider's, and what is lowered under it keeps its literal offsets.
+expect(
+	"the pin takes its children as a thunk",
+	/__VelaBoundary\.Pin, nil, function\(\)/.test(source),
+);
+expect(
+	"an offset under the pin is left literal",
+	/__VelaBoundary\.Pin[\s\S]{0,400}?Size = UDim2\.fromOffset\(96, 24\)/.test(
+		source,
+	),
+);
+
 // A component tag is rendered by the host rather than lowered, and its children
 // travel with it.
 expect(

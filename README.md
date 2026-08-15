@@ -323,14 +323,30 @@ export default defineConfig({
       min: 8,
       max: 64,
       baseResolution: { x: 1920, y: 1020 },
+      pinnedUnder: ["surfacegui", "billboardgui"],
     },
   },
 });
 ```
 
-`rem` is a record rather than a keyed scale, so a partial override merges field by field — `theme.rem` and `theme.extend.rem` behave the same, and naming only `min` leaves the rest at their defaults.
+`rem` is a record rather than a keyed scale, so a partial override merges field by field: `theme.rem` and `theme.extend.rem` behave the same, and naming only `min` leaves the rest at their defaults. `pinnedUnder` is the one list among them, and a list that merged could never say "none", so naming one replaces the defaults.
 
 Scale-valued utilities are unaffected: `w-full`, `h-1/2`, and `translate-x-1/2` are fractions of the parent, and rem never touches them.
+
+**A container that is not the screen keeps its literal pixels.** A `SurfaceGui` is drawn on a part, at the pixel space that part and its `PixelsPerStud` give it, and a `BillboardGui` sizes itself the same way; the viewport the curve follows says nothing about either. Both are pinned by default, so every offset under one lowers to the literal it was written as, on the static path and on the runtime path alike:
+
+```tsx
+<surfacegui Adornee={panel}>
+  {/* 32px is 32px here, whatever the player's screen is doing */}
+  <frame className="size-8 rounded-md p-2">
+    <Menu />
+  </frame>
+</surfacegui>
+```
+
+The pin is opened by the container element in your JSX. What is written under it lexically is pinned in the emit and costs nothing at runtime; a component rendered there was compiled in a file of its own, so the emit also opens a scope it reads at its root. A `SurfaceGui` your JSX never names (one built in Luau, or in another file, that a React root is mounted into) is not something this pass can see, so pin such a project with the clamp below instead.
+
+`theme.rem.pinnedUnder` names the containers this applies to. Emptying it puts them back on the curve.
 
 **To pin offsets to literal pixels**, close the clamp:
 

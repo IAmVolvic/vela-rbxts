@@ -98,13 +98,18 @@ pub(crate) struct ThemeConfig {
 /// How an offset in a utility turns into pixels. `base` is what one rem is worth
 /// at `base_resolution`; every other viewport scales that value and clamps it
 /// into `[min, max]`.
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Deserialize, Serialize, PartialEq)]
 pub(crate) struct RemConfig {
     pub(crate) base: f64,
     pub(crate) min: f64,
     pub(crate) max: f64,
     #[serde(rename = "baseResolution")]
     pub(crate) base_resolution: RemResolution,
+    /// The containers whose subtree keeps its literal pixels. Compile-time only:
+    /// this pass opens the scope and the runtime is told where it lands, so the
+    /// list itself never travels with the config.
+    #[serde(default, rename = "pinnedUnder", skip_serializing_if = "Vec::is_empty")]
+    pub(crate) pinned_under: Vec<String>,
 }
 
 impl RemConfig {
@@ -116,6 +121,15 @@ impl RemConfig {
     pub(crate) fn is_static(&self) -> bool {
         self.min >= self.max && self.min == self.base
     }
+
+    /// Whether a subtree under this JSX tag reads its offsets as literal pixels.
+    /// A `SurfaceGui` takes its pixel space from the part it is drawn on, so the
+    /// viewport the curve follows says nothing about it.
+    pub(crate) fn pins_under(&self, tag: &str) -> bool {
+        self.pinned_under
+            .iter()
+            .any(|pinned| pinned.eq_ignore_ascii_case(tag))
+    }
 }
 
 impl Default for RemConfig {
@@ -125,6 +139,7 @@ impl Default for RemConfig {
             min: 16.0,
             max: 16.0,
             base_resolution: RemResolution::default(),
+            pinned_under: Vec::new(),
         }
     }
 }
@@ -185,13 +200,15 @@ pub(crate) struct ThemeConfigExtendInput {
     pub(crate) rem: Option<RemConfigInput>,
 }
 
-#[derive(Clone, Copy, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default)]
 pub(crate) struct RemConfigInput {
     pub(crate) base: Option<f64>,
     pub(crate) min: Option<f64>,
     pub(crate) max: Option<f64>,
     #[serde(rename = "baseResolution")]
     pub(crate) base_resolution: Option<RemResolutionInput>,
+    #[serde(rename = "pinnedUnder")]
+    pub(crate) pinned_under: Option<Vec<String>>,
 }
 
 #[derive(Clone, Copy, Deserialize, Default)]

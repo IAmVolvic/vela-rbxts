@@ -397,7 +397,8 @@
       "baseResolution": {
         "x": 1920,
         "y": 1020
-      }
+      },
+      "pinnedUnder": ["surfacegui", "billboardgui"]
     }
   }
 }

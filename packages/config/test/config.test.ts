@@ -271,7 +271,22 @@ test("a partial rem override merges field by field", () => {
 		min: 12,
 		max: 64,
 		baseResolution: { x: 1920, y: 1080 },
+		pinnedUnder: ["surfacegui", "billboardgui"],
 	});
+});
+
+// A `SurfaceGui` draws at the pixel space its part gives it, so the viewport
+// the curve follows says nothing about it. A list that merged could never say
+// "none", so naming one replaces the defaults rather than adding to them.
+test("pinned containers replace the defaults and are matched in lowercase", () => {
+	expect(
+		defineConfig({ theme: { rem: { pinnedUnder: ["SurfaceGui"] } } }).theme.rem
+			.pinnedUnder,
+	).toEqual(["surfacegui"]);
+
+	expect(
+		defineConfig({ theme: { rem: { pinnedUnder: [] } } }).theme.rem.pinnedUnder,
+	).toEqual([]);
 });
 
 test("pinning min to max takes the scaling out of every offset", () => {

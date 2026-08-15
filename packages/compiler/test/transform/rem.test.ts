@@ -157,3 +157,90 @@ test("an inverted rem clamp collapses onto min instead of reaching the runtime",
 	expect(result.diagnostics).toEqual([]);
 	expect(result.code).toMatch(/"min": 32\.0,\s*"max": 32\.0/);
 });
+
+// A SurfaceGui is drawn on a part, at the pixel space the part gives it, so the
+// viewport the curve follows says nothing about what happens under one.
+test("a container named in pinnedUnder keeps the literal offsets below it", () => {
+	const result = transform(
+		'<surfacegui><frame className="w-4 p-2" /></surfacegui>',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain("Size={UDim2.fromOffset(16, 0)}");
+	expect(emitted(result.code)).toContain("PaddingTop={new UDim(0, 8)}");
+	// Nothing below it scaled, so the file needs neither the scaler nor the pin
+	// the runtime would otherwise have to be told about.
+	expect(result.code).not.toContain("__VelaRem");
+	expect(result.code).not.toContain("__VelaBoundary.Pin");
+});
+
+test("the pin stops at the container that opened it", () => {
+	const result = transform(
+		'<screengui><surfacegui><frame className="w-4" /></surfacegui><frame className="w-4" /></screengui>',
+	);
+
+	expect(emitted(result.code)).toContain("Size={UDim2.fromOffset(16, 0)}");
+	expect(emitted(result.code)).toContain(
+		"Size={__VelaRem.scale(UDim2.fromOffset(16, 0), 0)}",
+	);
+});
+
+// A component was compiled in a file of its own, against the viewport, so the
+// only thing that can tell it where it was rendered is the scope around it.
+test("a component under the pin is handed it at runtime", () => {
+	const result = transform("<surfacegui><Panel /></surfacegui>");
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain(
+		"<__VelaBoundary.Pin><Panel/></__VelaBoundary.Pin>",
+	);
+	expect(result.code).toMatch(
+		/import \{[^}]*__VelaBoundary[^}]*\} from "@rbxts\/vela-runtime";/,
+	);
+});
+
+test("a runtime host under the pin resolves its own class value pinned", () => {
+	const result = transform(
+		'<surfacegui><frame className="w-4 hover:w-8" /></surfacegui>',
+	);
+
+	expect(result.needsRuntimeHost).toBe(true);
+	expect(result.code).toContain("__velaRemPinned={true}");
+	// It was handed the pin, so there is nothing left for it to scale.
+	expect(result.code).not.toContain("__velaRem={");
+});
+
+test("a Vide pin defers its children into the scope that holds them", () => {
+	const result = transform("<surfacegui><Panel /></surfacegui>", {
+		configJson: JSON.stringify(defineConfig({ framework: "vide" })),
+	});
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain(
+		"<__VelaBoundary.Pin>{()=><Panel/>}</__VelaBoundary.Pin>",
+	);
+});
+
+test("emptying pinnedUnder puts the container back on the curve", () => {
+	const result = transform(
+		'<surfacegui><frame className="w-4" /></surfacegui>',
+		{
+			configJson: JSON.stringify(
+				defineConfig({ theme: { rem: { pinnedUnder: [] } } }),
+			),
+		},
+	);
+
+	expect(emitted(result.code)).toContain(
+		"Size={__VelaRem.scale(UDim2.fromOffset(16, 0), 0)}",
+	);
+});
+
+// The runtime is told where a pin lands rather than where one could land, so
+// the list of containers is compile-time only.
+test("the pinned containers never travel with the config", () => {
+	const result = transform('<frame className="w-4 hover:w-8" />');
+
+	expect(result.code).not.toContain("pinnedUnder");
+	expect(hostConfig(result.code).theme.rem.pinnedUnder).toBeUndefined();
+});

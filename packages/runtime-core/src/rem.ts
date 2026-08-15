@@ -77,6 +77,12 @@ export namespace __VelaRem {
 		return config.base > 0 ? rem / config.base : 1;
 	}
 
+	/// The rem a ratio of 1 comes out of, which is what a pinned subtree
+	/// resolves against: under a `SurfaceGui` the offsets are the literal ones.
+	export function base(): number {
+		return config.base;
+	}
+
 	/// What a `[2rem]` payload is worth before the viewport has its say, which
 	/// is the same base the compiler resolves such a payload against.
 	export function pixels(rem: number): number {

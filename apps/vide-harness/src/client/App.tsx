@@ -391,6 +391,19 @@ function ChildSlot(props: { children?: Vide.Node } & Record<string, unknown>) {
 	);
 }
 
+/// A SurfaceGui is drawn on a part, at the pixel space that part gives it, so
+/// the curve is pinned under one. Vide reads the pin where a thunk is built,
+/// which is why the children below it are deferred into the scope.
+export function SurfacePanel() {
+	return (
+		<surfacegui>
+			<frame className="w-24 h-6 bg-slate-800 rounded-lg p-2">
+				<NestedNode />
+			</frame>
+		</surfacegui>
+	);
+}
+
 export function App() {
 	const active = Vide.source(false);
 	// A template the collapser cannot read, so this one stays on the runtime

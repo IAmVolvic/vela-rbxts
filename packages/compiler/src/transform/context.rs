@@ -8,11 +8,11 @@ use crate::ir::model::{PropEntry, StyleIr, TextSpec};
 use crate::swc::builders::{
     create_helper_child, create_helper_child_cast_any, create_prop_attr, create_prop_attr_cast_any,
 };
-use crate::transform::fade::{
-    fade_component_function, fade_component_initializer, is_component_binding,
+use crate::transform::boundary::{
+    consume_component_function, consume_component_initializer, is_component_binding,
 };
 use crate::transform::jsx::{
-    element_expression_source, is_component_element, lower_class_name,
+    element_display_name, element_expression_source, is_component_element, lower_class_name,
     unsupported_host_class_name_diagnostic,
 };
 use crate::transform::module::{RuntimeNeeds, element_tag_name, is_supported_host_element};
@@ -45,6 +45,10 @@ pub(crate) struct VelaTransformer {
     /// Whether a fade left the static path and needs the runtime's opacity
     /// helpers, which a file can need without needing the whole host.
     pub(crate) opacity_helper_needed: bool,
+    /// Whether anything in this file reads what crossed a component boundary:
+    /// the consumer every component root carries, and the pin a `SurfaceGui`
+    /// opens over a subtree this pass cannot see all of.
+    pub(crate) boundary_helper_needed: bool,
     /// Whether a statically lowered offset left as a rem binding, which needs
     /// the rem namespace the same way, and the slots those bindings took.
     pub(crate) rem: crate::transform::rem::RemScaler,
@@ -52,6 +56,10 @@ pub(crate) struct VelaTransformer {
     /// The alpha every enclosing `opacity-*` has left for this element. 1 is
     /// opaque, and the root starts there.
     pub(crate) opacity_alpha: f64,
+    /// Whether an enclosing container pins this element's offsets to literal
+    /// pixels. A `SurfaceGui` is drawn on a part rather than on the screen, so
+    /// the viewport the rem curve follows says nothing about it.
+    pub(crate) rem_pinned: bool,
 }
 
 impl VisitMut for VelaTransformer {
@@ -67,6 +75,7 @@ impl VisitMut for VelaTransformer {
                 resolves_class_values: self.resolves_class_values,
                 rem: self.rem.used.then_some(&self.config.theme.rem),
                 opacity: self.opacity_helper_needed,
+                boundary: self.boundary_helper_needed,
             },
         );
 
@@ -83,15 +92,15 @@ impl VisitMut for VelaTransformer {
     }
 
     // A component defined here is rendered from somewhere this pass cannot see,
-    // so the fade that reaches it arrives as context. Its root is where that is
-    // read, and the instances it lowered statically are faded from there.
+    // so what reaches it arrives as context. Its root is where that is read, and
+    // the instances it lowered statically are corrected from there.
     fn visit_mut_fn_decl(&mut self, declaration: &mut FnDecl) {
         declaration.visit_mut_children_with(self);
 
         if is_component_binding(&declaration.ident.sym)
-            && fade_component_function(&mut declaration.function, self.target)
+            && consume_component_function(&mut declaration.function, self.target)
         {
-            self.opacity_helper_needed = true;
+            self.boundary_helper_needed = true;
             self.changed = true;
         }
     }
@@ -102,8 +111,8 @@ impl VisitMut for VelaTransformer {
         let DefaultDecl::Fn(function) = &mut declaration.decl else {
             return;
         };
-        if fade_component_function(&mut function.function, self.target) {
-            self.opacity_helper_needed = true;
+        if consume_component_function(&mut function.function, self.target) {
+            self.boundary_helper_needed = true;
             self.changed = true;
         }
     }
@@ -121,8 +130,8 @@ impl VisitMut for VelaTransformer {
         let Some(init) = declarator.init.as_deref_mut() else {
             return;
         };
-        if fade_component_initializer(init, self.target) {
-            self.opacity_helper_needed = true;
+        if consume_component_initializer(init, self.target) {
+            self.boundary_helper_needed = true;
             self.changed = true;
         }
     }
@@ -180,12 +189,27 @@ impl VisitMut for VelaTransformer {
         } else {
             self.subtree_opacity_alpha(element, element_tag.as_deref())
         };
+        let inherited_pin = self.rem_pinned;
+        // `SurfaceGui` is a tag this pass never lowers, but it is one it can
+        // still see, and seeing it is what opens the pin over everything below.
+        let pins_here = !is_component
+            && !inherited_pin
+            && self
+                .config
+                .theme
+                .rem
+                .pins_under(&element_display_name(&element.opening.name));
+        self.rem_pinned = inherited_pin || pins_here;
         element.visit_mut_children_with(self);
         if self.opacity_alpha < 1.0 {
             let alpha = self.opacity_alpha;
             self.provide_unreachable_opacity_children(&mut element.children, alpha);
         }
+        if pins_here {
+            self.pin_unreachable_children(element);
+        }
         self.opacity_alpha = inherited_alpha;
+        self.rem_pinned = inherited_pin;
 
         if !is_host && !is_component {
             if let Some(diagnostic) = unsupported_host_class_name_diagnostic(
@@ -329,7 +353,7 @@ impl VisitMut for VelaTransformer {
 
         // A helper is a host instance of its own that the runtime host never
         // reads back, so its offsets take the binding on either path.
-        let scales_rem = !self.config.theme.rem.is_static();
+        let scales_rem = !self.config.theme.rem.is_static() && !self.rem_pinned;
         let helper_children = lowered
             .style_ir
             .base
@@ -377,6 +401,15 @@ impl VisitMut for VelaTransformer {
                     name: "__velaRem".into(),
                     value: serde_json::to_string(&rem_props)
                         .expect("rem prop names must serialize to JSON"),
+                }));
+            }
+            // What this element resolves from a class value is scaled where it
+            // is resolved, which is inside the host, so a pin this pass can see
+            // has to travel with it rather than being applied to the emit.
+            if self.rem_pinned && !self.config.theme.rem.is_static() {
+                attrs.push(create_prop_attr(PropEntry {
+                    name: "__velaRemPinned".into(),
+                    value: "true".to_owned(),
                 }));
             }
             if !lowered.style_ir.runtime_rules.is_empty() {
@@ -563,12 +596,41 @@ impl VelaTransformer {
                     expr: JSXExpr::JSXEmptyExpr(JSXEmptyExpr { span: DUMMY_SP }),
                 }),
             );
-            let wrapped = self.target.opacity_provider_child(wrapped);
+            let wrapped = self.target.provider_child(wrapped);
             *child =
                 JSXElementChild::JSXElement(self.target.opacity_provider(alpha, vec![wrapped]));
             self.changed = true;
             self.opacity_helper_needed = true;
         }
+    }
+
+    /// Opens the pin at runtime as well as in the emit. Everything this pass
+    /// lowered below the container already carries literal offsets; a component
+    /// rendered there was compiled against the viewport in a file of its own,
+    /// and this is what tells it where it ended up.
+    fn pin_unreachable_children(&mut self, element: &mut JSXElement) {
+        if self.config.theme.rem.is_static() || !children_leave_the_static_path(&element.children) {
+            return;
+        }
+
+        let children = std::mem::take(&mut element.children)
+            .into_iter()
+            .map(|child| self.target.provider_child(child))
+            .collect();
+
+        if element.opening.self_closing {
+            element.opening.self_closing = false;
+            element.closing = Some(JSXClosingElement {
+                span: DUMMY_SP,
+                name: element.opening.name.clone(),
+            });
+        }
+
+        element.children = vec![JSXElementChild::JSXElement(
+            self.target.pin_provider(children),
+        )];
+        self.changed = true;
+        self.boundary_helper_needed = true;
     }
 
     /// Wraps a component element in the runtime's provider. Its instances are
@@ -583,7 +645,7 @@ impl VelaTransformer {
         std::mem::swap(element, provider.as_mut());
         element.children.push(
             self.target
-                .opacity_provider_child(JSXElementChild::JSXElement(provider)),
+                .provider_child(JSXElementChild::JSXElement(provider)),
         );
         self.changed = true;
         self.opacity_helper_needed = true;
@@ -631,6 +693,27 @@ impl Visit for JsxPresence {
     fn visit_jsx_fragment(&mut self, _: &JSXFragment) {
         self.found = true;
     }
+}
+
+/// Whether anything under a container reaches an element this pass did not
+/// lower itself: a component, or children handed over as a value. A subtree
+/// written out as plain host JSX was already pinned in the emit, and wrapping
+/// it would cost a provider that has nothing left to tell.
+fn children_leave_the_static_path(children: &[JSXElementChild]) -> bool {
+    children.iter().any(|child| match child {
+        JSXElementChild::JSXElement(element) => {
+            is_component_element(&element.opening.name)
+                || children_leave_the_static_path(&element.children)
+        }
+        JSXElementChild::JSXFragment(fragment) => {
+            children_leave_the_static_path(&fragment.children)
+        }
+        JSXElementChild::JSXExprContainer(container) => {
+            !matches!(container.expr, JSXExpr::JSXEmptyExpr(_))
+        }
+        JSXElementChild::JSXSpreadChild(_) => true,
+        JSXElementChild::JSXText(_) => false,
+    })
 }
 
 pub(crate) fn contains_jsx(expr: &Expr) -> bool {

@@ -47,10 +47,17 @@ pub(crate) trait EmitTarget {
     /// reads the context during the child's own render, so the child travels as
     /// it is; Vide builds a child eagerly, before the provider that would have
     /// scoped it ever runs, so it travels as a thunk instead.
-    fn opacity_provider_child(&self, child: JSXElementChild) -> JSXElementChild;
+    fn provider_child(&self, child: JSXElementChild) -> JSXElementChild;
 
-    /// The runtime's fade consumer, wrapped around what a component returns.
-    fn fade_element(&self, child: Expr) -> Box<JSXElement>;
+    /// The runtime's pin provider, wrapped around what a pinning container
+    /// holds. Everything below it reads its offsets as literal pixels.
+    fn pin_provider(&self, children: Vec<JSXElementChild>) -> Box<JSXElement>;
+
+    /// The runtime's boundary consumer, wrapped around what a component
+    /// returns. It reads what reached this component as context rather than as
+    /// something the transformer could compose into the emit: an inherited
+    /// fade, and the pin a container opened above the file this pass compiled.
+    fn boundary_element(&self, child: Expr) -> Box<JSXElement>;
 }
 
 pub(crate) fn react_target() -> &'static dyn EmitTarget {

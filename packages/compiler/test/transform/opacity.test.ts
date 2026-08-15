@@ -147,28 +147,28 @@ test("a component's own opacity multiplies with the one it inherits", () => {
 	);
 });
 
-test("a component root reads the alpha its caller provided", () => {
+test("a component root reads what its caller provided", () => {
 	const result = transform(
 		'export const Label = () => <textlabel className="text-sm" Text="hi" />;',
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(emitted(result.code)).toContain("<__VelaOpacity.Fade>");
+	expect(emitted(result.code)).toContain("<__VelaBoundary.Consume>");
 	expect(result.code).toMatch(
-		/import \{[^}]*__VelaOpacity[^}]*\} from "@rbxts\/vela-runtime";/,
+		/import \{[^}]*__VelaBoundary[^}]*\} from "@rbxts\/vela-runtime";/,
 	);
 	// The host is a great deal more than a fade needs.
 	expect(result.needsRuntimeHost).toBe(false);
 	expect(result.code).not.toContain("createVelaRuntimeHost");
 });
 
-test("a component root that resolves at runtime needs no fade of its own", () => {
+test("a component root that resolves at runtime needs no consumer of its own", () => {
 	const result = transform(
 		'export const Label = () => <textlabel className="text-sm hover:text-lg" Text="hi" />;',
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(emitted(result.code)).not.toContain("__VelaOpacity.Fade");
+	expect(emitted(result.code)).not.toContain("__VelaBoundary.Consume");
 	expect(result.needsRuntimeHost).toBe(true);
 });
 
@@ -179,7 +179,7 @@ test("a callback inside a component is not a component root", () => {
 
 	expect(result.diagnostics).toEqual([]);
 	expect(
-		emitted(result.code).match(/__VelaOpacity\.Fade>/g) ?? [],
+		emitted(result.code).match(/__VelaBoundary\.Consume>/g) ?? [],
 	).toHaveLength(2);
 });
 

@@ -52,6 +52,10 @@ type VelaRuntimeHostProps = {
 	/// ones. Nothing re-runs this component, so each test arrives as a thunk.
 	__velaTests?: readonly (() => boolean)[];
 	__velaRem?: readonly string[];
+	/// Whether a container this pass could see pins those offsets to literal
+	/// pixels. What the scope says is the same thing for a pin that was opened
+	/// in a file this element's own was compiled without.
+	__velaRemPinned?: boolean;
 	__velaTransition?: RuntimeTransition;
 	__velaAnimation?: string;
 	__velaText?: RuntimeTextSpec;
@@ -74,6 +78,7 @@ const HOST_OWN_PROPS = new Set<string>([
 	"__velaRules",
 	"__velaTests",
 	"__velaRem",
+	"__velaRemPinned",
 	"__velaTransition",
 	"__velaAnimation",
 	"__velaText",
@@ -119,6 +124,21 @@ namespace __VelaEnvSource {
 	export const current = state as () => RuntimeEnvironment;
 }
 
+/// Whether what is being built right now sits under a container that pins its
+/// offsets to literal pixels. Declared above the scaler that reads it, since a
+/// namespace is a local and a local is not in scope above itself.
+namespace __VelaPin {
+	const Context = Vide.context(false);
+
+	export function pinned(): boolean {
+		return Context();
+	}
+
+	export function scope(body: () => Vide.Node): Vide.Node {
+		return Context(true, body);
+	}
+}
+
 namespace __VelaRemSource {
 	function ratio(): number {
 		return __VelaRemCore.ratio(__VelaEnvSource.current().rem);
@@ -126,12 +146,27 @@ namespace __VelaRemSource {
 
 	/// No slot table: a thunk costs nothing to rebuild, and React needed one
 	/// only because a fresh binding reads as a new subscription.
+	///
+	/// A pin is read where the thunk is built rather than inside it: a child is
+	/// built inside the scope that holds it, and the effect the thunk ends up in
+	/// runs long after that scope closed. React has to undo the scaling after
+	/// the fact for the same reason it caches; here it is never applied.
 	export function scaler(): VelaRemScaler {
 		function scale<T>(value: T, _slot: number): () => T {
+			if (__VelaPin.pinned()) {
+				return () => value;
+			}
+
 			return () => __VelaRemCore.apply(value as never, ratio()) as never;
 		}
 
 		function scaleText(value: number, _slot: number): () => number {
+			if (__VelaPin.pinned()) {
+				const capped = math.min(value, __VelaRemCore.TEXT_SIZE_CEILING);
+
+				return () => capped;
+			}
+
 			return () => math.min(value * ratio(), __VelaRemCore.TEXT_SIZE_CEILING);
 		}
 
@@ -185,13 +220,13 @@ export namespace __VelaOpacity {
 
 	/// React clones the element to fold the inherited alpha in. Vide has already
 	/// built the instance by the time this runs, so it is written instead.
-	export function Fade(props: { children?: Vide.Node }): Vide.Node {
+	export function consume(children: Vide.Node): Vide.Node {
 		const alpha = Context();
 		if (alpha < 1) {
-			fade(props.children, alpha, undefined);
+			fade(children, alpha, undefined);
 		}
 
-		return props.children;
+		return children;
 	}
 
 	/// What React hands a host's children through a provider they read during
@@ -259,6 +294,37 @@ export namespace __VelaOpacity {
 	}
 }
 
+/// What reaches an element through the tree rather than through its own class
+/// list, and can only be read where the tree is: an enclosing fade, and the pin
+/// a container opened over its whole subtree.
+export namespace __VelaBoundary {
+	type PinProps = {
+		children: (() => Vide.Node) | Array<() => Vide.Node>;
+	};
+
+	/// Pins everything below to the offsets it was written with. A `SurfaceGui`
+	/// gets its pixel space from the part it is drawn on, so the viewport the
+	/// rem curve follows says nothing about what happens under one. Its children
+	/// arrive as thunks, since Vide would otherwise have built them before the
+	/// scope that holds them existed.
+	export function Pin(props: PinProps): Vide.Node {
+		const children = props.children;
+
+		return __VelaPin.scope(
+			typeIs(children, "function")
+				? children
+				: () => children.map((child) => child()),
+		);
+	}
+
+	/// A pin needs nothing here: a thunk reads it where it is built, which is
+	/// already inside the scope. Only the fade arrives too late for what it
+	/// applies to to have read it.
+	export function Consume(props: { children?: Vide.Node }): Vide.Node {
+		return __VelaOpacity.consume(props.children);
+	}
+}
+
 export function createVelaRuntimeHost(
 	config: VelaRuntimeConfig,
 	motionDriver?: VelaMotionDriver,
@@ -287,6 +353,9 @@ export function createVelaRuntimeHost(
 		const explicitAlpha = props.__velaOpacity ?? 1;
 		const ambientAlpha = __VelaOpacity.inherited();
 		const alpha = explicitAlpha * ambientAlpha;
+		// Read here rather than inside the resolution: the scope is open while
+		// this body runs, and the derivation reruns long after it closed.
+		const pinned = __VelaPin.pinned() || props.__velaRemPinned === true;
 
 		const hovered = Vide.source(false);
 		const pressed = Vide.source(false);
@@ -301,7 +370,9 @@ export function createVelaRuntimeHost(
 
 			return {
 				width: base.width,
-				rem: base.rem,
+				// A pinned subtree resolves at the base, which is the rem a ratio
+				// of 1 comes out of: the offsets it writes are the literal ones.
+				rem: pinned ? __VelaRemCore.base() : base.rem,
 				orientation: base.orientation,
 				input: base.input,
 				colorScheme: base.colorScheme,
