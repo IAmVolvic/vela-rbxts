@@ -16,7 +16,7 @@ export namespace __VelaMotion {
 		driver = value;
 	}
 
-	export function transitionState(
+	function transitionState(
 		resolution: RuntimeResolution,
 	): RuntimeTransitionState {
 		let state = resolution.transition;
@@ -40,10 +40,7 @@ export namespace __VelaMotion {
 				return true;
 			}
 
-			const property = __VelaLua.substring(
-				token,
-				__VelaLua.stringLength("transition-"),
-			);
+			const property = __VelaLua.after(token, "transition-");
 			if (
 				token === "transition" ||
 				property === "all" ||
@@ -57,27 +54,18 @@ export namespace __VelaMotion {
 			return true;
 		}
 
-		if (__VelaLua.startsWith(token, "duration-")) {
-			const millis = tonumber(
-				__VelaLua.substring(token, __VelaLua.stringLength("duration-")),
-			);
-			if (millis !== undefined) {
-				const state = transitionState(resolution);
-				state.time = millis / 1000;
-				if (state.enabled === undefined) {
-					state.enabled = true;
-				}
+		for (const [prefix, field] of [
+			["duration-", "time"],
+			["delay-", "delay"],
+		] as Array<[string, "time" | "delay"]>) {
+			if (!__VelaLua.startsWith(token, prefix)) {
+				continue;
 			}
-			return true;
-		}
 
-		if (__VelaLua.startsWith(token, "delay-")) {
-			const millis = tonumber(
-				__VelaLua.substring(token, __VelaLua.stringLength("delay-")),
-			);
+			const millis = tonumber(__VelaLua.after(token, prefix));
 			if (millis !== undefined) {
 				const state = transitionState(resolution);
-				state.delay = millis / 1000;
+				state[field] = millis / 1000;
 				if (state.enabled === undefined) {
 					state.enabled = true;
 				}
@@ -86,7 +74,7 @@ export namespace __VelaMotion {
 		}
 
 		if (__VelaLua.startsWith(token, "ease-")) {
-			const key = __VelaLua.substring(token, __VelaLua.stringLength("ease-"));
+			const key = __VelaLua.after(token, "ease-");
 			const easing =
 				key === "linear"
 					? (["Linear", "InOut"] as const)
@@ -171,7 +159,7 @@ export namespace __VelaMotion {
 		);
 	}
 
-	export function parseEasingStyle(name: string): Enum.EasingStyle {
+	function parseEasingStyle(name: string): Enum.EasingStyle {
 		const registry = Enum.EasingStyle as unknown as Record<
 			string,
 			Enum.EasingStyle | undefined
@@ -179,7 +167,7 @@ export namespace __VelaMotion {
 		return registry[name] ?? Enum.EasingStyle.Quad;
 	}
 
-	export function parseEasingDirection(name: string): Enum.EasingDirection {
+	function parseEasingDirection(name: string): Enum.EasingDirection {
 		const registry = Enum.EasingDirection as unknown as Record<
 			string,
 			Enum.EasingDirection | undefined
@@ -187,8 +175,6 @@ export namespace __VelaMotion {
 		return registry[name] ?? Enum.EasingDirection.Out;
 	}
 
-	/// Starts a preset loop animation and returns the cleanup that cancels it and
-	/// restores the animated property.
 	export function playTransition(
 		instance: Instance,
 		goal: Record<string, RuntimePropValue>,
@@ -210,6 +196,8 @@ export namespace __VelaMotion {
 		__VelaTweenService.Create(instance, info, goal as never).Play();
 	}
 
+	/// Starts a preset loop animation and returns the cleanup that cancels it and
+	/// restores the animated property.
 	export function startPresetAnimation(
 		instance: Instance,
 		animation: string,

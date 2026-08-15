@@ -26,6 +26,10 @@ export namespace __VelaLua {
 		return __velaStringSub(value, start + 1, resolvedStop);
 	}
 
+	export function after(value: string, prefix: string): string {
+		return substring(value, stringLength(prefix));
+	}
+
 	export function startsWith(value: string, prefix: string): boolean {
 		return substring(value, 0, stringLength(prefix)) === prefix;
 	}
@@ -252,7 +256,7 @@ export namespace __VelaLua {
 		return splitBy(body, ",").map((entry) => trim(entry));
 	}
 
-	export function isWhitespace(value: string): boolean {
+	function isWhitespace(value: string): boolean {
 		return value === " " || value === "\t" || value === "\n" || value === "\r";
 	}
 
@@ -287,7 +291,7 @@ export namespace __VelaLua {
 		return mathAbs(value - rounded) < 1e-9;
 	}
 
-	export function mathRound(value: number): number {
+	function mathRound(value: number): number {
 		return mathFloor(value + 0.5);
 	}
 
@@ -295,7 +299,7 @@ export namespace __VelaLua {
 		return typeOf(value) === "table" && arraySize(value as unknown[]) > 0;
 	}
 
-	export function isNaNNumber(value: number): boolean {
+	function isNaNNumber(value: number): boolean {
 		return !(value >= 0 || value <= 0);
 	}
 

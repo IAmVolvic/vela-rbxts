@@ -121,6 +121,8 @@ export namespace __VelaVariant {
 		];
 	}
 
+	/// Text boxes carry their own keyboard focus events; every other element reads
+	/// focus as the selection a gamepad or `GuiService` moved onto it.
 	export function focusTracking(
 		tag: VelaRuntimeTag,
 		setFocused: (focused: boolean) => void,
@@ -162,7 +164,7 @@ export namespace __VelaVariant {
 		composeEvent(hostProps, "MouseLeave", () => setPressed(false));
 	}
 
-	export function isPressInput(input: unknown): boolean {
+	function isPressInput(input: unknown): boolean {
 		if (!typeIs(input, "Instance") || !input.IsA("InputObject")) {
 			return false;
 		}
@@ -173,22 +175,14 @@ export namespace __VelaVariant {
 		);
 	}
 
-	/// Text boxes carry their own keyboard focus events; every other element reads
-	/// focus as the selection a gamepad or `GuiService` moved onto it.
 	export function attachFocusTracking(
 		hostProps: Record<string, unknown>,
 		tag: VelaRuntimeTag,
 		setFocused: (focused: boolean) => void,
 	) {
-		let gained = "SelectionGained";
-		let lost = "SelectionLost";
-		if (tag === "textbox") {
-			gained = "Focused";
-			lost = "FocusLost";
+		for (const binding of focusTracking(tag, setFocused)) {
+			composeEvent(hostProps, binding.name, binding.handler);
 		}
-
-		composeEvent(hostProps, gained, () => setFocused(true));
-		composeEvent(hostProps, lost, () => setFocused(false));
 	}
 
 	export function matchesRuntimeCondition(

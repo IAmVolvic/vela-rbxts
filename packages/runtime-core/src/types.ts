@@ -220,7 +220,6 @@ export type RuntimeTransitionState = {
 };
 
 /** What a transition asks the motion driver to move the instance through. */
-
 export type VelaMotionSpec = RuntimeTransition;
 
 /**
@@ -233,7 +232,6 @@ export type VelaMotionSpec = RuntimeTransition;
  * driver that never assigns leaves the instance where it was.
  * `animate` returns its own cleanup, called when the animation is taken away.
  */
-
 /// Method signatures, not function properties: roblox-ts gives an object
 /// literal's method an implicit `self`, so a driver written the documented way
 /// only lines up when the runtime calls it as a method too. Stated as

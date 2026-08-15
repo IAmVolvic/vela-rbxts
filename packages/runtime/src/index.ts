@@ -13,8 +13,6 @@ import type {
 	RuntimePropMap,
 	RuntimePropValue,
 	RuntimeRemConfig,
-	RuntimeResolution,
-	RuntimeResolvedHelperEntry,
 	RuntimeRule,
 	RuntimeTextSpec,
 	RuntimeTransition,
@@ -26,7 +24,6 @@ import type {
 } from "@rbxts/vela-runtime-core";
 import {
 	__VelaApply,
-	__VelaColor,
 	__VelaDivide as __VelaDivideCore,
 	__VelaEnv as __VelaEnvCore,
 	__VelaLua,
@@ -36,7 +33,6 @@ import {
 	__VelaRem as __VelaRemCore,
 	__VelaResolution,
 	__VelaText,
-	__VelaValue,
 	__VelaVariant,
 } from "@rbxts/vela-runtime-core";
 
@@ -55,7 +51,6 @@ type VelaRefTarget<Tag> = Tag extends SupportedHostElementTag
 /// The reactive layer over the shared rem curve. The curve itself, and what it
 /// does to a value, is the core's; this is only how a React tree hears about it.
 namespace __VelaRem {
-	let cameraConnection: RBXScriptConnection | undefined;
 	let connected = false;
 
 	const [remBinding, setRem] = __VelaReact.createBinding(
@@ -141,24 +136,8 @@ namespace __VelaRem {
 		}
 
 		connected = true;
-		__VelaWorkspace.GetPropertyChangedSignal("CurrentCamera").Connect(() => {
-			watchCamera();
-			viewport.call();
-		});
-		watchCamera();
+		__VelaEnvCore.watchViewport(viewport.call);
 		refresh();
-	}
-
-	function watchCamera() {
-		cameraConnection?.Disconnect();
-
-		const camera = __VelaWorkspace.CurrentCamera as RuntimeCamera | undefined;
-		cameraConnection =
-			camera === undefined
-				? undefined
-				: camera
-						.GetPropertyChangedSignal("ViewportSize")
-						.Connect(viewport.call);
 	}
 
 	__VelaRemCore.whenConfigured(() => {
@@ -310,14 +289,8 @@ namespace __VelaDivide {
 		divide: RuntimeDivide,
 		children: defined[],
 	): defined[] {
-		const color =
-			(divide.color !== undefined
-				? __VelaValue.parseColor3(divide.color)
-				: undefined) ?? Color3.fromRGB(229, 231, 235);
-		const size =
-			divide.axis === "x"
-				? new UDim2(0, divide.thickness, 1, 0)
-				: new UDim2(1, 0, 0, divide.thickness);
+		const color = __VelaDivideCore.separatorColor(divide);
+		const size = __VelaDivideCore.separatorSize(divide);
 
 		const result: defined[] = [];
 		let seenContentChild = false;
@@ -494,6 +467,24 @@ type VelaRuntimeHostProps = {
 	children?: defined | readonly defined[];
 } & Record<string, unknown>;
 
+/// The host's own props, which the transformer writes onto it and no instance
+/// has a member for. Named in one place because a name missing from the static
+/// passthrough reaches `Instance` and throws there.
+const HOST_OWN_PROPS = new Set<string>([
+	"__velaTag",
+	"__velaRules",
+	"__velaTests",
+	"__velaRem",
+	"__velaTransition",
+	"__velaAnimation",
+	"__velaText",
+	"__velaMargin",
+	"__velaDivide",
+	"__velaOpacity",
+	"className",
+	"children",
+]);
+
 // `forwardRef` fixes one ref type for the whole component, which would leave
 // every consumer ref typed as `unknown`. Restating it as a generic call lets
 // `ref` follow whichever host tag the transformer lowered to.
@@ -600,21 +591,8 @@ export function createVelaRuntimeHost(
 
 			const hostProps: Record<string, unknown> = {};
 			for (const [name, value] of pairs(props as Record<string, unknown>)) {
-				if (
-					name !== "__velaTag" &&
-					name !== "__velaRules" &&
-					name !== "__velaTests" &&
-					name !== "__velaRem" &&
-					name !== "__velaTransition" &&
-					name !== "__velaAnimation" &&
-					name !== "__velaText" &&
-					name !== "__velaMargin" &&
-					name !== "__velaDivide" &&
-					name !== "__velaOpacity" &&
-					name !== "className" &&
-					name !== "children"
-				) {
-					hostProps[name] = value;
+				if (!HOST_OWN_PROPS.has(name as string)) {
+					hostProps[name as string] = value;
 				}
 			}
 			// Before the resolution merges in: what it carries was already scaled

@@ -119,9 +119,9 @@ export namespace __VelaColor {
 		return undefined;
 	}
 
-	export const HEX_DIGITS = "0123456789abcdef";
+	const HEX_DIGITS = "0123456789abcdef";
 
-	export function parseHexDigit(value: string): number | undefined {
+	function parseHexDigit(value: string): number | undefined {
 		const lowered = value.lower();
 		for (let index = 0; index < 16; index++) {
 			if (__VelaLua.substring(HEX_DIGITS, index, index + 1) === lowered) {
@@ -132,7 +132,7 @@ export namespace __VelaColor {
 		return undefined;
 	}
 
-	export function parseHexPair(value: string): number | undefined {
+	function parseHexPair(value: string): number | undefined {
 		const high = parseHexDigit(__VelaLua.substring(value, 0, 1));
 		const low = parseHexDigit(__VelaLua.substring(value, 1, 2));
 		if (high === undefined || low === undefined) {

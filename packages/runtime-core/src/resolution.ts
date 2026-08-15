@@ -166,10 +166,7 @@ export namespace __VelaResolution {
 		}
 
 		if (__VelaLua.startsWith(utility, "animate-")) {
-			const key = __VelaLua.substring(
-				utility,
-				__VelaLua.stringLength("animate-"),
-			);
+			const key = __VelaLua.after(utility, "animate-");
 			if (
 				key === "spin" ||
 				key === "pulse" ||
@@ -203,7 +200,7 @@ export namespace __VelaResolution {
 		);
 	}
 
-	export const TEXT_HOST_PROPS: readonly string[] = [
+	const TEXT_HOST_PROPS: readonly string[] = [
 		"TextColor3",
 		"TextTransparency",
 		"TextSize",
@@ -217,13 +214,13 @@ export namespace __VelaResolution {
 		"FontStyle",
 	];
 
-	export const IMAGE_HOST_PROPS: readonly string[] = [
+	const IMAGE_HOST_PROPS: readonly string[] = [
 		"ImageColor3",
 		"ImageTransparency",
 		"ScaleType",
 	];
 
-	export const SCROLL_HOST_PROPS: readonly string[] = [
+	const SCROLL_HOST_PROPS: readonly string[] = [
 		"ElasticBehavior",
 		"ScrollingDirection",
 		"ScrollingEnabled",

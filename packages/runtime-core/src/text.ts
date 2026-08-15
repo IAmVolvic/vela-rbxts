@@ -1,14 +1,14 @@
 import type { RuntimeResolution, RuntimeTextSpec } from "./types";
 
 export namespace __VelaText {
-	export function escapeRichText(value: string): string {
+	function escapeRichText(value: string): string {
 		const [amp] = value.gsub("&", "&amp;");
 		const [lt] = amp.gsub("<", "&lt;");
 		const [gt] = lt.gsub(">", "&gt;");
 		return gt;
 	}
 
-	export function capitalizeAsciiWords(value: string): string {
+	function capitalizeAsciiWords(value: string): string {
 		const [result] = value.gsub("%f[%a]%a", (letter) => letter.upper());
 		return result;
 	}

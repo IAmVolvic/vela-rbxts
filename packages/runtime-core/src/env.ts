@@ -1,6 +1,7 @@
 import {
 	Players as __VelaPlayers,
 	UserInputService as __VelaUserInputService,
+	Workspace as __VelaWorkspace,
 } from "@rbxts/services";
 import __VelaConfigDefaults from "./config-defaults.json";
 import { __VelaRem } from "./rem";
@@ -80,12 +81,35 @@ export namespace __VelaEnv {
 		};
 	}
 
+	/// The viewport is read off the current camera, which the place can swap: the
+	/// size subscription has to follow it rather than stay on the one that was
+	/// current at connect time.
+	export function watchViewport(onChange: () => void): void {
+		let cameraConnection: RBXScriptConnection | undefined;
+
+		function watchCamera() {
+			cameraConnection?.Disconnect();
+
+			const camera = __VelaWorkspace.CurrentCamera;
+			cameraConnection =
+				camera === undefined
+					? undefined
+					: camera.GetPropertyChangedSignal("ViewportSize").Connect(onChange);
+		}
+
+		__VelaWorkspace.GetPropertyChangedSignal("CurrentCamera").Connect(() => {
+			watchCamera();
+			onChange();
+		});
+		watchCamera();
+	}
+
 	/// Roblox exposes no color scheme to a running game, so the app owns the
 	/// choice: `dark:` reads this attribute off the local player, which the server
 	/// can also set per player.
 	export const VELA_COLOR_SCHEME_ATTRIBUTE = "VelaColorScheme";
 
-	export function readColorScheme(): RuntimeEnvironment["colorScheme"] {
+	function readColorScheme(): RuntimeEnvironment["colorScheme"] {
 		const player = __VelaPlayers.LocalPlayer;
 		if (player === undefined) {
 			return "light";
@@ -96,7 +120,7 @@ export namespace __VelaEnv {
 			: "light";
 	}
 
-	export function detectInputMode(): RuntimeEnvironment["input"] {
+	function detectInputMode(): RuntimeEnvironment["input"] {
 		if (__VelaUserInputService.GamepadEnabled) {
 			return "gamepad";
 		}
@@ -152,14 +176,14 @@ export namespace __VelaEnv {
 					isReplaced("colors"),
 				),
 			),
-			radius: normalizeRadiusScale(
+			radius: normalizeUDimScale(
 				withDefaults(
 					DEFAULT_THEME.radius,
 					config.theme.radius,
 					isReplaced("radius"),
 				),
 			),
-			spacing: normalizeSpacingScale(
+			spacing: normalizeUDimScale(
 				withDefaults(
 					DEFAULT_THEME.spacing,
 					config.theme.spacing,
@@ -204,20 +228,7 @@ export namespace __VelaEnv {
 		return normalized;
 	}
 
-	export function normalizeRadiusScale(
-		scale: Record<string, string>,
-	): Record<string, UDim> {
-		const normalized: Record<string, UDim> = {};
-
-		for (const [key, value] of pairs(scale)) {
-			normalized[key] =
-				__VelaValue.parseUDim(value as string) ?? new UDim(0, 0);
-		}
-
-		return normalized;
-	}
-
-	export function normalizeSpacingScale(
+	function normalizeUDimScale(
 		scale: Record<string, string>,
 	): Record<string, UDim> {
 		const normalized: Record<string, UDim> = {};

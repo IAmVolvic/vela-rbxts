@@ -26,7 +26,6 @@ import {
 	__VelaRem as __VelaRemCore,
 	__VelaResolution,
 	__VelaText,
-	__VelaValue,
 	__VelaVariant,
 } from "@rbxts/vela-runtime-core";
 import Vide from "@rbxts/vide";
@@ -100,7 +99,6 @@ namespace __VelaEnvSource {
 	}
 
 	const state = Vide.source(read());
-	let cameraConnection: RBXScriptConnection | undefined;
 
 	function refresh() {
 		state(read());
@@ -110,23 +108,7 @@ namespace __VelaEnvSource {
 	/// debounce rather than landing a frame's worth of intermediate sizes.
 	const viewport = __VelaEnvCore.debounceViewport(refresh);
 
-	function watchCamera() {
-		cameraConnection?.Disconnect();
-
-		const camera = __VelaWorkspace.CurrentCamera;
-		cameraConnection =
-			camera === undefined
-				? undefined
-				: camera
-						.GetPropertyChangedSignal("ViewportSize")
-						.Connect(viewport.call);
-	}
-
-	__VelaWorkspace.GetPropertyChangedSignal("CurrentCamera").Connect(() => {
-		watchCamera();
-		viewport.call();
-	});
-	watchCamera();
+	__VelaEnvCore.watchViewport(viewport.call);
 
 	// This module is loaded by the emitted preamble, which only then calls the
 	// factory that configures the curve — so the first read above used the
@@ -759,7 +741,7 @@ function writeResolvedProps(writer: ResolvedPropWriter) {
 		// restores it. What the element declared comes back first; the class
 		// default answers only where it declared nothing.
 		for (const name of stale) {
-			const fallback = declared[name] ?? classDefault(writer.hostTag, name);
+			const fallback = declared[name] ?? classMember(writer.hostTag, name);
 			write(name, finalValue(name, fallback), true);
 			written.delete(name);
 		}
@@ -859,10 +841,6 @@ function classMember(tag: string, name: string): unknown {
 	return ok ? value : undefined;
 }
 
-function classDefault(tag: string, name: string): unknown {
-	return classMember(tag, name);
-}
-
 function prepareMarginWrapper(
 	hostProps: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -909,24 +887,6 @@ const COMPOSED_BY_CONTRIBUTOR: Record<string, string> = {
 	TranslateY: "Position",
 };
 
-function divideColor(divide: RuntimeDivide | undefined): Color3 {
-	return (
-		(divide?.color !== undefined
-			? __VelaValue.parseColor3(divide.color)
-			: undefined) ?? Color3.fromRGB(229, 231, 235)
-	);
-}
-
-function divideSize(divide: RuntimeDivide | undefined): UDim2 {
-	if (divide === undefined) {
-		return UDim2.fromOffset(0, 0);
-	}
-
-	return divide.axis === "x"
-		? new UDim2(0, divide.thickness, 1, 0)
-		: new UDim2(1, 0, 0, divide.thickness);
-}
-
 /// Every separator a divide could ever ask for, built before the children
 /// effect that would otherwise have to open a reactive scope to make one. A run
 /// the resolution does not currently ask for is simply left out of the list,
@@ -940,10 +900,10 @@ function buildSeparators(
 	for (let index = 0; index < count; index += 1) {
 		separators.push(
 			videJsx("frame", {
-				BackgroundColor3: () => divideColor(divide()),
+				BackgroundColor3: () => __VelaDivide.separatorColor(divide()),
 				BackgroundTransparency: () => divide()?.transparency ?? 0,
 				BorderSizePixel: 0,
-				Size: () => divideSize(divide()),
+				Size: () => __VelaDivide.separatorSize(divide()),
 			}) as defined,
 		);
 	}

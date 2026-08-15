@@ -202,8 +202,9 @@ export namespace __VelaValue {
 		return undefined;
 	}
 
-	/// `content-*` distributes the cross axis, which `UIListLayout` exposes as its
-	/// vertical properties — the same split `items-*` uses.
+	/// `justify-*` runs along the main axis, which `UIListLayout` exposes as its
+	/// horizontal properties. `between`/`around`/`evenly` need `UIFlexAlignment`
+	/// rather than a plain alignment, so they land on a different property.
 	export function resolveJustifyProp(
 		key: string,
 	): RuntimeResolvedPropEntry | undefined {
@@ -276,6 +277,8 @@ export namespace __VelaValue {
 		return (100 - percent) / 100;
 	}
 
+	/// `content-*` distributes the cross axis, which `UIListLayout` exposes as its
+	/// vertical properties — the same split `items-*` uses.
 	export function resolveAlignContentProp(
 		key: string,
 	): RuntimeResolvedPropEntry | undefined {
@@ -518,7 +521,7 @@ export namespace __VelaValue {
 		return [key, undefined];
 	}
 
-	export function isColorShade(value: string): boolean {
+	function isColorShade(value: string): boolean {
 		return (
 			value === "50" ||
 			value === "100" ||
@@ -582,10 +585,10 @@ export namespace __VelaValue {
 			return { scale: 0, offset: spacing.Offset };
 		}
 
-		return resolveArbitrarySizeValue(key);
+		return parseArbitraryValue(key);
 	}
 
-	export function resolveArbitraryUDim(key: string): UDim | undefined {
+	function resolveArbitraryUDim(key: string): UDim | undefined {
 		const value = parseArbitraryValue(key);
 		if (value === undefined) {
 			return undefined;
@@ -594,13 +597,7 @@ export namespace __VelaValue {
 		return new UDim(value.scale, value.offset);
 	}
 
-	export function resolveArbitrarySizeValue(
-		key: string,
-	): RuntimeSizeAxisValue | undefined {
-		return parseArbitraryValue(key);
-	}
-
-	export function resolveNumericSpacingValue(key: string): UDim | undefined {
+	function resolveNumericSpacingValue(key: string): UDim | undefined {
 		if (__VelaLua.startsWith(key, "-") || __VelaLua.startsWith(key, "+")) {
 			return undefined;
 		}
@@ -617,7 +614,7 @@ export namespace __VelaValue {
 		return new UDim(0, numeric * 4);
 	}
 
-	export function resolveFractionScale(key: string): number | undefined {
+	function resolveFractionScale(key: string): number | undefined {
 		const [numeratorText, denominatorText] = __VelaLua.splitOnce(key, "/");
 		if (denominatorText === undefined) {
 			return undefined;
@@ -667,9 +664,7 @@ export namespace __VelaValue {
 	/// Mirrors the compiler's `parse_arbitrary_value`: a percentage is a scale, and
 	/// a length is an offset. The two must agree, or a class resolves differently
 	/// depending on whether it was static or dynamic.
-	export function parseArbitraryValue(
-		key: string,
-	): RuntimeSizeAxisValue | undefined {
+	function parseArbitraryValue(key: string): RuntimeSizeAxisValue | undefined {
 		if (!__VelaLua.startsWith(key, "[") || !__VelaLua.endsWith(key, "]")) {
 			return undefined;
 		}
@@ -715,10 +710,7 @@ export namespace __VelaValue {
 
 	/// The plain number behind a `[...]` payload, for families that count in
 	/// something other than pixels.
-	export function parseArbitraryNumber(
-		key: string,
-		unit: string,
-	): number | undefined {
+	function parseArbitraryNumber(key: string, unit: string): number | undefined {
 		if (!__VelaLua.startsWith(key, "[") || !__VelaLua.endsWith(key, "]")) {
 			return undefined;
 		}

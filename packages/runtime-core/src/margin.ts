@@ -8,9 +8,7 @@ import type {
 import { __VelaValue } from "./value";
 
 export namespace __VelaMargin {
-	export function marginState(
-		resolution: RuntimeResolution,
-	): RuntimeMarginState {
+	function marginState(resolution: RuntimeResolution): RuntimeMarginState {
 		let state = resolution.margin;
 		if (state === undefined) {
 			state = {};
@@ -171,7 +169,4 @@ export namespace __VelaMargin {
 
 		return wrapperProps;
 	}
-
-	/// Renders the margin box: a transparent wrapper padded by the margins, with
-	/// the real element filling the remaining space.
 }

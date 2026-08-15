@@ -9,9 +9,7 @@ import type {
 import { __VelaValue } from "./value";
 
 export namespace __VelaDivide {
-	export function divideState(
-		resolution: RuntimeResolution,
-	): RuntimeDivideState {
+	function divideState(resolution: RuntimeResolution): RuntimeDivideState {
 		let state = resolution.divide;
 		if (state === undefined) {
 			state = {};
@@ -39,9 +37,7 @@ export namespace __VelaDivide {
 			if (!__VelaLua.startsWith(token, prefix)) {
 				continue;
 			}
-			const thickness = tonumber(
-				__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
-			);
+			const thickness = tonumber(__VelaLua.after(token, prefix));
 			if (thickness !== undefined) {
 				const state = divideState(resolution);
 				state.axis = prefix === "divide-x-" ? "x" : "y";
@@ -51,7 +47,7 @@ export namespace __VelaDivide {
 		}
 
 		if (__VelaLua.startsWith(token, "divide-")) {
-			const key = __VelaLua.substring(token, __VelaLua.stringLength("divide-"));
+			const key = __VelaLua.after(token, "divide-");
 			const [base, opacity] = __VelaColor.splitColorOpacity(key);
 			const color = resolveDivideColor(theme, base);
 			if (color !== undefined) {
@@ -69,7 +65,7 @@ export namespace __VelaDivide {
 
 	/// The divide config travels as an expression string, because the compile-time
 	/// half of it arrives that way on `__velaDivide`.
-	export function resolveDivideColor(
+	function resolveDivideColor(
 		theme: RuntimeTheme,
 		key: string,
 	): string | undefined {
@@ -99,7 +95,21 @@ export namespace __VelaDivide {
 		};
 	}
 
-	/// Interleaves a separator frame between consecutive children. Separators rely
-	/// on hierarchy order, so lists that assign explicit LayoutOrder will scatter
-	/// them.
+	export function separatorColor(divide: RuntimeDivide | undefined): Color3 {
+		return (
+			(divide?.color !== undefined
+				? __VelaValue.parseColor3(divide.color)
+				: undefined) ?? Color3.fromRGB(229, 231, 235)
+		);
+	}
+
+	export function separatorSize(divide: RuntimeDivide | undefined): UDim2 {
+		if (divide === undefined) {
+			return UDim2.fromOffset(0, 0);
+		}
+
+		return divide.axis === "x"
+			? new UDim2(0, divide.thickness, 1, 0)
+			: new UDim2(1, 0, 0, divide.thickness);
+	}
 }

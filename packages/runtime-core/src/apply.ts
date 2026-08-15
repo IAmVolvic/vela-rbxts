@@ -11,7 +11,6 @@ import type {
 	RuntimeResolution,
 	RuntimeResolvedEffectBundle,
 	RuntimeResolvedPropEntry,
-	RuntimeRulePropEntry,
 } from "./types";
 import { __VelaValue } from "./value";
 
@@ -150,7 +149,7 @@ export namespace __VelaApply {
 	/// three parts of a `FontFace`, a grid track and the gap it has to give back.
 	/// They travel as their own entries and are composed here, once every rule and
 	/// class token has had its say.
-	export function applyResolutionProp(
+	function applyResolutionProp(
 		resolution: RuntimeResolution,
 		name: string,
 		rawValue: RuntimePropValue,
@@ -354,7 +353,7 @@ export namespace __VelaApply {
 		applyComposedGradient(hostProps, resolution, preflight);
 	}
 
-	export function applyComposedFont(
+	function applyComposedFont(
 		hostProps: Record<string, unknown>,
 		resolution: RuntimeResolution,
 	) {
@@ -374,7 +373,7 @@ export namespace __VelaApply {
 		);
 	}
 
-	export function applyComposedSize(
+	function applyComposedSize(
 		hostProps: Record<string, unknown>,
 		resolution: RuntimeResolution,
 	) {
@@ -457,7 +456,7 @@ export namespace __VelaApply {
 		);
 	}
 
-	export function splitTranslateAxis(
+	function splitTranslateAxis(
 		axis: UDim | undefined,
 	): [number | undefined, number] {
 		if (axis === undefined) {
@@ -470,7 +469,7 @@ export namespace __VelaApply {
 		return [anchor, axis.Offset];
 	}
 
-	export function shiftPositionAxis(
+	function shiftPositionAxis(
 		axis: UDim | undefined,
 		shift: number,
 	): UDim | undefined {
@@ -612,9 +611,7 @@ export namespace __VelaApply {
 		}
 	}
 
-	export function colorSequenceValue(
-		stops: Color3[],
-	): ColorSequence | undefined {
+	function colorSequenceValue(stops: Color3[]): ColorSequence | undefined {
 		const [first, second] = stops;
 		if (first === undefined) {
 			return undefined;
@@ -640,9 +637,7 @@ export namespace __VelaApply {
 		return new ColorSequence(keypoints);
 	}
 
-	export function numberSequenceValue(
-		stops: number[],
-	): NumberSequence | undefined {
+	function numberSequenceValue(stops: number[]): NumberSequence | undefined {
 		const [first, second] = stops;
 		if (first === undefined) {
 			return undefined;
@@ -677,33 +672,7 @@ export namespace __VelaApply {
 		props[name] = value;
 	}
 
-	export function setHelperProp(
-		helpers: RuntimeHelper[],
-		tag: string,
-		props: RuntimeRulePropEntry[],
-	) {
-		const existing = helpers.find((helper) => helper.tag === tag);
-		if (existing) {
-			for (const prop of props) {
-				setHelperEntryProp(
-					existing.props,
-					prop.name,
-					parseRuntimePropValue(prop.value),
-				);
-			}
-			return;
-		}
-
-		helpers.push({
-			tag,
-			props: props.map((prop) => ({
-				name: prop.name,
-				value: parseRuntimePropValue(prop.value),
-			})),
-		});
-	}
-
-	export function setResolvedHelperProp(
+	function setResolvedHelperProp(
 		helpers: RuntimeHelper[],
 		tag: string,
 		props: RuntimeResolvedPropEntry[],
@@ -722,7 +691,7 @@ export namespace __VelaApply {
 		});
 	}
 
-	export function setHelperEntryProp(
+	function setHelperEntryProp(
 		props: RuntimeHelperProp[],
 		name: string,
 		value: RuntimePropValue,

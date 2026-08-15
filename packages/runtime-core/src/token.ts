@@ -10,15 +10,15 @@ import type {
 } from "./types";
 import { __VelaValue } from "./value";
 
-/// `fit` and `auto` do not produce a size; they hand the axis to Roblox.
 export namespace __VelaToken {
-	export function isAutomaticSizeKey(key: string): boolean {
+	/// `fit` and `auto` do not produce a size; they hand the axis to Roblox.
+	function isAutomaticSizeKey(key: string): boolean {
 		return key === "fit" || key === "auto";
 	}
 
 	/// Mirrors TEXT_SIZE_VALUES on the static path. `text-[15px]` is a size too;
 	/// only a number reads that way, so `text-[#f00]` stays a color.
-	export function resolveTextSizeValue(key: string): number | undefined {
+	function resolveTextSizeValue(key: string): number | undefined {
 		const arbitrary = __VelaValue.parseArbitraryLength(key);
 		if (arbitrary !== undefined) return arbitrary;
 		if (key === "xs") return 12;
@@ -39,7 +39,7 @@ export namespace __VelaToken {
 
 	/// `text-left|center|right` on the static path; `justify` has no Roblox
 	/// equivalent and is left unresolved there too.
-	export function resolveTextXAlignmentValue(
+	function resolveTextXAlignmentValue(
 		key: string,
 	): Enum.TextXAlignment | undefined {
 		if (key === "left") return Enum.TextXAlignment.Left;
@@ -50,9 +50,7 @@ export namespace __VelaToken {
 
 	/// Mirrors FONT_WEIGHT_VALUES. A payload that is not a weight is read as a
 	/// `theme.fontFamily` key, the way Tailwind overloads `font-*`.
-	export function resolveFontWeightValue(
-		key: string,
-	): Enum.FontWeight | undefined {
+	function resolveFontWeightValue(key: string): Enum.FontWeight | undefined {
 		if (key === "thin") return Enum.FontWeight.Thin;
 		if (key === "extralight") return Enum.FontWeight.ExtraLight;
 		if (key === "light") return Enum.FontWeight.Light;
@@ -65,9 +63,6 @@ export namespace __VelaToken {
 		return undefined;
 	}
 
-	/// `justify-*` runs along the main axis, which `UIListLayout` exposes as its
-	/// horizontal properties. `between`/`around`/`evenly` need `UIFlexAlignment`
-	/// rather than a plain alignment, so they land on a different property.
 	export function propEffect(
 		name: string,
 		value: RuntimePropValue,
@@ -75,13 +70,13 @@ export namespace __VelaToken {
 		return { props: [{ name, value }], helpers: [] };
 	}
 
-	export function propsEffect(
+	function propsEffect(
 		props: RuntimeResolvedPropEntry[],
 	): RuntimeResolvedEffectBundle {
 		return { props, helpers: [] };
 	}
 
-	export function helperEffect(
+	function helperEffect(
 		tag: string,
 		props: RuntimeResolvedPropEntry[],
 	): RuntimeResolvedEffectBundle {
@@ -90,7 +85,7 @@ export namespace __VelaToken {
 
 	/// A gradient stop carries its `/N` alpha beside the color, because
 	/// UIGradient only learns the keypoint positions once every stop is known.
-	export function gradientStopEffect(
+	function gradientStopEffect(
 		theme: RuntimeTheme,
 		name: string,
 		key: string,
@@ -144,7 +139,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveRotationValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("-rotate-")),
+			__VelaLua.after(token, "-rotate-"),
 			true,
 		);
 		return value === undefined ? undefined : propEffect("Rotation", value);
@@ -168,7 +163,7 @@ export namespace __VelaToken {
 				return resolvePositionalToken(
 					theme,
 					positive,
-					__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+					__VelaLua.after(token, prefix),
 					true,
 				);
 			}
@@ -177,19 +172,13 @@ export namespace __VelaToken {
 		return undefined;
 	}
 
-	function resolveGridToken(): RuntimeResolvedEffectBundle | undefined {
-		return helperEffect("uigridlayout", [
-			{ name: "SortOrder", value: Enum.SortOrder.LayoutOrder },
-		]);
-	}
-
 	function resolveScrollbarThicknessToken(
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const offset = __VelaValue.resolveSpacingOffset(
 			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("scrollbar-w-")),
+			__VelaLua.after(token, "scrollbar-w-"),
 		);
 		return offset === undefined
 			? undefined
@@ -208,15 +197,11 @@ export namespace __VelaToken {
 			: helperEffect("uicorner", [{ name: "CornerRadius", value }]);
 	}
 
-	function resolveUprightToken(): RuntimeResolvedEffectBundle | undefined {
-		return propEffect("FontStyle", Enum.FontStyle.Normal);
-	}
-
 	function resolveTextToken(
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("text-"));
+		const key = __VelaLua.after(token, "text-");
 		const textSize = resolveTextSizeValue(key);
 		if (textSize !== undefined) {
 			return propEffect("TextSize", textSize);
@@ -239,7 +224,7 @@ export namespace __VelaToken {
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("shadow-"));
+		const key = __VelaLua.after(token, "shadow-");
 		if (key === "none") {
 			return helperEffect("uishadow", [{ name: "Enabled", value: false }]);
 		}
@@ -257,17 +242,11 @@ export namespace __VelaToken {
 		return shadowColorEffect(theme, key);
 	}
 
-	function resolveVisibilityToken(
-		token: string,
-	): RuntimeResolvedEffectBundle | undefined {
-		return propEffect("Visible", token === "visible");
-	}
-
 	function resolveFontToken(
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("font-"));
+		const key = __VelaLua.after(token, "font-");
 		const weight = resolveFontWeightValue(key);
 		if (weight !== undefined) {
 			return propEffect("FontWeight", weight);
@@ -283,7 +262,7 @@ export namespace __VelaToken {
 	): RuntimeResolvedEffectBundle | undefined {
 		return colorPropEffect(
 			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("bg-")),
+			__VelaLua.after(token, "bg-"),
 			"BackgroundColor3",
 			"BackgroundTransparency",
 		);
@@ -293,7 +272,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const alignment = __VelaValue.resolveTextYAlignmentValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("align-")),
+			__VelaLua.after(token, "align-"),
 		);
 		return alignment === undefined
 			? undefined
@@ -306,7 +285,7 @@ export namespace __VelaToken {
 	): RuntimeResolvedEffectBundle | undefined {
 		return colorPropEffect(
 			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("image-")),
+			__VelaLua.after(token, "image-"),
 			"ImageColor3",
 			"ImageTransparency",
 		);
@@ -318,7 +297,7 @@ export namespace __VelaToken {
 	): RuntimeResolvedEffectBundle | undefined {
 		return colorPropEffect(
 			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("placeholder-")),
+			__VelaLua.after(token, "placeholder-"),
 			"PlaceholderColor3",
 			undefined,
 		);
@@ -328,10 +307,7 @@ export namespace __VelaToken {
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		return resolveBorderToken(
-			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("border-")),
-		);
+		return resolveBorderToken(theme, __VelaLua.after(token, "border-"));
 	}
 
 	function resolveRadiusToken(
@@ -340,7 +316,7 @@ export namespace __VelaToken {
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveRadiusValue(
 			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("rounded-")),
+			__VelaLua.after(token, "rounded-"),
 		);
 		return value === undefined
 			? undefined
@@ -350,9 +326,7 @@ export namespace __VelaToken {
 	function resolveZIndexToken(
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const value = __VelaValue.resolveZIndexValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("z-")),
-		);
+		const value = __VelaValue.resolveZIndexValue(__VelaLua.after(token, "z-"));
 		return value === undefined ? undefined : propEffect("ZIndex", value);
 	}
 
@@ -375,7 +349,7 @@ export namespace __VelaToken {
 
 			const value = __VelaValue.resolveSpacingValue(
 				theme,
-				__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+				__VelaLua.after(token, prefix),
 			);
 			return value === undefined
 				? undefined
@@ -394,7 +368,7 @@ export namespace __VelaToken {
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveSpacingValue(
 			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("gap-")),
+			__VelaLua.after(token, "gap-"),
 		);
 		if (value === undefined) {
 			return undefined;
@@ -425,7 +399,7 @@ export namespace __VelaToken {
 
 			const offset = __VelaValue.resolveSpacingOffset(
 				theme,
-				__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+				__VelaLua.after(token, prefix),
 			);
 			return offset === undefined ? undefined : propEffect(name, offset);
 		}
@@ -437,7 +411,7 @@ export namespace __VelaToken {
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("w-"));
+		const key = __VelaLua.after(token, "w-");
 		if (isAutomaticSizeKey(key)) {
 			return propEffect("AutoX", true);
 		}
@@ -452,7 +426,7 @@ export namespace __VelaToken {
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("h-"));
+		const key = __VelaLua.after(token, "h-");
 		if (isAutomaticSizeKey(key)) {
 			return propEffect("AutoY", true);
 		}
@@ -467,7 +441,7 @@ export namespace __VelaToken {
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("size-"));
+		const key = __VelaLua.after(token, "size-");
 		if (isAutomaticSizeKey(key)) {
 			return propsEffect([
 				{ name: "AutoX", value: true },
@@ -488,7 +462,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveOverflowValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("overflow-")),
+			__VelaLua.after(token, "overflow-"),
 		);
 		return value === undefined
 			? undefined
@@ -499,7 +473,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveRotationValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("rotate-")),
+			__VelaLua.after(token, "rotate-"),
 			false,
 		);
 		return value === undefined ? undefined : propEffect("Rotation", value);
@@ -509,7 +483,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveScaleValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("scale-")),
+			__VelaLua.after(token, "scale-"),
 		);
 		return value === undefined
 			? undefined
@@ -521,7 +495,7 @@ export namespace __VelaToken {
 		tag: string | undefined,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveOpacityValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("opacity-")),
+			__VelaLua.after(token, "opacity-"),
 		);
 		if (value === undefined) {
 			return undefined;
@@ -555,7 +529,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveAspectRatioValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("aspect-")),
+			__VelaLua.after(token, "aspect-"),
 		);
 		return value === undefined
 			? undefined
@@ -567,7 +541,7 @@ export namespace __VelaToken {
 	function resolveFlexToken(
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("flex-"));
+		const key = __VelaLua.after(token, "flex-");
 		if (key !== "row" && key !== "col") {
 			return undefined;
 		}
@@ -584,7 +558,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const prop = __VelaValue.resolveJustifyProp(
-			__VelaLua.substring(token, __VelaLua.stringLength("justify-")),
+			__VelaLua.after(token, "justify-"),
 		);
 		return prop === undefined
 			? undefined
@@ -595,7 +569,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const prop = __VelaValue.resolveAlignItemsProp(
-			__VelaLua.substring(token, __VelaLua.stringLength("items-")),
+			__VelaLua.after(token, "items-"),
 		);
 		return prop === undefined
 			? undefined
@@ -611,11 +585,7 @@ export namespace __VelaToken {
 			["via-", "GradientVia"],
 		] as Array<[string, string]>) {
 			if (__VelaLua.startsWith(token, prefix)) {
-				return gradientStopEffect(
-					theme,
-					name,
-					__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
-				);
+				return gradientStopEffect(theme, name, __VelaLua.after(token, prefix));
 			}
 		}
 
@@ -629,7 +599,7 @@ export namespace __VelaToken {
 		return resolvePositionalToken(
 			theme,
 			"top-",
-			__VelaLua.substring(token, __VelaLua.stringLength("top-")),
+			__VelaLua.after(token, "top-"),
 			false,
 		);
 	}
@@ -641,7 +611,7 @@ export namespace __VelaToken {
 		return gradientStopEffect(
 			theme,
 			"GradientTo",
-			__VelaLua.substring(token, __VelaLua.stringLength("to-")),
+			__VelaLua.after(token, "to-"),
 		);
 	}
 
@@ -663,7 +633,7 @@ export namespace __VelaToken {
 				return resolvePositionalToken(
 					theme,
 					prefix,
-					__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+					__VelaLua.after(token, prefix),
 					false,
 				);
 			}
@@ -676,7 +646,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveAnchorPointValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("origin-")),
+			__VelaLua.after(token, "origin-"),
 		);
 		return value === undefined ? undefined : propEffect("AnchorPoint", value);
 	}
@@ -685,7 +655,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const prop = __VelaValue.resolveAlignContentProp(
-			__VelaLua.substring(token, __VelaLua.stringLength("content-")),
+			__VelaLua.after(token, "content-"),
 		);
 		return prop === undefined
 			? undefined
@@ -696,7 +666,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveAlignSelfValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("self-")),
+			__VelaLua.after(token, "self-"),
 		);
 		return value === undefined
 			? undefined
@@ -707,7 +677,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveLineHeightValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("leading-")),
+			__VelaLua.after(token, "leading-"),
 		);
 		return value === undefined ? undefined : propEffect("LineHeight", value);
 	}
@@ -721,7 +691,7 @@ export namespace __VelaToken {
 			}
 
 			const count = __VelaValue.resolveGridCellCount(
-				__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+				__VelaLua.after(token, prefix),
 			);
 			if (count === undefined) {
 				return undefined;
@@ -765,7 +735,7 @@ export namespace __VelaToken {
 
 			const extent = __VelaValue.resolveSpacingOffset(
 				theme,
-				__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+				__VelaLua.after(token, prefix),
 			);
 			if (extent === undefined) {
 				return undefined;
@@ -789,7 +759,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveObjectFitValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("object-")),
+			__VelaLua.after(token, "object-"),
 		);
 		return value === undefined ? undefined : propEffect("ScaleType", value);
 	}
@@ -798,7 +768,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolvePointerEventsValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("pointer-events-")),
+			__VelaLua.after(token, "pointer-events-"),
 		);
 		return value === undefined ? undefined : propEffect("Interactable", value);
 	}
@@ -814,7 +784,7 @@ export namespace __VelaToken {
 
 			const value = __VelaValue.resolveSpacingValue(
 				theme,
-				__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+				__VelaLua.after(token, prefix),
 			);
 			return value === undefined
 				? undefined
@@ -837,7 +807,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveWhitespaceValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("whitespace-")),
+			__VelaLua.after(token, "whitespace-"),
 		);
 		return value === undefined ? undefined : propEffect("TextWrapped", value);
 	}
@@ -846,7 +816,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveOverscrollValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("overscroll-")),
+			__VelaLua.after(token, "overscroll-"),
 		);
 		return value === undefined
 			? undefined
@@ -859,7 +829,7 @@ export namespace __VelaToken {
 	): RuntimeResolvedEffectBundle | undefined {
 		return colorPropEffect(
 			theme,
-			__VelaLua.substring(token, __VelaLua.stringLength("scrollbar-")),
+			__VelaLua.after(token, "scrollbar-"),
 			"ScrollBarImageColor3",
 			"ScrollBarImageTransparency",
 		);
@@ -868,7 +838,7 @@ export namespace __VelaToken {
 	function resolveScrollToken(
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const key = __VelaLua.substring(token, __VelaLua.stringLength("scroll-"));
+		const key = __VelaLua.after(token, "scroll-");
 		if (key === "none") {
 			return propEffect("ScrollingEnabled", false);
 		}
@@ -883,7 +853,7 @@ export namespace __VelaToken {
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		const value = __VelaValue.resolveCanvasSizeValue(
-			__VelaLua.substring(token, __VelaLua.stringLength("canvas-")),
+			__VelaLua.after(token, "canvas-"),
 		);
 		return value === undefined
 			? undefined
@@ -899,7 +869,7 @@ export namespace __VelaToken {
 				continue;
 			}
 
-			const key = __VelaLua.substring(token, __VelaLua.stringLength(prefix));
+			const key = __VelaLua.after(token, prefix);
 			const thickness = resolveStrokeThickness(prefix === "outline-", key);
 			if (thickness !== undefined) {
 				return strokeThicknessEffect(thickness);
@@ -941,7 +911,9 @@ export namespace __VelaToken {
 		}
 
 		if (token === "grid") {
-			return resolveGridToken();
+			return helperEffect("uigridlayout", [
+				{ name: "SortOrder", value: Enum.SortOrder.LayoutOrder },
+			]);
 		}
 
 		// `scrollbar-none` hides the bar by zeroing its thickness, so it belongs to
@@ -971,7 +943,7 @@ export namespace __VelaToken {
 		}
 
 		if (token === "not-italic") {
-			return resolveUprightToken();
+			return propEffect("FontStyle", Enum.FontStyle.Normal);
 		}
 
 		// `text-*` is an overloaded prefix: sizes, alignment, wrapping and colors all
@@ -983,7 +955,7 @@ export namespace __VelaToken {
 		for (const prefix of ["bg-gradient-to-", "bg-linear-to-"]) {
 			if (__VelaLua.startsWith(token, prefix)) {
 				const rotation = __VelaValue.resolveGradientRotation(
-					__VelaLua.substring(token, __VelaLua.stringLength(prefix)),
+					__VelaLua.after(token, prefix),
 				);
 				return rotation === undefined
 					? undefined
@@ -1019,7 +991,7 @@ export namespace __VelaToken {
 		}
 
 		if (token === "hidden" || token === "visible") {
-			return resolveVisibilityToken(token);
+			return propEffect("Visible", token === "visible");
 		}
 
 		// `font-*` carries both the weight scale and the theme's font families; the
@@ -1202,7 +1174,7 @@ export namespace __VelaToken {
 
 	/// The `left`/`top`/`inset`/`translate`/`order`/`basis` families all read a
 	/// spacing-or-fraction payload; only where the resolved distance lands differs.
-	export function resolvePositionalToken(
+	function resolvePositionalToken(
 		theme: RuntimeTheme,
 		family: string,
 		key: string,
@@ -1261,14 +1233,14 @@ export namespace __VelaToken {
 		]);
 	}
 
-	export function listLayoutEffect(
+	function listLayoutEffect(
 		name: string,
 		value: RuntimePropValue,
 	): RuntimeResolvedEffectBundle {
 		return helperEffect("uilistlayout", [{ name, value }]);
 	}
 
-	export function resolveBorderToken(
+	function resolveBorderToken(
 		theme: RuntimeTheme,
 		key: string,
 	): RuntimeResolvedEffectBundle | undefined {
@@ -1303,7 +1275,7 @@ export namespace __VelaToken {
 		return strokeColorEffect(theme, key);
 	}
 
-	export function strokeThicknessEffect(
+	function strokeThicknessEffect(
 		thickness: number,
 	): RuntimeResolvedEffectBundle {
 		return helperEffect("uistroke", [
@@ -1313,7 +1285,7 @@ export namespace __VelaToken {
 	}
 
 	/// `ring`/`outline` payloads with a stroke meaning; anything else is a color.
-	export function resolveStrokeThickness(
+	function resolveStrokeThickness(
 		isOutline: boolean,
 		key: string,
 	): number | undefined {
@@ -1334,7 +1306,7 @@ export namespace __VelaToken {
 		return __VelaValue.parseArbitraryLength(key);
 	}
 
-	export function isUnsupportedStrokeKey(key: string): boolean {
+	function isUnsupportedStrokeKey(key: string): boolean {
 		if (
 			key === "inset" ||
 			key === "solid" ||
@@ -1352,7 +1324,7 @@ export namespace __VelaToken {
 		return __VelaLua.toNumber(key) !== undefined;
 	}
 
-	export function strokeColorEffect(
+	function strokeColorEffect(
 		theme: RuntimeTheme,
 		key: string,
 	): RuntimeResolvedEffectBundle | undefined {
@@ -1378,7 +1350,7 @@ export namespace __VelaToken {
 		]);
 	}
 
-	export function shadowPresetEffect(
+	function shadowPresetEffect(
 		blur: number,
 		offsetY: number,
 		spread: number,
@@ -1397,7 +1369,7 @@ export namespace __VelaToken {
 		return helperEffect("uishadow", props);
 	}
 
-	export function resolveShadowPreset(
+	function resolveShadowPreset(
 		key: string,
 	): RuntimeResolvedEffectBundle | undefined {
 		if (key === "sm") return shadowPresetEffect(2, 1, 0, 0.95);
@@ -1408,7 +1380,7 @@ export namespace __VelaToken {
 		return undefined;
 	}
 
-	export function shadowColorEffect(
+	function shadowColorEffect(
 		theme: RuntimeTheme,
 		key: string,
 	): RuntimeResolvedEffectBundle | undefined {
