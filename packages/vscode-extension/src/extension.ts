@@ -110,16 +110,6 @@ async function startClient(
 	const { args, command, workspaceRoot } = resolvedServerCommand;
 	const configs = await collectProjectConfigs();
 	log(`Loaded ${configs.length} vela config(s) for the language server.`);
-	const clientOutputChannel =
-		outputChannel ??
-		vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME, { log: true });
-	const clientTraceOutputChannel =
-		traceOutputChannel ??
-		vscode.window.createOutputChannel(`${OUTPUT_CHANNEL_NAME} Trace`, {
-			log: true,
-		});
-	outputChannel = clientOutputChannel;
-	traceOutputChannel = clientTraceOutputChannel;
 	const serverOptions: ServerOptions = {
 		run: {
 			command,
@@ -157,9 +147,9 @@ async function startClient(
 			workspaceRoot,
 			configs,
 		},
-		outputChannel: clientOutputChannel,
+		outputChannel,
 		outputChannelName: OUTPUT_CHANNEL_NAME,
-		traceOutputChannel: clientTraceOutputChannel,
+		traceOutputChannel,
 	};
 
 	client = new LanguageClient(
