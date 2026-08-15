@@ -159,17 +159,31 @@ pub(crate) const BORDER_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
 pub(crate) const Z_INDEX_VALUES: [&str; 6] = ["0", "10", "20", "30", "40", "50"];
 pub(crate) const BORDER_THICKNESS_VALUES: [&str; 4] = ["0", "1", "2", "4"];
 pub(crate) const ROTATION_VALUES: [&str; 9] = ["0", "1", "2", "3", "6", "12", "45", "90", "180"];
-pub(crate) const SCALE_VALUES: [&str; 10] = [
-    "0", "50", "75", "90", "95", "100", "105", "110", "125", "150",
+pub(crate) const SCALE_VALUES: [(&str, &str); 10] = [
+    ("0", "0"),
+    ("50", "0.5"),
+    ("75", "0.75"),
+    ("90", "0.9"),
+    ("95", "0.95"),
+    ("100", "1"),
+    ("105", "1.05"),
+    ("110", "1.1"),
+    ("125", "1.25"),
+    ("150", "1.5"),
 ];
-pub(crate) const BORDER_LINE_JOIN_VALUES: [&str; 3] = ["round", "bevel", "miter"];
+pub(crate) const BORDER_LINE_JOIN_VALUES: [(&str, &str); 3] =
+    [("round", "Round"), ("bevel", "Bevel"), ("miter", "Miter")];
 pub(crate) const OPACITY_VALUES: [&str; 14] = [
     "0", "5", "10", "20", "25", "30", "40", "50", "60", "70", "75", "80", "90", "100",
 ];
 pub(crate) const ASPECT_RATIO_VALUES: [&str; 2] = ["square", "video"];
 pub(crate) const FLEX_DIRECTION_VALUES: [&str; 2] = ["row", "col"];
 pub(crate) const ALIGNMENT_VALUES: [&str; 3] = ["start", "center", "end"];
-pub(crate) const JUSTIFY_FLEX_VALUES: [&str; 3] = ["between", "around", "evenly"];
+pub(crate) const JUSTIFY_FLEX_VALUES: [(&str, &str); 3] = [
+    ("between", "SpaceBetween"),
+    ("around", "SpaceAround"),
+    ("evenly", "SpaceEvenly"),
+];
 pub(crate) const FLEX_ITEM_VALUES: [&str; 8] = [
     "flex-1",
     "flex-auto",
@@ -207,8 +221,16 @@ pub(crate) const FONT_WEIGHT_VALUES: [(&str, &str); 9] = [
     ("black", "Heavy"),
 ];
 pub(crate) const SHADOW_SIZE_VALUES: [&str; 6] = ["sm", "md", "lg", "xl", "2xl", "none"];
-pub(crate) const GRADIENT_DIRECTION_VALUES: [&str; 8] =
-    ["t", "tr", "r", "br", "b", "bl", "l", "tl"];
+pub(crate) const GRADIENT_DIRECTION_VALUES: [(&str, &str); 8] = [
+    ("t", "270"),
+    ("tr", "315"),
+    ("r", "0"),
+    ("br", "45"),
+    ("b", "90"),
+    ("bl", "135"),
+    ("l", "180"),
+    ("tl", "225"),
+];
 pub(crate) const GRADIENT_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
     theme_family: "gradient color",
     color_prop: "Color",
@@ -219,8 +241,16 @@ pub(crate) const SHADOW_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
     color_prop: "Color",
     transparency_prop: Some("Transparency"),
 };
-pub(crate) const TEXT_X_ALIGN_VALUES: [&str; 3] = ["left", "center", "right"];
-pub(crate) const TEXT_Y_ALIGN_VALUES: [&str; 3] = ["top", "middle", "bottom"];
+pub(crate) const TEXT_X_ALIGN_VALUES: [(&str, &str); 3] = [
+    ("left", "Enum.TextXAlignment.Left"),
+    ("center", "Enum.TextXAlignment.Center"),
+    ("right", "Enum.TextXAlignment.Right"),
+];
+pub(crate) const TEXT_Y_ALIGN_VALUES: [(&str, &str); 3] = [
+    ("top", "Enum.TextYAlignment.Top"),
+    ("middle", "Enum.TextYAlignment.Center"),
+    ("bottom", "Enum.TextYAlignment.Bottom"),
+];
 pub(crate) const TEXT_WRAP_VALUES: [&str; 2] = ["wrap", "nowrap"];
 pub(crate) const DEFAULT_FONT_FAMILY: &str = "rbxasset://fonts/families/SourceSansPro.json";
 pub(crate) const ALIGN_CONTENT_VALUES: [&str; 7] = [
@@ -320,16 +350,16 @@ pub(crate) const DIVIDE_COLOR_FAMILY: ColorFamilySpec = ColorFamilySpec {
     color_prop: "BackgroundColor3",
     transparency_prop: None,
 };
-pub(crate) const ANCHOR_ORIGIN_VALUES: [&str; 9] = [
-    "top-left",
-    "top",
-    "top-right",
-    "left",
-    "center",
-    "right",
-    "bottom-left",
-    "bottom",
-    "bottom-right",
+pub(crate) const ANCHOR_ORIGIN_VALUES: [(&str, &str, &str); 9] = [
+    ("top-left", "0", "0"),
+    ("top", "0.5", "0"),
+    ("top-right", "1", "0"),
+    ("left", "0", "0.5"),
+    ("center", "0.5", "0.5"),
+    ("right", "1", "0.5"),
+    ("bottom-left", "0", "1"),
+    ("bottom", "0.5", "1"),
+    ("bottom-right", "1", "1"),
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -447,10 +477,6 @@ impl UtilityKind {
                 | UtilityKind::GradientVia
                 | UtilityKind::GradientTo
         )
-    }
-
-    pub(crate) fn is_supported(&self) -> bool {
-        !matches!(self, UtilityKind::Unknown)
     }
 }
 
@@ -853,17 +879,7 @@ fn classify_shadow_utility(payload: &str) -> UtilityKind {
 }
 
 pub(crate) fn resolve_gradient_rotation(direction: &str) -> Option<&'static str> {
-    match direction {
-        "r" => Some("0"),
-        "br" => Some("45"),
-        "b" => Some("90"),
-        "bl" => Some("135"),
-        "l" => Some("180"),
-        "tl" => Some("225"),
-        "t" => Some("270"),
-        "tr" => Some("315"),
-        _ => None,
-    }
+    lookup_table(&GRADIENT_DIRECTION_VALUES, direction)
 }
 
 pub(crate) fn resolve_shadow_preset(key: Option<&str>) -> Option<ShadowPreset> {
@@ -888,7 +904,7 @@ pub(crate) fn resolve_shadow_preset(key: Option<&str>) -> Option<ShadowPreset> {
 fn classify_text_utility(payload: &str) -> UtilityKind {
     if TEXT_SIZE_VALUES.iter().any(|(key, _)| *key == payload) {
         UtilityKind::TextSize
-    } else if TEXT_X_ALIGN_VALUES.contains(&payload) || payload == "justify" {
+    } else if TEXT_X_ALIGN_VALUES.iter().any(|(key, _)| *key == payload) || payload == "justify" {
         UtilityKind::TextXAlignment
     } else if TEXT_WRAP_VALUES.contains(&payload) {
         UtilityKind::TextWrap
@@ -900,22 +916,23 @@ fn classify_text_utility(payload: &str) -> UtilityKind {
     }
 }
 
+fn lookup_table(table: &[(&'static str, &'static str)], key: &str) -> Option<&'static str> {
+    table
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, value)| *value)
+}
+
 pub(crate) fn resolve_text_size_value(config: &TailwindConfig, key: &str) -> Option<String> {
     if let Some(size) = parse_arbitrary_length(key) {
         return Some(size.offset(config));
     }
 
-    TEXT_SIZE_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, value)| (*value).to_owned())
+    lookup_table(&TEXT_SIZE_VALUES, key).map(str::to_owned)
 }
 
 pub(crate) fn resolve_font_weight_enum(key: &str) -> Option<&'static str> {
-    FONT_WEIGHT_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, weight)| *weight)
+    lookup_table(&FONT_WEIGHT_VALUES, key)
 }
 
 pub(crate) fn resolve_font_weight_value(key: &str) -> Option<String> {
@@ -946,25 +963,11 @@ pub(crate) fn font_face_expression(
 }
 
 pub(crate) fn resolve_text_x_alignment_value(key: &str) -> Option<String> {
-    let alignment = match key {
-        "left" => "Enum.TextXAlignment.Left",
-        "center" => "Enum.TextXAlignment.Center",
-        "right" => "Enum.TextXAlignment.Right",
-        _ => return None,
-    };
-
-    Some(alignment.to_owned())
+    lookup_table(&TEXT_X_ALIGN_VALUES, key).map(str::to_owned)
 }
 
 pub(crate) fn resolve_text_y_alignment_value(key: &str) -> Option<String> {
-    let alignment = match key {
-        "top" => "Enum.TextYAlignment.Top",
-        "middle" => "Enum.TextYAlignment.Center",
-        "bottom" => "Enum.TextYAlignment.Bottom",
-        _ => return None,
-    };
-
-    Some(alignment.to_owned())
+    lookup_table(&TEXT_Y_ALIGN_VALUES, key).map(str::to_owned)
 }
 
 pub(crate) fn resolve_text_wrap_value(key: &str) -> Option<&'static str> {
@@ -1326,22 +1329,7 @@ pub(crate) fn resolve_position_axis_value(
     token: &str,
     negative: bool,
 ) -> Option<SizeAxisValue> {
-    let base = if let Some(value) = parse_arbitrary_value(position_key) {
-        arbitrary_size_axis(config, value)
-    } else if position_key == "px" {
-        SizeAxisValue::offset("1")
-    } else if position_key == "full" {
-        SizeAxisValue::scale("1")
-    } else if let Some(fraction) = resolve_size_fraction_scale(position_key) {
-        SizeAxisValue::scale(fraction)
-    } else {
-        SizeAxisValue::offset(resolve_size_spacing_offset(
-            config,
-            diagnostics,
-            position_key,
-            token,
-        )?)
-    };
+    let base = resolve_size_axis_value(config, diagnostics, position_key, token)?;
 
     Some(if negative {
         negate_size_axis(base)
@@ -1351,18 +1339,9 @@ pub(crate) fn resolve_position_axis_value(
 }
 
 pub(crate) fn resolve_anchor_point_value(key: &str) -> Option<String> {
-    let (x, y) = match key {
-        "top-left" => ("0", "0"),
-        "top" => ("0.5", "0"),
-        "top-right" => ("1", "0"),
-        "left" => ("0", "0.5"),
-        "center" => ("0.5", "0.5"),
-        "right" => ("1", "0.5"),
-        "bottom-left" => ("0", "1"),
-        "bottom" => ("0.5", "1"),
-        "bottom-right" => ("1", "1"),
-        _ => return None,
-    };
+    let (_, x, y) = ANCHOR_ORIGIN_VALUES
+        .iter()
+        .find(|(name, _, _)| *name == key)?;
 
     Some(format!("new Vector2({x}, {y})"))
 }
@@ -1422,7 +1401,7 @@ pub(crate) fn resolve_size_fraction_scale(key: &str) -> Option<String> {
         return None;
     }
 
-    Some(format_fraction_scale(numerator, denominator))
+    Some(format_ratio(f64::from(numerator) / f64::from(denominator)))
 }
 
 pub(crate) fn resolve_z_index_value(
@@ -1451,38 +1430,16 @@ pub(crate) fn resolve_z_index_value(
         return Some(z_key.to_owned());
     }
 
-    if z_key.parse::<i32>().is_ok() {
-        diagnostics.push(unsupported_z_index_value_diagnostic(z_key, token));
-        return None;
-    }
-
     diagnostics.push(unsupported_z_index_value_diagnostic(z_key, token));
     None
 }
 
 pub(crate) fn resolve_scale_value(key: &str) -> Option<&'static str> {
-    match key {
-        "0" => Some("0"),
-        "50" => Some("0.5"),
-        "75" => Some("0.75"),
-        "90" => Some("0.9"),
-        "95" => Some("0.95"),
-        "100" => Some("1"),
-        "105" => Some("1.05"),
-        "110" => Some("1.1"),
-        "125" => Some("1.25"),
-        "150" => Some("1.5"),
-        _ => None,
-    }
+    lookup_table(&SCALE_VALUES, key)
 }
 
 pub(crate) fn resolve_line_join_value(key: &str) -> Option<&'static str> {
-    match key {
-        "round" => Some("Round"),
-        "bevel" => Some("Bevel"),
-        "miter" => Some("Miter"),
-        _ => None,
-    }
+    lookup_table(&BORDER_LINE_JOIN_VALUES, key)
 }
 
 pub(crate) fn resolve_rotation_value(degrees: &str, negative: bool) -> Option<String> {
@@ -1530,12 +1487,7 @@ pub(crate) fn resolve_flex_direction_value(key: Option<&str>) -> Option<String> 
 }
 
 pub(crate) fn resolve_justify_flex_value(key: &str) -> Option<&'static str> {
-    match key {
-        "between" => Some("SpaceBetween"),
-        "around" => Some("SpaceAround"),
-        "evenly" => Some("SpaceEvenly"),
-        _ => None,
-    }
+    lookup_table(&JUSTIFY_FLEX_VALUES, key)
 }
 
 pub(crate) fn resolve_items_flex_value(key: &str) -> Option<&'static str> {
@@ -1588,10 +1540,7 @@ pub(crate) fn resolve_align_content_flex_value(key: &str) -> Option<&'static str
 }
 
 pub(crate) fn resolve_align_self_value(key: &str) -> Option<&'static str> {
-    ALIGN_SELF_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, alignment)| *alignment)
+    lookup_table(&ALIGN_SELF_VALUES, key)
 }
 
 pub(crate) fn resolve_line_height_value(key: &str) -> Option<String> {
@@ -1603,17 +1552,11 @@ pub(crate) fn resolve_line_height_value(key: &str) -> Option<String> {
 }
 
 fn resolve_line_height_preset(key: &str) -> Option<&'static str> {
-    LINE_HEIGHT_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, value)| *value)
+    lookup_table(&LINE_HEIGHT_VALUES, key)
 }
 
 pub(crate) fn resolve_font_style_value(key: &str) -> Option<&'static str> {
-    FONT_STYLE_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, style)| *style)
+    lookup_table(&FONT_STYLE_VALUES, key)
 }
 
 pub(crate) fn resolve_layout_order_value(key: &str, negative: bool) -> Option<String> {
@@ -1656,17 +1599,11 @@ pub(crate) fn resolve_ease_value(key: &str) -> Option<(&'static str, &'static st
 }
 
 pub(crate) fn resolve_text_transform_value(key: &str) -> Option<&'static str> {
-    TEXT_TRANSFORM_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, value)| *value)
+    lookup_table(&TEXT_TRANSFORM_VALUES, key)
 }
 
 pub(crate) fn resolve_text_decoration_value(key: &str) -> Option<&'static str> {
-    TEXT_DECORATION_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, value)| *value)
+    lookup_table(&TEXT_DECORATION_VALUES, key)
 }
 
 pub(crate) fn resolve_animation_value(key: &str) -> Option<&'static str> {
@@ -1677,45 +1614,27 @@ pub(crate) fn resolve_animation_value(key: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn resolve_object_fit_value(key: &str) -> Option<&'static str> {
-    OBJECT_FIT_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, scale_type)| *scale_type)
+    lookup_table(&OBJECT_FIT_VALUES, key)
 }
 
 pub(crate) fn resolve_pointer_events_value(key: &str) -> Option<&'static str> {
-    POINTER_EVENTS_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, value)| *value)
+    lookup_table(&POINTER_EVENTS_VALUES, key)
 }
 
 pub(crate) fn resolve_whitespace_value(key: &str) -> Option<&'static str> {
-    WHITESPACE_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, value)| *value)
+    lookup_table(&WHITESPACE_VALUES, key)
 }
 
 pub(crate) fn resolve_overscroll_value(key: &str) -> Option<&'static str> {
-    OVERSCROLL_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, behavior)| *behavior)
+    lookup_table(&OVERSCROLL_VALUES, key)
 }
 
 pub(crate) fn resolve_scroll_direction_value(key: &str) -> Option<&'static str> {
-    SCROLL_DIRECTION_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, direction)| *direction)
+    lookup_table(&SCROLL_DIRECTION_VALUES, key)
 }
 
 pub(crate) fn resolve_canvas_size_value(key: &str) -> Option<&'static str> {
-    CANVAS_SIZE_VALUES
-        .iter()
-        .find(|(name, _)| *name == key)
-        .map(|(_, axis)| *axis)
+    lookup_table(&CANVAS_SIZE_VALUES, key)
 }
 
 /// `ring`/`outline` payloads with a stroke meaning; anything else falls
@@ -1867,7 +1786,7 @@ fn resolve_numeric_spacing_value(key: &str) -> Option<String> {
         return None;
     }
 
-    Some(format!("new UDim(0, {})", format_spacing_offset(offset_px)))
+    Some(format!("new UDim(0, {})", format_number(offset_px)))
 }
 
 pub(crate) fn spacing_value_to_offset(value: &str) -> Option<String> {
@@ -1884,34 +1803,12 @@ pub(crate) fn spacing_value_to_offset(value: &str) -> Option<String> {
         return None;
     }
 
-    Some(format_spacing_offset(offset))
+    Some(format_number(offset))
 }
 
 fn is_whole_number(value: f64) -> bool {
     let rounded = value.round();
     (value - rounded).abs() < 1e-9
-}
-
-fn format_spacing_offset(value: f64) -> String {
-    let rounded = value.round();
-    if (value - rounded).abs() < 1e-9 {
-        return format!("{rounded:.0}");
-    }
-
-    value.to_string()
-}
-
-fn format_fraction_scale(numerator: u32, denominator: u32) -> String {
-    let value = numerator as f64 / denominator as f64;
-    let rounded = value.round();
-    if (value - rounded).abs() < 1e-9 {
-        return format!("{rounded:.0}");
-    }
-
-    format!("{value:.10}")
-        .trim_end_matches('0')
-        .trim_end_matches('.')
-        .to_owned()
 }
 
 fn push_unique(values: &mut Vec<String>, value: String) {

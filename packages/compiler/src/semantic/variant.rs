@@ -5,7 +5,7 @@
 use crate::ir::model::RuntimeCondition;
 
 /// Runtime variant names paired with the condition they check, phrased for
-/// editor documentation. Keep the widths in sync with `parse_variant_prefix`.
+/// editor documentation. Keep the widths in sync with `BREAKPOINT_WIDTHS`.
 pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 12] = [
     ("sm", "the viewport is at least 640px wide"),
     ("md", "the viewport is at least 768px wide"),
@@ -20,6 +20,8 @@ pub(crate) const RUNTIME_VARIANTS: [(&str, &str); 12] = [
     ("focus", "the element holds input focus"),
     ("dark", "the player's color scheme is dark"),
 ];
+
+const BREAKPOINT_WIDTHS: [(&str, u32); 3] = [("sm", 640), ("md", 768), ("lg", 1024)];
 
 pub(crate) fn variant_condition(prefix: &str) -> Option<&'static str> {
     RUNTIME_VARIANTS
@@ -95,39 +97,23 @@ impl ParsedVariant {
 }
 
 pub(crate) fn parse_variant_prefix(prefix: &str) -> Option<VariantKind> {
+    if let Some((alias, min_width)) = BREAKPOINT_WIDTHS.iter().find(|(name, _)| *name == prefix) {
+        return Some(VariantKind::Width {
+            alias: (*alias).to_owned(),
+            min_width: *min_width,
+            max_width: None,
+        });
+    }
+
     match prefix {
-        "sm" => Some(VariantKind::Width {
-            alias: "sm".to_owned(),
-            min_width: 640,
-            max_width: None,
+        "portrait" | "landscape" => Some(VariantKind::Orientation {
+            value: prefix.to_owned(),
         }),
-        "md" => Some(VariantKind::Width {
-            alias: "md".to_owned(),
-            min_width: 768,
-            max_width: None,
-        }),
-        "lg" => Some(VariantKind::Width {
-            alias: "lg".to_owned(),
-            min_width: 1024,
-            max_width: None,
-        }),
-        "portrait" => Some(VariantKind::Orientation {
-            value: "portrait".to_owned(),
-        }),
-        "landscape" => Some(VariantKind::Orientation {
-            value: "landscape".to_owned(),
-        }),
-        "touch" => Some(VariantKind::Input {
-            value: "touch".to_owned(),
-        }),
-        "mouse" => Some(VariantKind::Input {
-            value: "mouse".to_owned(),
-        }),
-        "gamepad" => Some(VariantKind::Input {
-            value: "gamepad".to_owned(),
+        "touch" | "mouse" | "gamepad" => Some(VariantKind::Input {
+            value: prefix.to_owned(),
         }),
         "dark" => Some(VariantKind::ColorScheme {
-            value: "dark".to_owned(),
+            value: prefix.to_owned(),
         }),
         "hover" => Some(VariantKind::Hover),
         "active" => Some(VariantKind::Active),

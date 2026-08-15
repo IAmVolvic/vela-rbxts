@@ -429,7 +429,7 @@ fn border_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         UtilityKind::Border,
     ));
 
-    for line_join in BORDER_LINE_JOIN_VALUES {
+    for (line_join, _) in BORDER_LINE_JOIN_VALUES {
         items.push(CompletionSpec::new(
             format!("border-{line_join}"),
             "border",
@@ -552,7 +552,7 @@ fn transform_and_opacity_candidates(_config: &TailwindConfig) -> Vec<CompletionS
         }
     }
 
-    for scale in SCALE_VALUES {
+    for (scale, _) in SCALE_VALUES {
         items.push(CompletionSpec::new(
             format!("scale-{scale}"),
             "transform",
@@ -959,7 +959,7 @@ fn grid_and_basis_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ));
     }
 
-    for origin in ANCHOR_ORIGIN_VALUES {
+    for (origin, _, _) in ANCHOR_ORIGIN_VALUES {
         items.push(CompletionSpec::new(
             format!("origin-{origin}"),
             "layout",
@@ -1064,7 +1064,7 @@ fn typography_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ));
     }
 
-    for alignment in TEXT_X_ALIGN_VALUES {
+    for (alignment, _) in TEXT_X_ALIGN_VALUES {
         items.push(CompletionSpec::new(
             format!("text-{alignment}"),
             "typography",
@@ -1073,7 +1073,7 @@ fn typography_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
         ));
     }
 
-    for alignment in TEXT_Y_ALIGN_VALUES {
+    for (alignment, _) in TEXT_Y_ALIGN_VALUES {
         items.push(CompletionSpec::new(
             format!("align-{alignment}"),
             "typography",
@@ -1185,7 +1185,7 @@ fn shadow_and_gradient_candidates(config: &TailwindConfig) -> Vec<CompletionSpec
         );
     }
 
-    for direction in GRADIENT_DIRECTION_VALUES {
+    for (direction, _) in GRADIENT_DIRECTION_VALUES {
         items.push(CompletionSpec::new(format!("bg-gradient-to-{direction}"), "effects", format!(
                     "Create a Roblox UIGradient pointing `{direction}`. Combine with `from-*`/`via-*`/`to-*`."
                 ), UtilityKind::GradientDirection));
@@ -1266,7 +1266,7 @@ fn flex_alignment_candidates(_config: &TailwindConfig) -> Vec<CompletionSpec> {
         }
     }
 
-    for alignment in JUSTIFY_FLEX_VALUES {
+    for (alignment, _) in JUSTIFY_FLEX_VALUES {
         items.push(CompletionSpec::new(
             format!("justify-{alignment}"),
             "layout",
