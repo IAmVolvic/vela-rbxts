@@ -9,6 +9,12 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Changed
+
+- A `SurfaceGui` keeps its literal pixels. Every offset a utility lowers has followed the viewport since rem landed, and a surface UI followed it too, though a `SurfaceGui` takes its pixel space from the part it is drawn on and its `PixelsPerStud`, and a `BillboardGui` sizes itself the same way: a panel written to fit its part grew and shrank with the player's screen, and closing the clamp to stop it took the scaling away from the screen UI as well. Both containers are pinned now, on the static path and on the runtime path alike. The container element in the JSX opens the pin: what is written under it lexically lowers to literal offsets with no binding at all, and a component rendered there, compiled in a file of its own against the viewport, reads the pin at its root and is handed back the offsets it was written with. `theme.rem.pinnedUnder` names the containers this applies to, and emptying it puts them back on the curve. A `SurfaceGui` the compiler never sees, one built in Luau or in another file that a React root is mounted into, is outside what this reaches; such a project still pins with `theme.rem: { min: 16, max: 16 }`.
+
+## [0.12.4] - 2026-08-11
+
 ### Fixed
 
 - The LSP server did not exit on the `exit` notification, only on the pipe closing behind it. tower-lsp ends its read loop on end of input and handles `exit` without ending it, so a client that sends the notification and holds stdin open, as one waiting for the process to go away does, was left with a server that never went. Editors mostly close the pipe right after and force-kill on a timeout, which is what kept this out of sight. The stdin the server reads reports end of input right behind the notification now, which is the path tower-lsp already unwinds cleanly.
@@ -326,7 +332,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.3...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.4...HEAD
+[0.12.4]: https://github.com/astra-void/vela-rbxts/compare/v0.12.3...v0.12.4
 [0.12.3]: https://github.com/astra-void/vela-rbxts/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/astra-void/vela-rbxts/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/astra-void/vela-rbxts/compare/v0.12.0...v0.12.1
