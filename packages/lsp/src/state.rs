@@ -5,6 +5,7 @@ use std::{
 };
 
 use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, Url};
+use vela_rbxts_compiler::EditorOptions;
 
 use crate::documents::Document;
 
@@ -16,7 +17,7 @@ pub struct ConfigEntry {
 
 #[derive(Debug, Default)]
 pub struct ServerState {
-    pub project_root: Option<PathBuf>,
+    project_root: Option<PathBuf>,
     configs: Vec<ConfigEntry>,
     documents: HashMap<Url, Document>,
 }
@@ -46,6 +47,11 @@ impl ServerState {
             .map(|entry| entry.json.clone())
     }
 
+    pub fn editor_options(&self, document: &Document) -> EditorOptions {
+        let config_json = self.config_json_for(document.file_path.as_deref());
+        document.editor_options(self.project_root.as_deref(), config_json)
+    }
+
     pub fn upsert_document(&mut self, uri: Url, text: String, version: Option<i32>) -> Document {
         let document = Document::new(uri.clone(), text, version);
         self.documents.insert(uri, document.clone());
@@ -57,10 +63,12 @@ impl ServerState {
         uri: &Url,
         changes: &[TextDocumentContentChangeEvent],
         version: Option<i32>,
-    ) -> Option<Document> {
-        let document = self.documents.get_mut(uri)?;
+    ) -> bool {
+        let Some(document) = self.documents.get_mut(uri) else {
+            return false;
+        };
         document.apply_content_changes(changes, version);
-        Some(document.clone())
+        true
     }
 
     pub fn remove_document(&mut self, uri: &Url) -> Option<Document> {
@@ -94,18 +102,16 @@ mod tests {
         assert_eq!(inserted.version, Some(1));
         assert_eq!(state.document(&uri).unwrap().text, "className=\"bg-\"");
 
-        let updated = state
-            .apply_document_changes(
-                &uri,
-                &[TextDocumentContentChangeEvent {
-                    range: None,
-                    range_length: None,
-                    text: "className=\"rounded-\"".to_owned(),
-                }],
-                Some(2),
-            )
-            .unwrap();
-        assert_eq!(updated.version, Some(2));
+        assert!(state.apply_document_changes(
+            &uri,
+            &[TextDocumentContentChangeEvent {
+                range: None,
+                range_length: None,
+                text: "className=\"rounded-\"".to_owned(),
+            }],
+            Some(2),
+        ));
+        assert_eq!(state.document(&uri).unwrap().version, Some(2));
         assert_eq!(state.document(&uri).unwrap().text, "className=\"rounded-\"");
 
         assert!(state.remove_document(&uri).is_some());

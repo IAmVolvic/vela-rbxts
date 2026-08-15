@@ -82,9 +82,9 @@ impl FrameScanner {
                     if self.pending.len() < length {
                         break;
                     }
-                    let body: Vec<u8> = self.pending.drain(..length).collect();
+                    exit |= is_exit(&self.pending[..length]);
+                    self.pending.drain(..length);
                     self.body_len = None;
-                    exit |= is_exit(&body);
                 }
             }
         }

@@ -78,24 +78,15 @@ impl RbxtsLanguageServer {
         }
     }
 
-    async fn snapshot_document(&self, uri: &Url) -> Option<Document> {
-        self.state.read().await.document_cloned(uri)
-    }
-
     async fn document_with_options(&self, uri: &Url) -> Option<(Document, EditorOptions)> {
         let state = self.state.read().await;
         let document = state.document_cloned(uri)?;
-        let config_json = state.config_json_for(document.file_path.as_deref());
-        let options = document.editor_options(state.project_root.as_deref(), config_json);
+        let options = state.editor_options(&document);
         Some((document, options))
     }
 
     async fn publish_now(&self, document: &Document) {
-        let options = {
-            let state = self.state.read().await;
-            let config_json = state.config_json_for(document.file_path.as_deref());
-            document.editor_options(state.project_root.as_deref(), config_json)
-        };
+        let options = self.state.read().await.editor_options(document);
         publish_diagnostics(&self.client, document, options).await;
     }
 
@@ -116,8 +107,7 @@ impl RbxtsLanguageServer {
                 if document.version != Some(version) {
                     return;
                 }
-                let config_json = guard.config_json_for(document.file_path.as_deref());
-                let options = document.editor_options(guard.project_root.as_deref(), config_json);
+                let options = guard.editor_options(&document);
                 (document, options)
             };
 
@@ -257,10 +247,7 @@ impl LanguageServer for RbxtsLanguageServer {
 
         let applied = {
             let mut state = self.state.write().await;
-            if state
-                .apply_document_changes(&uri, &changes, Some(version))
-                .is_some()
-            {
+            if state.apply_document_changes(&uri, &changes, Some(version)) {
                 true
             } else if let Some(full) = changes.iter().rev().find(|change| change.range.is_none()) {
                 // No document to patch (missed did_open); only full text can seed one.
@@ -368,7 +355,7 @@ impl LanguageServer for RbxtsLanguageServer {
             return Ok(None);
         }
 
-        let uri = params.text_document.uri.clone();
+        let uri = params.text_document.uri;
         let Some((document, options)) = self.document_with_options(&uri).await else {
             return Ok(None);
         };
@@ -437,7 +424,7 @@ impl LanguageServer for RbxtsLanguageServer {
     ) -> Result<Option<Vec<DocumentHighlight>>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        let Some(document) = self.snapshot_document(&uri).await else {
+        let Some(document) = self.state.read().await.document_cloned(&uri) else {
             return Ok(None);
         };
 
@@ -755,7 +742,13 @@ fn replace_action(
         title: format!("Replace with `{suggestion}`"),
         kind: Some(CodeActionKind::QUICKFIX),
         diagnostics: Some(vec![diagnostic.clone()]),
-        edit: Some(single_edit(uri, diagnostic.range, suggestion.to_owned())),
+        edit: Some(document_edit(
+            uri,
+            vec![TextEdit {
+                range: diagnostic.range,
+                new_text: suggestion.to_owned(),
+            }],
+        )),
         is_preferred: Some(preferred),
         ..Default::default()
     }
@@ -766,7 +759,13 @@ fn remove_action(uri: &Url, diagnostic: &Diagnostic, token: &str) -> CodeAction 
         title: format!("Remove `{token}`"),
         kind: Some(CodeActionKind::QUICKFIX),
         diagnostics: Some(vec![diagnostic.clone()]),
-        edit: Some(single_edit(uri, diagnostic.range, String::new())),
+        edit: Some(document_edit(
+            uri,
+            vec![TextEdit {
+                range: diagnostic.range,
+                new_text: String::new(),
+            }],
+        )),
         ..Default::default()
     }
 }
@@ -799,23 +798,17 @@ fn sort_action(
         })
         .collect();
 
-    let mut changes = HashMap::new();
-    changes.insert(uri.clone(), edits);
-
     Some(CodeAction {
         title: "Sort vela-rbxts classes".to_owned(),
         kind: Some(sort_action_kind()),
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
+        edit: Some(document_edit(uri, edits)),
         ..Default::default()
     })
 }
 
-fn single_edit(uri: &Url, range: Range, new_text: String) -> WorkspaceEdit {
+fn document_edit(uri: &Url, edits: Vec<TextEdit>) -> WorkspaceEdit {
     let mut changes = HashMap::new();
-    changes.insert(uri.clone(), vec![TextEdit { range, new_text }]);
+    changes.insert(uri.clone(), edits);
     WorkspaceEdit {
         changes: Some(changes),
         ..Default::default()
