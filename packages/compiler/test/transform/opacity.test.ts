@@ -162,6 +162,20 @@ test("a component root reads what its caller provided", () => {
 	expect(result.code).not.toContain("createVelaRuntimeHost");
 });
 
+// A default export has no name for the component rule to read, and it is a
+// component all the same.
+test("a component the file exports unnamed reads what its caller provided", () => {
+	const result = transform(
+		'export default () => <textlabel className="text-sm" Text="hi" />;',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(emitted(result.code)).toContain("<__VelaBoundary.Consume>");
+	expect(result.code).toMatch(
+		/import \{[^}]*__VelaBoundary[^}]*\} from "@rbxts\/vela-runtime";/,
+	);
+});
+
 test("a component root that resolves at runtime needs no consumer of its own", () => {
 	const result = transform(
 		'export const Label = () => <textlabel className="text-sm hover:text-lg" Text="hi" />;',

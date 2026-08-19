@@ -22,8 +22,8 @@ use crate::transform::opacity::{
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        BlockStmt, DefaultDecl, ExportDefaultDecl, Expr, FnDecl, Ident, JSXAttr, JSXAttrName,
-        JSXAttrOrSpread, JSXAttrValue, JSXClosingElement, JSXElement, JSXElementChild,
+        BlockStmt, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnDecl, Ident, JSXAttr,
+        JSXAttrName, JSXAttrOrSpread, JSXAttrValue, JSXClosingElement, JSXElement, JSXElementChild,
         JSXElementName, JSXEmptyExpr, JSXExpr, JSXExprContainer, JSXFragment, Module, Pat, Str,
         VarDecl, VarDeclKind, VarDeclarator,
     },
@@ -112,6 +112,17 @@ impl VisitMut for VelaTransformer {
             return;
         };
         if consume_component_function(&mut function.function, self.target) {
+            self.boundary_helper_needed = true;
+            self.changed = true;
+        }
+    }
+
+    // `export default (props) => …` names nothing for the rule above to read,
+    // and it is a component all the same.
+    fn visit_mut_export_default_expr(&mut self, expr: &mut ExportDefaultExpr) {
+        expr.visit_mut_children_with(self);
+
+        if consume_component_initializer(&mut expr.expr, self.target) {
             self.boundary_helper_needed = true;
             self.changed = true;
         }
