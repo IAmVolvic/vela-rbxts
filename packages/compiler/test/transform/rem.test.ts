@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { transform } from "@vela-rbxts/compiler";
 import { expect, test } from "vitest";
 import { defineConfig } from "../../../config/src/index";
-import { emitted, hostConfig } from "./helpers";
+import { emitted, hostConfig, runtimeSource } from "./helpers";
 
 const videRuntimeSource = readFileSync(
 	new URL("../../../runtime-vide/src/index.ts", import.meta.url),
@@ -196,6 +196,19 @@ test("a component under the pin is handed it at runtime", () => {
 	);
 	expect(result.code).toMatch(
 		/import \{[^}]*__VelaBoundary[^}]*\} from "@rbxts\/vela-runtime";/,
+	);
+});
+
+// A caller hands the container whatever it built, and a fragment or a wrapper
+// of its own reads no context on the way down — what hangs under one is still
+// owed its literal offsets.
+test("the pin reaches through what is not a host element", () => {
+	const unpinElement =
+		/function unpinElement[\s\S]*?\n\t\}\n/.exec(runtimeSource)?.[0] ?? "";
+
+	// The tag decides which props are put back, not whether the walk goes on.
+	expect(unpinElement).toMatch(
+		/if \(typeIs\(element\.type as unknown, "string"\)\) \{[\s\S]*?\n\t\t\}\n\n\t\tconst children = props\.children;[\s\S]*?unpin\(children\)/,
 	);
 });
 

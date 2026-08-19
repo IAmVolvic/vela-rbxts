@@ -162,6 +162,17 @@ test("a component root reads what its caller provided", () => {
 	expect(result.code).not.toContain("createVelaRuntimeHost");
 });
 
+// A caller can hand a faded subtree a fragment of its own, and a fragment reads
+// no context to fade itself with.
+test("the fade carries through a fragment", () => {
+	const applyToElement =
+		/function applyToElement\([\s\S]*?\n\t\}\n/.exec(runtimeSource)?.[0] ?? "";
+
+	expect(applyToElement).toMatch(
+		/elementType !== \(__VelaReact\.Fragment as unknown\)[\s\S]*?children: applyAlpha\(children, alpha\)/,
+	);
+});
+
 // A default export has no name for the component rule to read, and it is a
 // component all the same.
 test("a component the file exports unnamed reads what its caller provided", () => {

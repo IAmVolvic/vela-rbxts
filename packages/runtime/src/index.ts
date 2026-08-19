@@ -166,9 +166,11 @@ namespace __VelaRem {
 		}
 	});
 
-	/// Hands a subtree back the offsets it was written with. It stops where the
-	/// fade does and for the same reason: a component and a runtime host read
-	/// the pin for themselves, and a nested provider has already read it.
+	/// Hands a subtree back the offsets it was written with. Unlike the fade it
+	/// does not stop at a component: putting a literal back is idempotent, so a
+	/// consumer that unpins the same subtree again finds nothing left to do,
+	/// while stopping would strand whatever the caller built by hand under a
+	/// fragment or a wrapper that reads no context of its own.
 	export function unpin(node: unknown): unknown {
 		if (node === undefined) {
 			return node;
@@ -185,40 +187,47 @@ namespace __VelaRem {
 		// Children arrive as an array or as a table keyed by instance name, and
 		// Roblox names the instance after that key, so the keys have to survive.
 		const unpinned = new Map<unknown, unknown>();
+		let replaced = false;
 		for (const [key, value] of pairs(node as Record<string, unknown>)) {
-			unpinned.set(key, unpin(value));
+			const child = unpin(value);
+			if (child !== value) {
+				replaced = true;
+			}
+			unpinned.set(key, child);
 		}
 
-		return unpinned;
+		return replaced ? unpinned : node;
 	}
 
 	function unpinElement(element: __VelaReact.Element): unknown {
-		const elementType = element.type as unknown;
-		if (!typeIs(elementType, "string")) {
-			return element;
-		}
-
 		const props = element.props as Record<string, unknown>;
-		const children = props.children;
 		const replaced: Record<string, unknown> = {};
 		let scaled = false;
-		for (const [name, value] of pairs(props)) {
-			const literal = literals.get(value);
-			if (literal !== undefined) {
-				replaced[name as string] = literal;
+
+		// Only a string tag carries scaled props of its own. Everything else —
+		// a fragment, a component, a provider — carries only the subtree below.
+		if (typeIs(element.type as unknown, "string")) {
+			for (const [name, value] of pairs(props)) {
+				const literal = literals.get(value);
+				if (literal !== undefined) {
+					replaced[name as string] = literal;
+					scaled = true;
+				}
+			}
+		}
+
+		const children = props.children;
+		if (children !== undefined) {
+			const unpinned = unpin(children);
+			if (unpinned !== children) {
+				replaced.children = unpinned;
 				scaled = true;
 			}
 		}
 
-		if (children === undefined) {
-			return scaled
-				? __VelaReact.cloneElement(element as never, replaced as never)
-				: element;
-		}
-
-		replaced.children = unpin(children);
-
-		return __VelaReact.cloneElement(element as never, replaced as never);
+		return scaled
+			? __VelaReact.cloneElement(element as never, replaced as never)
+			: element;
 	}
 }
 
@@ -309,9 +318,24 @@ export namespace __VelaOpacity {
 		const elementType = element.type as unknown;
 
 		// Only a string tag is an instance this can write to. Everything else
-		// resolves against a context of its own.
+		// resolves against a context of its own, except a fragment: it renders
+		// the children it was given as they are and reads nothing, so the fade
+		// has to carry through it or die there.
 		if (!typeIs(elementType, "string")) {
-			return element;
+			const children = props.children;
+			if (
+				elementType !== (__VelaReact.Fragment as unknown) ||
+				children === undefined
+			) {
+				return element;
+			}
+
+			return __VelaReact.cloneElement(
+				element as never,
+				{
+					children: applyAlpha(children, alpha),
+				} as never,
+			);
 		}
 
 		// The tag on a rendered element is the Roblox class name — roblox-ts
