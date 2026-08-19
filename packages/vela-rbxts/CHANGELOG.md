@@ -1,5 +1,16 @@
 # vela-rbxts
 
+## 0.12.6
+
+### Patch Changes
+
+- Updated dependencies [e9805ff]
+  - @rbxts/vela-runtime@0.12.6
+  - @vela-rbxts/rbxtsc-host@0.12.6
+  - @vela-rbxts/config@0.12.6
+  - @vela-rbxts/types@0.12.6
+  - @rbxts/vela-runtime-vide@0.12.6
+
 ## 0.12.5
 
 ### Patch Changes

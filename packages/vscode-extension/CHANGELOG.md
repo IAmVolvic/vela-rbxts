@@ -1,5 +1,11 @@
 # vela-rbxts-lsp
 
+## 0.12.6
+
+### Patch Changes
+
+- @vela-rbxts/lsp@0.12.6
+
 ## 0.12.5
 
 ### Patch Changes

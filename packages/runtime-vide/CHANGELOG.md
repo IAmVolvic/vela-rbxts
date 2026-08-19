@@ -1,5 +1,11 @@
 # @rbxts/vela-runtime-vide
 
+## 0.12.6
+
+### Patch Changes
+
+- @rbxts/vela-runtime-core@0.12.6
+
 ## 0.12.5
 
 ### Patch Changes
