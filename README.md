@@ -344,7 +344,7 @@ Scale-valued utilities are unaffected: `w-full`, `h-1/2`, and `translate-x-1/2` 
 </surfacegui>
 ```
 
-The pin is opened by the container element in your JSX. What is written under it lexically is pinned in the emit and costs nothing at runtime; a component rendered there was compiled in a file of its own, so the emit also opens a scope it reads at its root. A `SurfaceGui` your JSX never names (one built in Luau, or in another file, that a React root is mounted into) is not something this pass can see, so pin such a project with the clamp below instead.
+The pin is opened by the container element in your JSX. What is written under it lexically is pinned in the emit and costs nothing at runtime; a component rendered there was compiled in a file of its own, so the emit also opens a scope it reads at its root. A subtree handed to the container as `children`, which is what a mount function does, was built by its caller against the viewport, and React hands it back its literal offsets at render, through whatever fragment or wrapper it arrives under. A `SurfaceGui` your JSX never names (one built in Luau, or in another file, that a React root is mounted into) is not something this pass can see, so pin such a project with the clamp below instead.
 
 `theme.rem.pinnedUnder` names the containers this applies to. Emptying it puts them back on the curve.
 
