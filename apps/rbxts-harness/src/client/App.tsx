@@ -30,6 +30,15 @@ const FadedCard = (props: { active: boolean; children?: React.Element }) => (
 	</frame>
 );
 
+// Built where no fade is written, the way a caller hands a node over rather than
+// writing it under one: a fragment reads no context of its own.
+const handedDown = (
+	<>
+		<textlabel Text="handed down under a fragment" />
+		<frame className="bg-white size-6" />
+	</>
+);
+
 // A SurfaceGui is drawn on a part, at the pixel space that part gives it, so
 // the curve is pinned under one: what is lowered here keeps its literal offsets,
 // and the component below hears about the pin through the scope the emit opens
@@ -40,6 +49,13 @@ export const SurfacePanel = () => (
 			<FadedLabel text="pinned" />
 		</frame>
 	</surfacegui>
+);
+
+// The same container handed a subtree its own file never saw. The caller built
+// those instances against the viewport, and a fragment on the way down reads no
+// context of its own, so the pin has to reach them after the fact.
+export const SurfaceMount = (props: { children?: React.Element }) => (
+	<surfacegui>{props.children}</surfacegui>
 );
 
 export const App = () => {
@@ -161,6 +177,11 @@ export const App = () => {
 					<FadedCard active={active}>
 						<textlabel Text="handed down as children" />
 					</FadedCard>
+				</frame>
+				{/* The same boundary one fragment deeper: what the caller
+				    built under one reads no context of its own. */}
+				<frame className="opacity-50 size-8 bg-slate-700">
+					<FadedCard active={active}>{handedDown}</FadedCard>
 				</frame>
 				<FadedLabel text="opaque control" />
 				<FadedCard active={active} />
