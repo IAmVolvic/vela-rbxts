@@ -9,6 +9,14 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Fixed
+
+- The pin under a `SurfaceGui` stopped at a fragment or a wrapper the caller built. A mount function that portals a `<surfacegui>` and fills it with what it was handed is the shape a project reaches for, and the offsets in those children were lowered in the caller's file, against the viewport; React puts them back after the fact by walking the elements the container is given, and that walk read the props of a host element and turned around at everything else. Children written as `<><frame className="p-4" /></>`, or under a wrapper of the caller's own, went on scaling with the screen. A fragment, a wrapper and a provider read no context of their own, so the walk carries through them now, and putting a literal back a second time finds nothing left to do, which is what the consumer at a component root was already relying on.
+- A fade written around a component never reached what the caller handed it under a fragment. `opacity-*` composes onto the instances it finds by walking the same subtree the pin does, and it stops at a component and at a runtime host on purpose, since both read the alpha for themselves and applying it here as well would multiply it; a fragment reads nothing at all, though, and renders what it was given as it is, so the walk died there. It carries through a fragment now and stops where it always did.
+- A component a file exports without naming it, `export default (props) => …`, heard about nothing that crossed the boundary: neither the pin a `SurfaceGui` opened over it nor the fade an `opacity-*` opened around it. The rule that finds a component root reads a name and a default export has none. It is read as a component root now, like the `export default function Panel()` beside it.
+
+## [0.12.5] - 2026-08-15
+
 ### Changed
 
 - A `SurfaceGui` keeps its literal pixels. Every offset a utility lowers has followed the viewport since rem landed, and a surface UI followed it too, though a `SurfaceGui` takes its pixel space from the part it is drawn on and its `PixelsPerStud`, and a `BillboardGui` sizes itself the same way: a panel written to fit its part grew and shrank with the player's screen, and closing the clamp to stop it took the scaling away from the screen UI as well. Both containers are pinned now, on the static path and on the runtime path alike. The container element in the JSX opens the pin: what is written under it lexically lowers to literal offsets with no binding at all, and a component rendered there, compiled in a file of its own against the viewport, reads the pin at its root and is handed back the offsets it was written with. `theme.rem.pinnedUnder` names the containers this applies to, and emptying it puts them back on the curve. A `SurfaceGui` the compiler never sees, one built in Luau or in another file that a React root is mounted into, is outside what this reaches; such a project still pins with `theme.rem: { min: 16, max: 16 }`.
@@ -332,7 +340,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.4...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.5...HEAD
+[0.12.5]: https://github.com/astra-void/vela-rbxts/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/astra-void/vela-rbxts/compare/v0.12.3...v0.12.4
 [0.12.3]: https://github.com/astra-void/vela-rbxts/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/astra-void/vela-rbxts/compare/v0.12.1...v0.12.2
