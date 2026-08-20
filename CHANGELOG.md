@@ -9,6 +9,8 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+## [0.12.6] - 2026-08-19
+
 ### Fixed
 
 - The pin under a `SurfaceGui` stopped at a fragment or a wrapper the caller built. A mount function that portals a `<surfacegui>` and fills it with what it was handed is the shape a project reaches for, and the offsets in those children were lowered in the caller's file, against the viewport; React puts them back after the fact by walking the elements the container is given, and that walk read the props of a host element and turned around at everything else. Children written as `<><frame className="p-4" /></>`, or under a wrapper of the caller's own, went on scaling with the screen. A fragment, a wrapper and a provider read no context of their own, so the walk carries through them now, and putting a literal back a second time finds nothing left to do, which is what the consumer at a component root was already relying on.
@@ -340,7 +342,8 @@ Initial npm publish of the `vela-rbxts` toolchain.
 - Runtime-aware variants: `sm:`, `md:`, `lg:`, `portrait:`, `landscape:`, `touch:`, `mouse:`, `gamepad:`.
 - Artifact-first release pipeline (`plan` → `build` → `pack` → `verify` → `publish`) with a cross-platform CI matrix.
 
-[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.5...HEAD
+[Unreleased]: https://github.com/astra-void/vela-rbxts/compare/v0.12.6...HEAD
+[0.12.6]: https://github.com/astra-void/vela-rbxts/compare/v0.12.5...v0.12.6
 [0.12.5]: https://github.com/astra-void/vela-rbxts/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/astra-void/vela-rbxts/compare/v0.12.3...v0.12.4
 [0.12.3]: https://github.com/astra-void/vela-rbxts/compare/v0.12.2...v0.12.3
