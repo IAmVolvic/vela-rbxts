@@ -84,6 +84,17 @@ test("warns on unsupported flex directions while lowering flex distribution", ()
 	]);
 });
 
+test("lowers justify-stretch onto the horizontal flex axis", () => {
+	const result = transform(
+		'<frame className="flex-col justify-stretch items-stretch" />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/HorizontalFlex=\{Enum\.UIFlexAlignment\.Fill\}/);
+	expect(result.code).toMatch(/VerticalFlex=\{Enum\.UIFlexAlignment\.Fill\}/);
+});
+
 test("carries flex utilities through the runtime variant path with enum parsing", () => {
 	const result = transform('<frame className="flex-row md:flex-col" />');
 

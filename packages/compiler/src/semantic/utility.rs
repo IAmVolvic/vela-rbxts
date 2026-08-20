@@ -179,10 +179,11 @@ pub(crate) const OPACITY_VALUES: [&str; 14] = [
 pub(crate) const ASPECT_RATIO_VALUES: [&str; 2] = ["square", "video"];
 pub(crate) const FLEX_DIRECTION_VALUES: [&str; 2] = ["row", "col"];
 pub(crate) const ALIGNMENT_VALUES: [&str; 3] = ["start", "center", "end"];
-pub(crate) const JUSTIFY_FLEX_VALUES: [(&str, &str); 3] = [
+pub(crate) const JUSTIFY_FLEX_VALUES: [(&str, &str); 4] = [
     ("between", "SpaceBetween"),
     ("around", "SpaceAround"),
     ("evenly", "SpaceEvenly"),
+    ("stretch", "Fill"),
 ];
 pub(crate) const FLEX_ITEM_VALUES: [&str; 8] = [
     "flex-1",

@@ -405,7 +405,7 @@ pub(crate) fn unsupported_alignment_value_diagnostic(
     token: &str,
 ) -> Diagnostic {
     let supported = if family == "justify" {
-        "`justify-start`, `justify-center`, `justify-end`, `justify-between`, `justify-around`, and `justify-evenly`"
+        "`justify-start`, `justify-center`, `justify-end`, `justify-between`, `justify-around`, `justify-evenly`, and `justify-stretch`"
     } else {
         "`items-start`, `items-center`, `items-end`, and `items-stretch`"
     };

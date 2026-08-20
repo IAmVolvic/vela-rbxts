@@ -203,8 +203,9 @@ export namespace __VelaValue {
 	}
 
 	/// `justify-*` runs along the main axis, which `UIListLayout` exposes as its
-	/// horizontal properties. `between`/`around`/`evenly` need `UIFlexAlignment`
-	/// rather than a plain alignment, so they land on a different property.
+	/// horizontal properties. `between`/`around`/`evenly`/`stretch` need
+	/// `UIFlexAlignment` rather than a plain alignment, so they land on a
+	/// different property.
 	export function resolveJustifyProp(
 		key: string,
 	): RuntimeResolvedPropEntry | undefined {
@@ -243,6 +244,9 @@ export namespace __VelaValue {
 				name: "HorizontalFlex",
 				value: Enum.UIFlexAlignment.SpaceEvenly,
 			};
+		}
+		if (key === "stretch") {
+			return { name: "HorizontalFlex", value: Enum.UIFlexAlignment.Fill };
 		}
 		return undefined;
 	}

@@ -9,6 +9,10 @@ Versions are released in lockstep across every workspace package.
 
 ## [Unreleased]
 
+### Added
+
+- `justify-stretch`, which sets `UIListLayout.HorizontalFlex` to `Enum.UIFlexAlignment.Fill`. The two flex properties Roblox exposes are named for absolute axes rather than for the main and cross one, and vela follows that: `justify-*` writes the horizontal axis, `items-*` and `content-*` the vertical. `items-stretch` reached `VerticalFlex` from the first, but nothing reached `HorizontalFlex`, so a column that wanted its children to fill the width had no class to say it with. Tailwind spells the same value `justify-stretch`, and that is what it lowers to here.
+
 ## [0.12.6] - 2026-08-19
 
 ### Fixed
