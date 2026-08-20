@@ -1,5 +1,15 @@
 # vela-rbxts
 
+## 0.12.7
+
+### Patch Changes
+
+- @vela-rbxts/rbxtsc-host@0.12.7
+- @rbxts/vela-runtime@0.12.7
+- @rbxts/vela-runtime-vide@0.12.7
+- @vela-rbxts/config@0.12.7
+- @vela-rbxts/types@0.12.7
+
 ## 0.12.6
 
 ### Patch Changes

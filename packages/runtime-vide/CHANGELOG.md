@@ -1,5 +1,12 @@
 # @rbxts/vela-runtime-vide
 
+## 0.12.7
+
+### Patch Changes
+
+- Updated dependencies [da7d895]
+  - @rbxts/vela-runtime-core@0.12.7
+
 ## 0.12.6
 
 ### Patch Changes
