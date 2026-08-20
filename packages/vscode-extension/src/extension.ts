@@ -108,7 +108,8 @@ async function startClient(
 	}
 
 	const { args, command, workspaceRoot } = resolvedServerCommand;
-	const configs = await collectProjectConfigs();
+	const collected = await collectProjectConfigs();
+	const configs = collected.entries;
 	log(`Loaded ${configs.length} vela config(s) for the language server.`);
 	const serverOptions: ServerOptions = {
 		run: {
@@ -169,6 +170,7 @@ async function startClient(
 		await client.start();
 		await client.setTrace(toClientTrace(getTraceSetting()));
 		log("Standalone Rust LSP started.");
+		reportConfigFailures(collected);
 	} catch (error) {
 		log(`Failed to start standalone Rust LSP: ${formatError(error)}`);
 		await stopClient();
@@ -415,6 +417,18 @@ interface ConfigEntry {
 	json: string;
 }
 
+interface ConfigFailure {
+	fsPath: string;
+	message: string;
+}
+
+interface CollectedConfigs {
+	entries: ConfigEntry[];
+	failures: ConfigFailure[];
+}
+
+const reportedConfigFailures = new Map<string, string>();
+
 // Loaded lazily: the loader pulls the workspace TypeScript runtime to evaluate
 // vela.config.ts, which the Rust server cannot do on its own.
 function loadConfigResolver():
@@ -430,17 +444,24 @@ function loadConfigResolver():
 	}
 }
 
-async function collectProjectConfigs(): Promise<ConfigEntry[]> {
-	const resolveProjectConfig = loadConfigResolver();
-	if (!resolveProjectConfig) {
-		return [];
-	}
-
+async function collectProjectConfigs(): Promise<CollectedConfigs> {
 	const files = await vscode.workspace.findFiles(
 		CONFIG_WATCH_GLOB,
 		"**/node_modules/**",
 	);
+	const resolveProjectConfig = loadConfigResolver();
+	if (!resolveProjectConfig) {
+		return {
+			entries: [],
+			failures: files.map((file) => ({
+				fsPath: file.fsPath,
+				message: "the vela config loader could not be loaded",
+			})),
+		};
+	}
+
 	const entries: ConfigEntry[] = [];
+	const failures: ConfigFailure[] = [];
 	const seenDirectories = new Set<string>();
 	// Mirrors the host loader, which prefers `vela.config.ts` over the JSON form.
 	const configPriority = (fsPath: string): number =>
@@ -464,10 +485,46 @@ async function collectProjectConfigs(): Promise<ConfigEntry[]> {
 			});
 		} catch (error) {
 			log(`Failed to load ${file.fsPath}: ${formatError(error)}`);
+			failures.push({
+				fsPath: file.fsPath,
+				message: error instanceof Error ? error.message : String(error),
+			});
 		}
 	}
 
-	return entries;
+	return { entries, failures };
+}
+
+// A config the loader could not read leaves the server on the default theme, so
+// every key the project defined reads as unknown. Nothing else says why, and the
+// output channel is not where anyone looks first.
+function reportConfigFailures(collected: CollectedConfigs): void {
+	const loaded = new Set(collected.entries.map((entry) => entry.dir));
+	for (const directory of loaded) {
+		reportedConfigFailures.delete(directory);
+	}
+
+	for (const failure of collected.failures) {
+		const directory = path.dirname(failure.fsPath);
+		if (
+			loaded.has(directory) ||
+			reportedConfigFailures.get(directory) === failure.message
+		) {
+			continue;
+		}
+
+		reportedConfigFailures.set(directory, failure.message);
+		void vscode.window
+			.showWarningMessage(
+				`vela-rbxts could not load ${path.basename(failure.fsPath)}, so class names are checked against the default theme: ${failure.message}`,
+				"Show Log",
+			)
+			.then((choice) => {
+				if (choice === "Show Log") {
+					outputChannel?.show(true);
+				}
+			});
+	}
 }
 
 async function pushProjectConfigs(): Promise<void> {
@@ -476,9 +533,14 @@ async function pushProjectConfigs(): Promise<void> {
 	}
 
 	try {
-		const configs = await collectProjectConfigs();
-		await client.sendNotification("vela-rbxts/setConfigs", { configs });
-		log(`Pushed ${configs.length} vela config(s) to the language server.`);
+		const collected = await collectProjectConfigs();
+		await client.sendNotification("vela-rbxts/setConfigs", {
+			configs: collected.entries,
+		});
+		log(
+			`Pushed ${collected.entries.length} vela config(s) to the language server.`,
+		);
+		reportConfigFailures(collected);
 	} catch (error) {
 		log(`Failed to push vela configs: ${formatError(error)}`);
 	}
