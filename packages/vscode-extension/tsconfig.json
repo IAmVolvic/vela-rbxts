@@ -3,6 +3,9 @@
 	"compilerOptions": {
 		"module": "node16",
 		"moduleResolution": "node16",
+		// The bundle consumes built entry points, so the workspace source paths
+		// would pull `@vela-rbxts/*` sources into a program compiled as CommonJS.
+		"paths": {},
 		"verbatimModuleSyntax": false,
 		"rootDir": "src",
 		"outDir": "dist",

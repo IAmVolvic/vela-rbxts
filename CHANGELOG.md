@@ -15,6 +15,7 @@ Versions are released in lockstep across every workspace package.
 
 ### Fixed
 
+- The published editor extension carried no vela config loader at all, so a project's `vela.config.ts` was never read and every key it defined was checked against the default theme. The loader is bundled into the extension, and the VSIX workflow built that bundle without building the loader package first; esbuild leaves a `require` it cannot resolve inside a try/catch where it stands and says nothing about it, so packaging went green over a bundle that had none. The loader is imported outright now, so a bundle built without it fails the build, the workflow builds it before the bundle, and packaging refuses a staged bundle that still resolves the loader at runtime.
 - A `vela.config.ts` the editor extension could not read left the session silently on the default theme, so every key the project defined was reported as an unknown one while the same file compiled without complaint. The failure was written to the extension's output channel and nowhere else. It is raised as a notification now, naming the file and the reason, with the log one click away. A config that loads on a later save clears it.
 
 ## [0.12.6] - 2026-08-19

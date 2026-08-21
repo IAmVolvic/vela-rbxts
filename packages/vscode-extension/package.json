@@ -75,7 +75,8 @@
 		"lint": "biome check src",
 		"clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});\"",
 		"vscode:prepublish": "pnpm run build",
-		"package:vsix": "pnpm run clean && pnpm run build && node ./scripts/package-vsix.cjs",
+		"build:loader": "pnpm --filter @vela-rbxts/config --filter @vela-rbxts/ir --filter @vela-rbxts/rbxtsc-host run build",
+		"package:vsix": "pnpm run clean && pnpm run build:loader && pnpm run build && node ./scripts/package-vsix.cjs",
 		"publish:vsix": "node ./scripts/publish-vsix.cjs"
 	},
 	"dependencies": {

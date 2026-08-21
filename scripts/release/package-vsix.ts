@@ -206,6 +206,11 @@ async function main() {
 		await validateStagedPublishPackagesForTarget(target);
 	}
 
+	// The bundle inlines the vela config loader, and this workflow runs no
+	// Rust toolchain, so the loader is built here rather than through turbo.
+	runCommand("pnpm", ["--filter", "./packages/vscode-extension", "run", "build:loader"], {
+		cwd: REPO_ROOT,
+	});
 	runCommand("pnpm", ["--filter", "./packages/vscode-extension", "run", "build"], {
 		cwd: REPO_ROOT,
 	});

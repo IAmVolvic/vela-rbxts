@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { resolveProjectConfig } from "@vela-rbxts/rbxtsc-host/project-config";
 import * as vscode from "vscode";
 import {
 	LanguageClient,
@@ -408,10 +409,6 @@ function toClientTrace(traceSetting: TraceSetting): Trace {
 	}
 }
 
-type ProjectConfigModule = {
-	resolveProjectConfig(sourceFileName: string): unknown;
-};
-
 interface ConfigEntry {
 	dir: string;
 	json: string;
@@ -429,36 +426,11 @@ interface CollectedConfigs {
 
 const reportedConfigFailures = new Map<string, string>();
 
-// Loaded lazily: the loader pulls the workspace TypeScript runtime to evaluate
-// vela.config.ts, which the Rust server cannot do on its own.
-function loadConfigResolver():
-	| ProjectConfigModule["resolveProjectConfig"]
-	| undefined {
-	try {
-		const moduleExports =
-			require("@vela-rbxts/rbxtsc-host/project-config") as ProjectConfigModule;
-		return moduleExports.resolveProjectConfig;
-	} catch (error) {
-		log(`Failed to load the vela config loader: ${formatError(error)}`);
-		return undefined;
-	}
-}
-
 async function collectProjectConfigs(): Promise<CollectedConfigs> {
 	const files = await vscode.workspace.findFiles(
 		CONFIG_WATCH_GLOB,
 		"**/node_modules/**",
 	);
-	const resolveProjectConfig = loadConfigResolver();
-	if (!resolveProjectConfig) {
-		return {
-			entries: [],
-			failures: files.map((file) => ({
-				fsPath: file.fsPath,
-				message: "the vela config loader could not be loaded",
-			})),
-		};
-	}
 
 	const entries: ConfigEntry[] = [];
 	const failures: ConfigFailure[] = [];

@@ -317,6 +317,18 @@ function stageLspPackages(target, targetConfig, marketplaceVersion) {
 	};
 }
 
+// esbuild leaves a `require` it cannot resolve inside a try/catch alone and
+// says nothing, so a bundle built before `@vela-rbxts/rbxtsc-host` ships with
+// no config loader at all.
+function assertBundledConfigLoader(target, bundlePath) {
+	const bundle = fs.readFileSync(bundlePath, "utf8");
+	if (bundle.includes('"@vela-rbxts/rbxtsc-host')) {
+		throw new Error(
+			`[${target}] Staged extension bundle still resolves @vela-rbxts/rbxtsc-host at runtime, which the VSIX does not ship: ${bundlePath}. Build the loader first (pnpm --filter ./packages/vscode-extension run build:loader) and rebuild the bundle.`,
+		);
+	}
+}
+
 function verifyStagedArtifacts(
 	target,
 	{ platformPackageName, platformPackageTarget },
@@ -359,6 +371,7 @@ function verifyStagedArtifacts(
 		stageExtensionEntryPath,
 		`[${target}] Missing staged extension bundle at ${stageExtensionEntryPath}. Build the extension first (for example: pnpm --filter ./packages/vscode-extension run build).`,
 	);
+	assertBundledConfigLoader(target, stageExtensionEntryPath);
 	assertExists(
 		stagedRuntimeDependencyPath,
 		`[${target}] Missing staged runtime dependency tree at ${stagedRuntimeDependencyPath}.`,
