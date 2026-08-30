@@ -137,9 +137,7 @@ test("resolves directional radius presets onto one UICorner", () => {
 
 	expect(result.changed).toBe(true);
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(
-		/CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}/,
-	);
+	expect(result.code).not.toMatch(/\sCornerRadius=/);
 	expect(result.code).toMatch(
 		/TopLeftRadius=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
 	);
@@ -147,18 +145,20 @@ test("resolves directional radius presets onto one UICorner", () => {
 		/BottomLeftRadius=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
 	);
 	expect(result.code).toMatch(/TopRightRadius=\{new UDim\(0\.5, 0\)\}/);
-	expect(result.code).not.toMatch(/BottomRightRadius=/);
+	expect(result.code).toMatch(
+		/BottomRightRadius=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}/,
+	);
 });
 
 test("defaults untouched corners to zero for a directional-only radius", () => {
 	const result = transform('<frame className="rounded-r-[10px]" />');
 
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
+	expect(result.code).not.toMatch(/\sCornerRadius=/);
 	expect(result.code).toMatch(/TopRightRadius=/);
 	expect(result.code).toMatch(/BottomRightRadius=/);
-	expect(result.code).not.toMatch(/TopLeftRadius=/);
-	expect(result.code).not.toMatch(/BottomLeftRadius=/);
+	expect(result.code).toMatch(/TopLeftRadius=\{new UDim\(0, 0\)\}/);
+	expect(result.code).toMatch(/BottomLeftRadius=\{new UDim\(0, 0\)\}/);
 });
 
 test("preserves an all-corner baseline under a directional variant", () => {

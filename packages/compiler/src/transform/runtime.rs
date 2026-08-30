@@ -118,7 +118,7 @@ where
 
     let own_opacity = pending.opacity.take();
     pending.flush(&mut style, SizeEmission::Combined);
-    default_corner_radius(&mut style);
+    normalize_directional_corner_radii(&mut style);
     default_list_layout_sort_order(&mut style);
     reset_variant_color_opacity(&mut style);
     if let Some(alpha) = own_opacity {
@@ -134,10 +134,18 @@ where
     style
 }
 
-/// Roblox gives UICorner a non-zero stock radius. A directional utility must
-/// leave every corner it does not name square unless an all-corner utility set
-/// a different baseline.
-fn default_corner_radius(style: &mut StyleIr) {
+/// `UICorner.CornerRadius` writes all four directional properties. React does
+/// not guarantee prop assignment order, so mixing that shorthand with an
+/// individual radius can erase the individual value. Once a directional
+/// utility is present, expand the shorthand into all four explicit properties.
+fn normalize_directional_corner_radii(style: &mut StyleIr) {
+    const DIRECTIONAL_PROPS: [&str; 4] = [
+        "TopLeftRadius",
+        "TopRightRadius",
+        "BottomLeftRadius",
+        "BottomRightRadius",
+    ];
+
     let Some(helper) = style
         .base
         .helpers
@@ -147,17 +155,30 @@ fn default_corner_radius(style: &mut StyleIr) {
         return;
     };
 
-    if helper.props.iter().any(|prop| prop.name == "CornerRadius") {
+    if !helper
+        .props
+        .iter()
+        .any(|prop| DIRECTIONAL_PROPS.contains(&prop.name.as_ref()))
+    {
         return;
     }
 
-    helper.props.insert(
-        0,
-        PropEntry {
-            name: "CornerRadius".into(),
-            value: "new UDim(0, 0)".to_owned(),
-        },
-    );
+    let baseline = helper
+        .props
+        .iter()
+        .find(|prop| prop.name == "CornerRadius")
+        .map(|prop| prop.value.clone())
+        .unwrap_or_else(|| "new UDim(0, 0)".to_owned());
+    helper.props.retain(|prop| prop.name != "CornerRadius");
+
+    for name in DIRECTIONAL_PROPS {
+        if helper.props.iter().all(|prop| prop.name != name) {
+            helper.props.push(PropEntry {
+                name: name.into(),
+                value: baseline.clone(),
+            });
+        }
+    }
 }
 
 /// A plugin utility that names Roblox properties bypasses the utility tables,

@@ -102,13 +102,13 @@ test("resolves directional arbitrary radius values", () => {
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
+	expect(result.code).not.toMatch(/\sCornerRadius=/);
 	expect(result.code).toMatch(/TopLeftRadius=\{new UDim\(0\.1, 0\)\}/);
 	expect(result.code).toMatch(/BottomLeftRadius=\{new UDim\(0\.1, 0\)\}/);
 	expect(result.code).toMatch(
 		/TopRightRadius=\{__VelaRem\.scale\(new UDim\(0, 10\), \d+\)\}/,
 	);
-	expect(result.code).not.toMatch(/BottomRightRadius=/);
+	expect(result.code).toMatch(/BottomRightRadius=\{new UDim\(0, 0\)\}/);
 });
 
 test("supports percent, pixel, and rem values on every directional radius", () => {
@@ -136,11 +136,19 @@ test("supports percent, pixel, and rem values on every directional radius", () =
 			);
 
 			expect(result.diagnostics).toEqual([]);
-			expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
+			expect(result.code).not.toMatch(/\sCornerRadius=/);
 			for (const prop of props) {
 				expect(result.code).toMatch(
 					new RegExp(`${prop}=\\{${emittedValue.source}\\}`),
 				);
+			}
+			for (const prop of [
+				"TopLeftRadius",
+				"TopRightRadius",
+				"BottomLeftRadius",
+				"BottomRightRadius",
+			]) {
+				expect(result.code).toMatch(new RegExp(`${prop}=`));
 			}
 		}
 	}

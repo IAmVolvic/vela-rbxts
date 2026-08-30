@@ -709,13 +709,27 @@ export namespace __VelaApply {
 	export function applyHelperDefaults(helpers: RuntimeHelper[]) {
 		for (const helper of helpers) {
 			if (helper.tag === "uicorner") {
+				const directionalProps = [
+					"TopLeftRadius",
+					"TopRightRadius",
+					"BottomLeftRadius",
+					"BottomRightRadius",
+				];
 				if (
-					helper.props.find((prop) => prop.name === "CornerRadius") === undefined
+					helper.props.find((prop) => directionalProps.includes(prop.name)) !==
+					undefined
 				) {
-					helper.props.unshift({
-						name: "CornerRadius",
-						value: new UDim(0, 0),
-					});
+					const baseline =
+						helper.props.find((prop) => prop.name === "CornerRadius")?.value ??
+						new UDim(0, 0);
+					helper.props = helper.props.filter(
+						(prop) => prop.name !== "CornerRadius",
+					);
+					for (const name of directionalProps) {
+						if (helper.props.find((prop) => prop.name === name) === undefined) {
+							helper.props.push({ name, value: baseline });
+						}
+					}
 				}
 				continue;
 			}
