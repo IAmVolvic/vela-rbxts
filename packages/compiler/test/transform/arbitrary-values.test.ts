@@ -102,6 +102,7 @@ test("resolves directional arbitrary radius values", () => {
 	);
 
 	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
 	expect(result.code).toMatch(/TopLeftRadius=\{new UDim\(0\.1, 0\)\}/);
 	expect(result.code).toMatch(/BottomLeftRadius=\{new UDim\(0\.1, 0\)\}/);
 	expect(result.code).toMatch(
@@ -135,6 +136,7 @@ test("supports percent, pixel, and rem values on every directional radius", () =
 			);
 
 			expect(result.diagnostics).toEqual([]);
+			expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
 			for (const prop of props) {
 				expect(result.code).toMatch(
 					new RegExp(`${prop}=\\{${emittedValue.source}\\}`),

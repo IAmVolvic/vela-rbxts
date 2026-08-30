@@ -118,6 +118,7 @@ where
 
     let own_opacity = pending.opacity.take();
     pending.flush(&mut style, SizeEmission::Combined);
+    default_corner_radius(&mut style);
     default_list_layout_sort_order(&mut style);
     reset_variant_color_opacity(&mut style);
     if let Some(alpha) = own_opacity {
@@ -131,6 +132,32 @@ where
         }
     }
     style
+}
+
+/// Roblox gives UICorner a non-zero stock radius. A directional utility must
+/// leave every corner it does not name square unless an all-corner utility set
+/// a different baseline.
+fn default_corner_radius(style: &mut StyleIr) {
+    let Some(helper) = style
+        .base
+        .helpers
+        .iter_mut()
+        .find(|helper| helper.tag == "uicorner")
+    else {
+        return;
+    };
+
+    if helper.props.iter().any(|prop| prop.name == "CornerRadius") {
+        return;
+    }
+
+    helper.props.insert(
+        0,
+        PropEntry {
+            name: "CornerRadius".into(),
+            value: "new UDim(0, 0)".to_owned(),
+        },
+    );
 }
 
 /// A plugin utility that names Roblox properties bypasses the utility tables,

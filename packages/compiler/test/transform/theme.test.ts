@@ -150,6 +150,29 @@ test("resolves directional radius presets onto one UICorner", () => {
 	expect(result.code).not.toMatch(/BottomRightRadius=/);
 });
 
+test("defaults untouched corners to zero for a directional-only radius", () => {
+	const result = transform('<frame className="rounded-r-[10px]" />');
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
+	expect(result.code).toMatch(/TopRightRadius=/);
+	expect(result.code).toMatch(/BottomRightRadius=/);
+	expect(result.code).not.toMatch(/TopLeftRadius=/);
+	expect(result.code).not.toMatch(/BottomLeftRadius=/);
+});
+
+test("preserves an all-corner baseline under a directional variant", () => {
+	const result = transform(
+		'<frame className="rounded-md hover:rounded-r-[10px]" />',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(/CornerRadius=/);
+	expect(result.code).toMatch(/TopRightRadius=/);
+	expect(result.code).toMatch(/BottomRightRadius=/);
+	expect(result.code).not.toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
+});
+
 test("warns on unknown radius keys without falling back to numeric radius resolution", () => {
 	const result = transform('<frame className="rounded-card" />');
 
