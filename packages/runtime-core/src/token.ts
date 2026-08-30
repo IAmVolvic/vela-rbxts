@@ -83,6 +83,42 @@ export namespace __VelaToken {
 		return { props: [], helpers: [{ tag, props }] };
 	}
 
+	const ALL_RADIUS_PROPS = ["CornerRadius"];
+
+	function radiusEffect(
+		value: UDim,
+		props: string[],
+	): RuntimeResolvedEffectBundle {
+		return helperEffect(
+			"uicorner",
+			props.map((name) => ({ name, value })),
+		);
+	}
+
+	function resolveRadiusPayload(payload: string): [string, string[]] {
+		for (const [direction, props] of [
+			["tl", ["TopLeftRadius"]],
+			["tr", ["TopRightRadius"]],
+			["bl", ["BottomLeftRadius"]],
+			["br", ["BottomRightRadius"]],
+			["t", ["TopLeftRadius", "TopRightRadius"]],
+			["r", ["TopRightRadius", "BottomRightRadius"]],
+			["b", ["BottomLeftRadius", "BottomRightRadius"]],
+			["l", ["TopLeftRadius", "BottomLeftRadius"]],
+		] as Array<[string, string[]]>) {
+			if (payload === direction) {
+				return [__VelaDefaults.PALETTE_DEFAULT_KEY, props];
+			}
+
+			const prefix = `${direction}-`;
+			if (__VelaLua.startsWith(payload, prefix)) {
+				return [__VelaLua.after(payload, prefix), props];
+			}
+		}
+
+		return [payload, ALL_RADIUS_PROPS];
+	}
+
 	/// A gradient stop carries its `/N` alpha beside the color, because
 	/// UIGradient only learns the keypoint positions once every stop is known.
 	function gradientStopEffect(
@@ -194,7 +230,7 @@ export namespace __VelaToken {
 		);
 		return value === undefined
 			? undefined
-			: helperEffect("uicorner", [{ name: "CornerRadius", value }]);
+			: radiusEffect(value, ALL_RADIUS_PROPS);
 	}
 
 	function resolveTextToken(
@@ -314,13 +350,11 @@ export namespace __VelaToken {
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const value = __VelaValue.resolveRadiusValue(
-			theme,
+		const [key, props] = resolveRadiusPayload(
 			__VelaLua.after(token, "rounded-"),
 		);
-		return value === undefined
-			? undefined
-			: helperEffect("uicorner", [{ name: "CornerRadius", value }]);
+		const value = __VelaValue.resolveRadiusValue(theme, key);
+		return value === undefined ? undefined : radiusEffect(value, props);
 	}
 
 	function resolveZIndexToken(

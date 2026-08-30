@@ -706,7 +706,7 @@ fn apply_analyzed_token(
         | UtilityKind::GradientTo => {
             apply_color_token(analysis, config, diagnostics, style, pending)
         }
-        UtilityKind::Border | UtilityKind::Radius | UtilityKind::Ring | UtilityKind::Outline => {
+        UtilityKind::Border | UtilityKind::Radius(_) | UtilityKind::Ring | UtilityKind::Outline => {
             apply_border_token(analysis, config, diagnostics, style, pending)
         }
         UtilityKind::Padding(_)
@@ -948,10 +948,12 @@ fn apply_border_token(
                 style.set_helper_prop("uistroke", "Thickness", value.offset(config));
             }
         }
-        UtilityKind::Radius => {
+        UtilityKind::Radius(kind) => {
             if let Some(radius_key) = analysis.payload() {
                 if let Some(value) = resolve_radius_value(config, radius_key) {
-                    style.set_helper_prop("uicorner", "CornerRadius", value);
+                    for prop in kind.props() {
+                        style.set_helper_prop("uicorner", *prop, value.clone());
+                    }
                 } else {
                     diagnostics.push(unknown_theme_key_diagnostic(
                         "radius",

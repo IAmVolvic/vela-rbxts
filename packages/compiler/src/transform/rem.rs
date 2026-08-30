@@ -5,7 +5,9 @@ pub(crate) const REM_NAMESPACE: &str = "__VelaRem";
 /// Props whose numbers are pixel offsets, mirroring the runtime's own table. A
 /// utility writes plenty of numbers rem must not touch — `UIGradient.Offset` is
 /// normalized, `UIScale.Scale` is a multiplier, `ZIndex` is an order.
-const SCALED_PROPS: [&str; 29] = [
+const SCALED_PROPS: [&str; 33] = [
+    "BottomLeftRadius",
+    "BottomRightRadius",
     "BlurRadius",
     "CellPadding",
     "CellSize",
@@ -32,6 +34,8 @@ const SCALED_PROPS: [&str; 29] = [
     "SizeY",
     "Spread",
     "TextSize",
+    "TopLeftRadius",
+    "TopRightRadius",
     "Thickness",
     "TranslateX",
     "TranslateY",

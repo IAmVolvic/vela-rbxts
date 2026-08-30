@@ -130,6 +130,26 @@ test("resolves built-in radius presets out of the box", () => {
 	);
 });
 
+test("resolves directional radius presets onto one UICorner", () => {
+	const result = transform(
+		'<frame className="rounded-md rounded-l-lg rounded-tr-full" />',
+	);
+
+	expect(result.changed).toBe(true);
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/CornerRadius=\{__VelaRem\.scale\(new UDim\(0, 6\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/TopLeftRadius=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(
+		/BottomLeftRadius=\{__VelaRem\.scale\(new UDim\(0, 8\), \d+\)\}/,
+	);
+	expect(result.code).toMatch(/TopRightRadius=\{new UDim\(0\.5, 0\)\}/);
+	expect(result.code).not.toMatch(/BottomRightRadius=/);
+});
+
 test("warns on unknown radius keys without falling back to numeric radius resolution", () => {
 	const result = transform('<frame className="rounded-card" />');
 
