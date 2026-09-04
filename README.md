@@ -463,6 +463,8 @@ The exhaustive table of accepted values lives in the [utility reference](https:/
 | Visibility | `hidden`, `visible`, `overflow-{hidden,clip,visible}`, `overscroll-{auto,contain,none}` | `Visible`, `ClipsDescendants`, `ElasticBehavior` on scrolling frames |
 | Scrolling | `scroll-{x,y,xy}`, `scroll-none`, `scrollbar-w-*`, `scrollbar-none`, `scrollbar-{color}`, `canvas-{auto,auto-x,auto-y,none}` | `ScrollingDirection`, `ScrollingEnabled`, `ScrollBarThickness` (from the spacing scale), `ScrollBarImageColor3`, `AutomaticCanvasSize` — scrolling frames only. `scrollbar-*` and `canvas-*` are Roblox-only extensions. |
 
+A per-corner `rounded-{t,r,b,l,tl,tr,bl,br}-*` beats the all-corner `rounded-*` on the corners it names, whichever order the two are written in, the way the two rules stack in Tailwind's own stylesheet. `rounded-l-lg rounded-md` and `rounded-md rounded-l-lg` both round the left corners to `lg` and the right ones to `md`. A corner no utility names is squared off rather than left at the Roblox default, so `rounded-r-lg` alone keeps the left side flat. Under a variant the shorthand still repaints what the base left open: `rounded-l-lg hover:rounded-md` holds the left corners at `lg` and rounds the right pair on hover.
+
 Two value forms work across every color family (`bg-`, `text-`, `image-`, `placeholder-`, `border-`, `divide-`, `shadow-`, `ring-`, `outline-`, and the gradient stops):
 
 - Arbitrary hex colors: `bg-[#ff0000]` and the short `bg-[#f00]` resolve to `Color3.fromRGB`. Non-hex bracket payloads keep the `unsupported-arbitrary-value` diagnostic.

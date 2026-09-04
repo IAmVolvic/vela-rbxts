@@ -95,28 +95,32 @@ export namespace __VelaToken {
 		);
 	}
 
-	function resolveRadiusPayload(payload: string): [string, string[]] {
-		for (const [direction, props] of [
-			["tl", ["TopLeftRadius"]],
-			["tr", ["TopRightRadius"]],
-			["bl", ["BottomLeftRadius"]],
-			["br", ["BottomRightRadius"]],
-			["t", ["TopLeftRadius", "TopRightRadius"]],
-			["r", ["TopRightRadius", "BottomRightRadius"]],
-			["b", ["BottomLeftRadius", "BottomRightRadius"]],
-			["l", ["TopLeftRadius", "BottomLeftRadius"]],
-		] as Array<[string, string[]]>) {
-			if (payload === direction) {
-				return [__VelaDefaults.PALETTE_DEFAULT_KEY, props];
+	/// Spelled out rather than built from the direction, so the guard that reads
+	/// this file for every static utility prefix can find each one.
+	const DIRECTIONAL_RADIUS_PREFIXES: Array<[string, string[]]> = [
+		["rounded-tl-", ["TopLeftRadius"]],
+		["rounded-tr-", ["TopRightRadius"]],
+		["rounded-bl-", ["BottomLeftRadius"]],
+		["rounded-br-", ["BottomRightRadius"]],
+		["rounded-t-", ["TopLeftRadius", "TopRightRadius"]],
+		["rounded-r-", ["TopRightRadius", "BottomRightRadius"]],
+		["rounded-b-", ["BottomLeftRadius", "BottomRightRadius"]],
+		["rounded-l-", ["TopLeftRadius", "BottomLeftRadius"]],
+	];
+
+	function resolveRadiusPayload(token: string): [string, string[]] {
+		for (const [prefix, props] of DIRECTIONAL_RADIUS_PREFIXES) {
+			if (__VelaLua.startsWith(token, prefix)) {
+				return [__VelaLua.after(token, prefix), props];
 			}
 
-			const prefix = `${direction}-`;
-			if (__VelaLua.startsWith(payload, prefix)) {
-				return [__VelaLua.after(payload, prefix), props];
+			// `rounded-t` is the prefix without its key: the directional DEFAULT.
+			if (token === __VelaLua.substring(prefix, 0, -1)) {
+				return [__VelaDefaults.PALETTE_DEFAULT_KEY, props];
 			}
 		}
 
-		return [payload, ALL_RADIUS_PROPS];
+		return [__VelaLua.after(token, "rounded-"), ALL_RADIUS_PROPS];
 	}
 
 	/// A gradient stop carries its `/N` alpha beside the color, because
@@ -350,9 +354,7 @@ export namespace __VelaToken {
 		theme: RuntimeTheme,
 		token: string,
 	): RuntimeResolvedEffectBundle | undefined {
-		const [key, props] = resolveRadiusPayload(
-			__VelaLua.after(token, "rounded-"),
-		);
+		const [key, props] = resolveRadiusPayload(token);
 		const value = __VelaValue.resolveRadiusValue(theme, key);
 		return value === undefined ? undefined : radiusEffect(value, props);
 	}

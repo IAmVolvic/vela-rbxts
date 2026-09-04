@@ -118,7 +118,6 @@ where
 
     let own_opacity = pending.opacity.take();
     pending.flush(&mut style, SizeEmission::Combined);
-    normalize_directional_corner_radii(&mut style);
     default_list_layout_sort_order(&mut style);
     reset_variant_color_opacity(&mut style);
     if let Some(alpha) = own_opacity {
@@ -138,7 +137,12 @@ where
 /// not guarantee prop assignment order, so mixing that shorthand with an
 /// individual radius can erase the individual value. Once a directional
 /// utility is present, expand the shorthand into all four explicit properties.
-fn normalize_directional_corner_radii(style: &mut StyleIr) {
+///
+/// Only a helper that ships statically is filled in here. One hoisted onto a
+/// rule is filled by the runtime instead, once every rule that writes a corner
+/// has been merged — filling it early would pin the untouched corners to zero
+/// and leave a later `rounded-*` under a variant with nothing to overwrite.
+pub(crate) fn normalize_directional_corner_radii(style: &mut StyleIr) {
     const DIRECTIONAL_PROPS: [&str; 4] = [
         "TopLeftRadius",
         "TopRightRadius",

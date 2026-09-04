@@ -6,9 +6,9 @@ pub(crate) const REM_NAMESPACE: &str = "__VelaRem";
 /// utility writes plenty of numbers rem must not touch — `UIGradient.Offset` is
 /// normalized, `UIScale.Scale` is a multiplier, `ZIndex` is an order.
 const SCALED_PROPS: [&str; 33] = [
+    "BlurRadius",
     "BottomLeftRadius",
     "BottomRightRadius",
-    "BlurRadius",
     "CellPadding",
     "CellSize",
     "CornerRadius",
@@ -34,9 +34,9 @@ const SCALED_PROPS: [&str; 33] = [
     "SizeY",
     "Spread",
     "TextSize",
+    "Thickness",
     "TopLeftRadius",
     "TopRightRadius",
-    "Thickness",
     "TranslateX",
     "TranslateY",
 ];

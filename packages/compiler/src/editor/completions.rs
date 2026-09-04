@@ -456,14 +456,21 @@ fn border_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
 fn radius_and_stacking_candidates(config: &TailwindConfig) -> Vec<CompletionSpec> {
     let mut items = Vec::new();
 
+    let radius_keys = radius_completion_keys(config);
     for kind in RADIUS_KINDS {
         let prefix = if kind.suffix().is_empty() {
             "rounded".to_owned()
         } else {
             format!("rounded-{}", kind.suffix())
         };
+        let targets = kind
+            .props()
+            .iter()
+            .map(|prop| format!("UICorner.{prop}"))
+            .collect::<Vec<_>>()
+            .join(", ");
 
-        for key in radius_completion_keys(config) {
+        for key in &radius_keys {
             // `rounded-DEFAULT` is not a class; the DEFAULT radius is what a bare
             // directional or all-corner utility resolves to.
             let label = if key == PALETTE_DEFAULT_KEY {
@@ -474,14 +481,7 @@ fn radius_and_stacking_candidates(config: &TailwindConfig) -> Vec<CompletionSpec
             items.push(CompletionSpec::new(
                 label,
                 "radius",
-                format!(
-                    "Set {} from theme radius `{key}`.",
-                    kind.props()
-                        .iter()
-                        .map(|prop| format!("UICorner.{prop}"))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
+                format!("Set {targets} from theme radius `{key}`."),
                 UtilityKind::Radius(kind),
             ));
         }

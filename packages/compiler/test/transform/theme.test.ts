@@ -4,6 +4,8 @@ import { defineConfig } from "../../../config/src/index";
 import {
 	emitted,
 	hostConfig,
+	hostRules,
+	ruleCorners,
 	runtimeSource,
 	withPluginUtilities,
 } from "./helpers";
@@ -167,10 +169,45 @@ test("preserves an all-corner baseline under a directional variant", () => {
 	);
 
 	expect(result.diagnostics).toEqual([]);
-	expect(result.code).toMatch(/CornerRadius=/);
-	expect(result.code).toMatch(/TopRightRadius=/);
-	expect(result.code).toMatch(/BottomRightRadius=/);
-	expect(result.code).not.toMatch(/CornerRadius=\{new UDim\(0, 0\)\}/);
+	// A rule writes the same `uicorner`, so the baseline is hoisted beside it
+	// rather than emitted as a child of its own.
+	const [baseline, hover] = hostRules(result.code);
+	expect(ruleCorners(baseline)).toEqual({ CornerRadius: "new UDim(0, 6)" });
+	expect(ruleCorners(hover)).toEqual({
+		TopRightRadius: "new UDim(0, 10)",
+		BottomRightRadius: "new UDim(0, 10)",
+	});
+});
+
+// The corners a directional utility leaves alone are squared off by whoever
+// applies last. Filling them here would pin them to zero and leave the variant
+// nothing to repaint, so a hoisted baseline travels with only what it named.
+test("lets a variant shorthand repaint the corners a directional base left open", () => {
+	const result = transform(
+		'<frame className="rounded-l-lg hover:rounded-md" />',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	const [baseline, hover] = hostRules(result.code);
+	expect(ruleCorners(baseline)).toEqual({
+		TopLeftRadius: "new UDim(0, 8)",
+		BottomLeftRadius: "new UDim(0, 8)",
+	});
+	expect(ruleCorners(hover)).toEqual({ CornerRadius: "new UDim(0, 6)" });
+});
+
+test("squares the untouched corners when no rule writes the same helper", () => {
+	const result = transform(
+		'<frame className="rounded-l-lg hover:bg-red-500" />',
+	);
+
+	expect(result.diagnostics).toEqual([]);
+	expect(result.code).toMatch(
+		/TopRightRadius=\{\(new UDim\(0, 0\) as never\)\}/,
+	);
+	expect(result.code).toMatch(
+		/BottomRightRadius=\{\(new UDim\(0, 0\) as never\)\}/,
+	);
 });
 
 test("warns on unknown radius keys without falling back to numeric radius resolution", () => {
